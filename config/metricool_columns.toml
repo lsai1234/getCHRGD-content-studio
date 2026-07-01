@@ -1,0 +1,47 @@
+# Metricool bulk-import column mapping.
+#
+# Metricool's exact CSV headers change over time and differ by plan, so the
+# export reads them from here instead of hardcoding. Download Metricool's own
+# bulk-upload template, run `chrgd export --sample` to emit a sample CSV, and
+# edit the right-hand sides below until the two line up.
+
+[format]
+# strftime format for the date/time column.
+datetime_format = "%d/%m/%Y %H:%M"
+# TikTok captions don't support line breaks; they're collapsed to spaces.
+caption_max_length = 2200
+# How media is referenced in the CSV:
+#   "filename" -> local file in ready/ (attach manually in Metricool), or
+#   "url"      -> public URL (set media_base_url below).
+media_reference = "filename"
+media_base_url = ""          # e.g. https://cdn.example.com/chrgd/  (url mode)
+# Value written into a network column when that network is targeted.
+network_on_value = "TRUE"
+draft_true = "TRUE"
+draft_false = "FALSE"
+
+[header]
+# logical field -> exact column header in your Metricool template.
+text = "Text"
+datetime = "Date"
+draft = "Draft"
+
+[networks]
+# logical network -> column header. Remove any you don't publish to.
+tiktok = "Tiktok"
+instagram = "Instagram"
+
+[media]
+# Carousel slides map to these numbered columns, in order.
+image_columns = ["Picture 1", "Picture 2", "Picture 3", "Picture 4", "Picture 5"]
+video_column = "Video"
+
+[schedule]
+# Simple scheduler for posts without an explicit scheduled_for.
+timezone = "Europe/London"
+start_offset_days = 1        # begin scheduling from tomorrow
+times = ["18:00"]            # posting time(s) each day
+per_day = 1
+
+[targets]
+default_networks = ["tiktok", "instagram"]

@@ -13,13 +13,18 @@ the app built around it: storage, generation, assembly, and a scheduler-ready ex
 > partner) bulk-publishes carousels + video across TikTok/Instagram/Shorts. This
 > system's job ends at producing clean assets + a CSV to bulk-import once a week.
 
-## Status — Milestones 1–2 ✅
+## Status — Milestones 1–4 ✅  *(the whole daily win is done)*
 
 The build ships incrementally (see [Build order](#build-order)).
 
 - **M1 — skeleton:** SQLite backlog store, `capture`, config/secrets scaffolding.
-- **M2 — pipeline runner:** turns a seed row into a validated finished-post JSON
-  via the **OpenAI API**, honouring the QA gate and logging spend.
+- **M2 — pipeline runner:** seed row → validated finished-post JSON via the
+  **OpenAI API**, honouring the QA gate and logging spend.
+- **M3 — carousel image builder:** a background per slide from the image API,
+  then approved text overlaid *in code* with Pillow inside the TikTok safe
+  zones; JPEG/WebP, ≤1080p, five slides to `output/<idea_id>/`.
+- **M4 — Metricool CSV export:** the primary deliverable — a bulk-import CSV +
+  matching `output/ready/` asset folder, config-driven columns, idempotent.
 
 Implemented now:
 
@@ -27,8 +32,13 @@ Implemented now:
 - `chrgd backlog` — inspect the backlog.
 - `chrgd build` — run the 6-stage content engine over N queued ideas (OpenAI).
 - `chrgd review` — inspect posts the QA gate flagged.
+- `chrgd render` — generate the five carousel images for a built post.
+- `chrgd export` — write the Metricool CSV + `ready/` folder for the week.
 
-The remaining commands are registered as stubs and report which milestone fills them.
+The remaining commands (`trends`, `run`) are stubs reporting their milestone.
+
+**The weekly loop now:** `capture` → `build` → `render` → `export`, then
+bulk-import one CSV into Metricool. That's the daily grind gone.
 
 > **Provider:** this build uses **OpenAI** (chat for the pipeline, `gpt-image-1`
 > for carousel backgrounds in M3) — one key covers everything. The model is
@@ -71,7 +81,26 @@ chrgd build --count 3 --dry-run   # runs the LLM, skips paid image/video (M3+)
 # Inspect anything the QA gate flagged:
 chrgd review
 chrgd review --show G-0001        # full built JSON for one idea
+
+# Render the five carousel images for a built post:
+chrgd render G-0001               # calls the image API (gpt-image-1)
+chrgd render G-0001 --dry-run     # branded placeholder backgrounds, no spend
+
+# Export the week's rendered posts to a Metricool bulk-import CSV:
+chrgd export --sample             # sample CSV to diff against Metricool's template
+chrgd export --week               # CSV + ready/ folder; marks rows exported
 ```
+
+`render` generates a background per slide, then overlays the approved headline
+and supporting text in code (Pillow) inside the safe zones — reliable text every
+time, no model-rendered gibberish. Styling lives in `brand.toml`.
+
+`export` selects `done` + rendered posts, builds one CSV row each (schedule,
+target networks, caption with hashtags inline and line breaks stripped, media
+references), copies assets into `output/ready/`, and stamps rows `exported_at`
+so nothing exports twice. Column headers and filename-vs-URL media style are
+read from `config/metricool_columns.toml` — run `chrgd export --sample` and diff
+its headers against the template you download from Metricool, then edit the TOML.
 
 `build` calls OpenAI to run the six-stage engine, validates the JSON against the
 `Post` model, and applies the QA thresholds from `content_engine_prompt.md`
@@ -95,8 +124,13 @@ chrgd/
   models.py    # Idea / Post / Slide models, status enums, QA gate
   capture.py   # dump → seed rows (LLM-free)
   pipeline.py  # OpenAI runner: seed row → validated post JSON + QA gate
-content_engine_prompt.md   # the CHRGD Content Engine reasoning (loaded by the pipeline, M2+)
-config/        # runtime config (e.g. metricool_columns.toml, M4)
+  brand.py     # brand.toml loader — canvas, safe zones, colours, fonts
+  images.py    # carousel builder: background gen + Pillow text overlay
+  publisher.py # Metricool CSV export + ready/ folder (Publisher backends)
+content_engine_prompt.md   # the CHRGD Content Engine reasoning (loaded by the pipeline)
+brand.toml     # carousel styling (fonts, CHRGD orange/yellow, safe zones)
+config/
+  metricool_columns.toml   # Metricool column mapping (edit to match your plan)
 data/          # SQLite db (gitignored)
 output/        # generated assets (gitignored)
 ```
@@ -133,8 +167,8 @@ Each milestone stops for testing before the next begins.
 
 1. ~~Skeleton + SQLite backlog + `capture` + `.env.example`.~~ ✅
 2. ~~Pipeline runner → validated post JSON from a seed row (LLM only).~~ ✅
-3. Carousel image builder — background gen + Pillow overlay + safe zones + JPEG export. ← *next*
-4. Metricool CSV export + `ready/` folder. *(Milestones 1–4 are the whole win.)*
-5. Trend scout writing seed rows.
+3. ~~Carousel image builder — background gen + Pillow overlay + safe zones + JPEG export.~~ ✅
+4. ~~Metricool CSV export + `ready/` folder.~~ ✅ *(Milestones 1–4 are the whole win.)*
+5. Trend scout writing seed rows. ← *next (or start the web dashboard)*
 6. Video builder (Higgsfield image-to-video + ffmpeg + draft/auto audio).
 7. Orchestration + cron + cost-guard polish; optional `unified_api` / `tiktok_direct`.

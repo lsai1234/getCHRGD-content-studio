@@ -172,15 +172,101 @@ def build(
 
 
 @app.command()
-def render(idea_id: str = typer.Argument(...)) -> None:
-    """(Re)generate assets for one post. (Milestone 3)"""
-    _not_yet("render", 3)
+def render(
+    idea_id: str = typer.Argument(..., help="The idea to (re)render."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Skip the paid image API; paint placeholders."
+    ),
+) -> None:
+    """(Re)generate carousel image assets for one built post.
+
+    Generates a background per slide, overlays the approved text in the safe
+    zones, and writes JPEG/WebP slides to output/<idea_id>/. `--dry-run`
+    produces branded placeholder backgrounds with no spend.
+    """
+    from .images import ImageError, render_carousel
+
+    settings = get_settings()
+    with _store() as store:
+        idea = store.get_idea(idea_id)
+        if idea is None:
+            typer.secho(f"No idea {idea_id}.", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        try:
+            result = render_carousel(idea, settings, dry_run=dry_run)
+        except ImageError as exc:
+            typer.secho(f"Render error: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        store.save_asset_paths(idea_id, result.paths)
+
+    for p in result.paths:
+        typer.secho(f"  ✓ {p}", fg=typer.colors.GREEN)
+    tag = " (dry-run placeholders)" if result.dry_run else ""
+    typer.secho(
+        f"\n{len(result.paths)} slide(s){tag} · {result.generated} generated · "
+        f"est. spend ${result.spend_usd:.4f}",
+        fg=typer.colors.BLUE,
+    )
 
 
 @app.command()
-def export(week: bool = typer.Option(False, "--week")) -> None:
-    """Produce the Metricool CSV + ready/ folder. (Milestone 4)"""
-    _not_yet("export", 4)
+def export(
+    week: bool = typer.Option(
+        False, "--week", help="Export a week's batch of rendered posts."
+    ),
+    limit: int = typer.Option(None, "--limit", help="Cap the number of posts."),
+    sample: bool = typer.Option(
+        False, "--sample", help="Write a sample CSV to diff against Metricool."
+    ),
+) -> None:
+    """Produce the Metricool bulk-import CSV + ready/ asset folder.
+
+    Selects `done`, rendered, not-yet-exported posts; builds one row each
+    (schedule, networks, caption+hashtags inline, media refs); copies assets
+    into output/ready/; and stamps them exported so nothing goes twice.
+    """
+    from .publisher import get_publisher
+
+    settings = get_settings()
+    settings.ensure_dirs()
+    publisher = get_publisher("metricool_csv")
+
+    if sample:
+        path = publisher.write_sample(settings)
+        typer.secho(f"Sample CSV: {path}", fg=typer.colors.GREEN)
+        typer.secho(
+            "Diff its headers against Metricool's downloadable template, then "
+            "edit config/metricool_columns.toml to match.",
+            fg=typer.colors.BLUE,
+        )
+        return
+
+    # --week defaults to a 7-slot batch; --limit overrides.
+    if limit is None and week:
+        cols = publisher.cols.schedule
+        limit = cols.per_day * 7
+
+    with _store() as store:
+        result = publisher.export(store, settings, limit=limit)
+
+    for idea_id, reason in result.skipped:
+        typer.secho(f"  · {idea_id} skipped — {reason}", fg=typer.colors.YELLOW)
+
+    if not result.exported_ids:
+        typer.secho(
+            "Nothing to export (need done + rendered posts).", fg=typer.colors.YELLOW
+        )
+        return
+
+    for idea_id in result.exported_ids:
+        typer.secho(f"  ✓ {idea_id}", fg=typer.colors.GREEN)
+    typer.secho(f"\nCSV: {result.csv_path}", fg=typer.colors.BLUE)
+    typer.secho(f"Assets: {result.ready_dir}", fg=typer.colors.BLUE)
+    typer.secho(
+        f"{len(result.exported_ids)} post(s) exported. Bulk-import the CSV in "
+        "Metricool and attach media from ready/.",
+        fg=typer.colors.BLUE,
+    )
 
 
 @app.command()

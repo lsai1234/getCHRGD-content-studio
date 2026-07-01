@@ -1,0 +1,40 @@
+# CHRGD brand styling — the single place that controls the carousel look.
+# Point the font paths at your real brand fonts when you have them; the
+# DejaVu defaults are freely licensed and always present on the VPS.
+
+[canvas]
+width = 1080          # final export width (<=1080p, TikTok-safe)
+height = 1350         # 4:5 vertical
+format = "jpeg"       # jpeg or webp — NEVER png (TikTok's API rejects png)
+save_quality = 90     # JPEG/WebP quality 1-100
+
+[generation]
+# gpt-image-1 vertical size; the background is resized/cropped to the canvas.
+size = "1024x1536"
+quality = "medium"    # low / medium / high / auto — drives image API cost
+
+[safe_zones]          # fractions of the canvas kept clear of TikTok UI
+top = 0.10
+right = 0.18
+bottom = 0.24
+left = 0.08
+
+[colors]
+background = "#0B0B0D"   # dark premium fallback / placeholder base
+headline = "#FFFFFF"
+supporting = "#E6E6E6"
+accent = "#FF6A00"       # CHRGD orange
+accent_alt = "#FFC400"   # CHRGD yellow
+panel = "#000000"        # contrast panel behind text
+panel_opacity = 0.55     # 0 = none, 1 = solid
+
+[fonts]
+headline = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+supporting = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+headline_size = 74
+supporting_size = 38
+line_spacing = 1.15
+
+[text]
+headline_max_lines = 4
+accent_bar = true        # draw a short accent bar under the headline

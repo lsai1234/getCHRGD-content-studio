@@ -201,6 +201,14 @@ class Store:
         self.conn.commit()
         return self.get_idea(idea_id)
 
+    def save_asset_paths(self, idea_id: str, paths: list[str]) -> None:
+        """Record rendered asset paths without changing status. Idempotent."""
+        self.conn.execute(
+            "UPDATE ideas SET asset_paths_json = ? WHERE idea_id = ?",
+            (json.dumps(paths), idea_id),
+        )
+        self.conn.commit()
+
     def mark_exported(self, idea_id: str, when: datetime | None = None) -> None:
         """Stamp `exported_at` so a row never exports twice."""
         ts = _to_db(when) if when else datetime.now().astimezone().isoformat()
