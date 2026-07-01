@@ -29,14 +29,16 @@ class Settings(BaseSettings):
     id_prefix: str = Field(default="G", alias="CHRGD_ID_PREFIX")
 
     # --- LLM pipeline (milestone 2+) ---
-    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
-    anthropic_model: str = Field(
-        default="claude-sonnet-4-6", alias="CHRGD_ANTHROPIC_MODEL"
-    )
+    openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    openai_model: str = Field(default="gpt-4o", alias="CHRGD_OPENAI_MODEL")
+    # Optional base-URL override (aggregators / Azure / compatible gateways).
+    openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
 
     # --- Image generation (milestone 3+) ---
-    image_provider: str | None = Field(default=None, alias="CHRGD_IMAGE_PROVIDER")
-    image_model: str | None = Field(default=None, alias="CHRGD_IMAGE_MODEL")
+    # Defaults to OpenAI images so one key covers text + images.
+    image_provider: str = Field(default="openai", alias="CHRGD_IMAGE_PROVIDER")
+    image_model: str = Field(default="gpt-image-1", alias="CHRGD_IMAGE_MODEL")
+    # Falls back to OPENAI_API_KEY when the provider is openai (see get_image_key).
     image_api_key: str | None = Field(default=None, alias="CHRGD_IMAGE_API_KEY")
 
     # --- Video generation (milestone 6+) ---
@@ -50,6 +52,14 @@ class Settings(BaseSettings):
 
     # --- Optional posting backends (milestone 7) ---
     unified_api_key: str | None = Field(default=None, alias="CHRGD_UNIFIED_API_KEY")
+
+    def get_image_key(self) -> str | None:
+        """Key for the image provider, falling back to the OpenAI key."""
+        if self.image_api_key:
+            return self.image_api_key
+        if self.image_provider == "openai":
+            return self.openai_api_key
+        return None
 
     def ensure_dirs(self) -> None:
         """Create the directories the app writes to, if missing."""

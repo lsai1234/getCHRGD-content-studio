@@ -123,11 +123,52 @@ def trends() -> None:
 
 @app.command()
 def build(
-    count: int = typer.Option(5, "--count", "-n"),
-    type: str = typer.Option("carousel", "--type"),
+    count: int = typer.Option(5, "--count", "-n", help="How many queued ideas."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Run the LLM but skip paid image/video (M3+)."
+    ),
 ) -> None:
-    """Run the pipeline over N queued ideas into finished posts. (Milestone 2)"""
-    _not_yet("build", 2)
+    """Run the pipeline over N queued ideas into finished posts.
+
+    Calls OpenAI to run the 6-stage engine, validates the JSON, applies the
+    QA gate, and saves each result. Failures are flagged for `chrgd review`.
+    """
+    from .pipeline import LLMError, build_ideas
+
+    settings = get_settings()
+    with _store() as store:
+        if store.count(Status.queued) == 0:
+            typer.secho("No queued ideas. Capture some first.", fg=typer.colors.YELLOW)
+            raise typer.Exit(code=1)
+        try:
+            results = build_ideas(store, settings, count, dry_run=dry_run)
+        except LLMError as exc:
+            typer.secho(f"LLM error: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+
+    done = [r for r in results if r.status is Status.done]
+    review = [r for r in results if r.status is Status.review]
+    other = [r for r in results if r.status not in (Status.done, Status.review)]
+    spend = sum(r.spend_usd for r in results)
+
+    for r in done:
+        typer.secho(
+            f"  ✓ {r.idea_id}  built  ({r.attempts} attempt(s))  "
+            f"hook: {r.post.hook if r.post else ''}",
+            fg=typer.colors.GREEN,
+        )
+    for r in review:
+        typer.secho(
+            f"  ! {r.idea_id}  QA review — {', '.join(r.qa_failures)}",
+            fg=typer.colors.YELLOW,
+        )
+    for r in other:
+        typer.secho(f"  · {r.idea_id}  {r.error or r.status.value}", fg=typer.colors.RED)
+
+    typer.secho(
+        f"\n{len(done)} built · {len(review)} flagged · est. spend ${spend:.4f}",
+        fg=typer.colors.BLUE,
+    )
 
 
 @app.command()
@@ -149,9 +190,49 @@ def run(count: int = typer.Option(5, "--count", "-n")) -> None:
 
 
 @app.command()
-def review() -> None:
-    """List posts flagged at QA for manual review. (Milestone 2)"""
-    _not_yet("review", 2)
+def review(
+    show: str = typer.Option(
+        None, "--show", help="Print full built JSON for one idea_id."
+    ),
+) -> None:
+    """List posts flagged at QA for manual review, or show one in full."""
+    import json as _json
+
+    with _store() as store:
+        if show:
+            idea = store.get_idea(show)
+            if idea is None:
+                typer.secho(f"No idea {show}.", fg=typer.colors.RED)
+                raise typer.Exit(code=1)
+            payload = {
+                "idea_id": idea.idea_id,
+                "status": idea.status.value,
+                "hook": idea.hook,
+                "caption": idea.caption,
+                "comment_trigger": idea.comment_trigger,
+                "hashtags": _json.loads(idea.hashtags) if idea.hashtags else [],
+                "slides": _json.loads(idea.slides_json) if idea.slides_json else [],
+                "route": _json.loads(idea.route_json) if idea.route_json else {},
+            }
+            typer.echo(_json.dumps(payload, indent=2, ensure_ascii=False))
+            return
+
+        flagged = store.list_ideas(status=Status.review)
+
+    if not flagged:
+        typer.secho("Nothing flagged for review.", fg=typer.colors.GREEN)
+        return
+    typer.secho(f"{len(flagged)} post(s) flagged at QA:", fg=typer.colors.YELLOW)
+    for idea in flagged:
+        typer.echo(f"  {idea.idea_id}  {idea.concept_note}")
+        if idea.route_json:
+            route = _json.loads(idea.route_json)
+            qa = route.get("qa", {})
+            if qa:
+                typer.echo(f"      qa: {qa}")
+    typer.secho(
+        "\nInspect one with:  chrgd review --show <idea_id>", fg=typer.colors.BLUE
+    )
 
 
 if __name__ == "__main__":

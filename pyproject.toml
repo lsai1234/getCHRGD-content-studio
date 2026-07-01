@@ -13,7 +13,7 @@ dependencies = [
 [project.optional-dependencies]
 # Pulled in by later milestones. Kept out of the base install so milestone 1
 # stays lean and testable without paid SDKs or heavy media libraries.
-llm = ["anthropic>=0.40", "httpx>=0.27"]
+llm = ["openai>=1.40", "httpx>=0.27"]
 media = ["pillow>=10.0", "httpx>=0.27"]
 video = ["moviepy>=1.0.3", "ffmpeg-python>=0.2"]
 dev = ["pytest>=8.0"]

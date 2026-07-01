@@ -210,6 +210,16 @@ class Store:
         )
         self.conn.commit()
 
+    def mark_review(self, idea_id: str, fields: dict) -> Idea:
+        """Persist a build that failed QA and flag it for `chrgd review`.
+
+        Same as `save_build` but leaves status as `review` instead of `done`,
+        so the post is inspectable but never exported.
+        """
+        idea = self.save_build(idea_id, fields)
+        self.set_status(idea_id, Status.review)
+        return self.get_idea(idea_id)
+
     def set_status(self, idea_id: str, status: Status) -> None:
         self.conn.execute(
             "UPDATE ideas SET status = ? WHERE idea_id = ?",
@@ -258,6 +268,39 @@ class Store:
                 "SELECT COUNT(*) AS c FROM ideas WHERE status = ?", (status.value,)
             ).fetchone()
         return int(row["c"])
+
+    # --- run history --------------------------------------------------------
+
+    def start_run(self, command: str) -> int:
+        cur = self.conn.execute(
+            "INSERT INTO runs (command, started_at) VALUES (?, ?)",
+            (command, datetime.now().astimezone().isoformat()),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def finish_run(
+        self,
+        run_id: int,
+        *,
+        built: int = 0,
+        exported: int = 0,
+        spend_usd: float = 0.0,
+        notes: str = "",
+    ) -> None:
+        self.conn.execute(
+            "UPDATE runs SET finished_at = ?, built = ?, exported = ?, "
+            "spend_usd = ?, notes = ? WHERE run_id = ?",
+            (
+                datetime.now().astimezone().isoformat(),
+                built,
+                exported,
+                spend_usd,
+                notes,
+                run_id,
+            ),
+        )
+        self.conn.commit()
 
     # --- mapping ------------------------------------------------------------
 
