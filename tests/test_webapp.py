@@ -154,3 +154,40 @@ def test_media_path_traversal_blocked(client):
 
 def test_media_requires_auth(client):
     assert client.get("/media/G-0001/slide_1.jpg").status_code == 401
+
+
+# --- background jobs (A2) ---------------------------------------------------
+
+
+def test_build_job_endpoint_enqueues(client):
+    _login(client)
+    r = client.post("/api/jobs/build", data={"count": 2, "dry_run": True})
+    assert "job_id" in r.json()
+    # It's queued, waiting for the worker (not started in tests).
+    job = client.get(f"/api/jobs/{r.json()['job_id']}").json()
+    assert job["status"] == "QUEUED"
+    assert job["kind"] == "build"
+
+
+def test_render_job_endpoint_then_worker(client, settings):
+    from chrgd.worker import Worker
+
+    with Store(settings.db_path) as store:
+        slides = [
+            {"headline": f"h{i}", "supporting": "s", "image_prompt": "p", "visual_intent": "v"}
+            for i in range(5)
+        ]
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x", slides_json=json.dumps(slides)))
+    _login(client)
+    job_id = client.post("/api/jobs/render/G-0001", params={"dry_run": True}).json()["job_id"]
+
+    Worker(settings).run_once()  # drive the queue once, deterministically
+
+    job = client.get(f"/api/jobs/{job_id}").json()
+    assert job["status"] == "COMPLETED"
+    assert len(json.loads(job["result_json"])["paths"]) == 5
+
+
+def test_render_job_missing_idea_404(client):
+    _login(client)
+    assert client.post("/api/jobs/render/NOPE").status_code == 404

@@ -85,23 +85,25 @@ CREATE TABLE IF NOT EXISTS runs (
     notes       TEXT
 );
 
--- Async job state (long-running video jobs, and later the web worker).
+-- Async job state (background build/render + long video jobs).
 -- Persisted so a crash/restart resumes instead of re-billing.
 CREATE TABLE IF NOT EXISTS jobs (
     job_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    idea_id     TEXT NOT NULL,
-    kind        TEXT NOT NULL,              -- e.g. 'video'
-    provider    TEXT,                       -- e.g. 'higgsfield'
-    external_id TEXT,                       -- provider generation_id
+    idea_id     TEXT,                        -- null for whole-batch jobs (build)
+    kind        TEXT NOT NULL,               -- 'build' | 'render' | 'video'
+    provider    TEXT,                        -- e.g. 'higgsfield'
+    external_id TEXT,                         -- provider generation_id
     status      TEXT NOT NULL DEFAULT 'QUEUED',
+    params_json TEXT,                         -- job inputs (count, dry_run, ...)
+    result_json TEXT,                         -- job output summary
+    progress    INTEGER NOT NULL DEFAULT 0,   -- 0-100
     media_url   TEXT,
     output_path TEXT,
     error       TEXT,
     attempts    INTEGER NOT NULL DEFAULT 0,
     cost_usd    REAL NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL,
-    FOREIGN KEY (idea_id) REFERENCES ideas(idea_id)
+    updated_at  TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
@@ -136,7 +138,23 @@ class Store:
         self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.execute("PRAGMA busy_timeout = 5000")
         self.conn.executescript(_SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a DB was first created (idempotent)."""
+        cols = {
+            r["name"]
+            for r in self.conn.execute("PRAGMA table_info(jobs)").fetchall()
+        }
+        additions = {
+            "params_json": "TEXT",
+            "result_json": "TEXT",
+            "progress": "INTEGER NOT NULL DEFAULT 0",
+        }
+        for name, decl in additions.items():
+            if name not in cols:
+                self.conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
         self.conn.close()
@@ -339,16 +357,56 @@ class Store:
     # --- async jobs ---------------------------------------------------------
 
     def create_job(
-        self, idea_id: str, kind: str, provider: str | None = None
+        self,
+        kind: str,
+        *,
+        idea_id: str | None = None,
+        provider: str | None = None,
+        params: dict | None = None,
     ) -> int:
         now = datetime.now().astimezone().isoformat()
         cur = self.conn.execute(
-            "INSERT INTO jobs (idea_id, kind, provider, status, created_at, "
-            "updated_at) VALUES (?, ?, ?, 'QUEUED', ?, ?)",
-            (idea_id, kind, provider, now, now),
+            "INSERT INTO jobs (idea_id, kind, provider, status, params_json, "
+            "created_at, updated_at) VALUES (?, ?, ?, 'QUEUED', ?, ?, ?)",
+            (idea_id, kind, provider, json.dumps(params or {}), now, now),
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def claim_next_job(self) -> dict | None:
+        """Atomically take the oldest QUEUED job → PROCESSING. Single worker."""
+        row = self.conn.execute(
+            "SELECT * FROM jobs WHERE status = 'QUEUED' ORDER BY job_id ASC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            return None
+        self.conn.execute(
+            "UPDATE jobs SET status = 'PROCESSING', attempts = attempts + 1, "
+            "updated_at = ? WHERE job_id = ?",
+            (datetime.now().astimezone().isoformat(), row["job_id"]),
+        )
+        self.conn.commit()
+        return self.get_job(row["job_id"])
+
+    def recover_interrupted_jobs(self) -> int:
+        """On startup, fail any PROCESSING build/render jobs (avoid re-billing).
+
+        Video jobs are pollable via external_id and resume separately, so they
+        are left for the video poller; here we only reap non-pollable work.
+        """
+        cur = self.conn.execute(
+            "UPDATE jobs SET status = 'ERROR', error = 'interrupted — re-run', "
+            "updated_at = ? WHERE status = 'PROCESSING' AND kind IN ('build','render')",
+            (datetime.now().astimezone().isoformat(),),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def list_jobs(self, limit: int = 50) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM jobs ORDER BY job_id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def get_job(self, job_id: int) -> dict | None:
         row = self.conn.execute(
@@ -369,6 +427,9 @@ class Store:
         allowed = {
             "external_id",
             "status",
+            "params_json",
+            "result_json",
+            "progress",
             "media_url",
             "output_path",
             "error",

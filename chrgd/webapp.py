@@ -10,13 +10,14 @@ Run it:  `chrgd serve`  (installs: `pip install -e '.[web]'`).
 
 from __future__ import annotations
 
+import json
 import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -24,6 +25,7 @@ from .config import Settings, get_settings
 from .db import Store
 from .models import Status
 from .webauth import auth_configured, verify_credentials
+from .worker import Worker, enqueue_build, enqueue_render
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -44,9 +46,23 @@ def _safe_output_path(settings: Settings, *parts: str) -> Path:
     return target
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> FastAPI:
     settings = settings or get_settings()
-    app = FastAPI(title="CHRGD Content Studio")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        worker = None
+        if run_worker:
+            worker = Worker(settings)
+            worker.start()
+            app.state.worker = worker
+        try:
+            yield
+        finally:
+            if worker:
+                worker.stop()
+
+    app = FastAPI(title="CHRGD Content Studio", lifespan=lifespan)
     app.state.settings = settings
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
@@ -249,6 +265,44 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(400, str(exc))
             store.save_asset_paths(idea_id, result.paths)
         return {"idea_id": idea_id, "paths": result.paths, "spend_usd": result.spend_usd}
+
+    # --- background jobs ----------------------------------------------------
+
+    @app.post("/api/jobs/build")
+    def api_job_build(
+        request: Request,
+        count: int = Form(3),
+        dry_run: bool = Form(False),
+        _: str = Depends(require_user),
+    ):
+        with _store(settings) as store:
+            job_id = enqueue_build(store, count=count, dry_run=dry_run)
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(f"/?flash=Build+job+%23{job_id}+queued", 303)
+        return {"job_id": job_id, "kind": "build"}
+
+    @app.post("/api/jobs/render/{idea_id}")
+    def api_job_render(
+        idea_id: str, dry_run: bool = False, _: str = Depends(require_user)
+    ):
+        with _store(settings) as store:
+            if store.get_idea(idea_id) is None:
+                raise HTTPException(404, "no such idea")
+            job_id = enqueue_render(store, idea_id, dry_run=dry_run)
+        return {"job_id": job_id, "kind": "render", "idea_id": idea_id}
+
+    @app.get("/api/jobs")
+    def api_jobs(_: str = Depends(require_user)):
+        with _store(settings) as store:
+            return store.list_jobs()
+
+    @app.get("/api/jobs/{job_id}")
+    def api_job(job_id: int, _: str = Depends(require_user)):
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+        if job is None:
+            raise HTTPException(404, "no such job")
+        return job
 
     @app.post("/api/export")
     def api_export(week: bool = True, limit: int | None = None, _: str = Depends(require_user)):

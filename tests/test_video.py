@@ -98,7 +98,7 @@ def test_jobs_table_crud(store):
     from chrgd.models import Idea
 
     store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
-    job_id = store.create_job("G-0001", "video", provider="higgsfield")
+    job_id = store.create_job("video", idea_id="G-0001", provider="higgsfield")
     job = store.get_job(job_id)
     assert job["status"] == "QUEUED"
     assert job["kind"] == "video"
