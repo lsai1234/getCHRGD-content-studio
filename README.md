@@ -83,6 +83,10 @@ Caddyfile, backup + bootstrap scripts) with a step-by-step guide in
 
 ## Install
 
+> **On Windows and not sure where to start?** Follow
+> [`QUICKSTART_WINDOWS.md`](QUICKSTART_WINDOWS.md) — a copy-paste, no-jargon guide
+> to run it and do a real test in ~10 minutes.
+
 Requires Python 3.11+.
 
 ```bash
