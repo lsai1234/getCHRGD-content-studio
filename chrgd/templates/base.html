@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CHRGD Content Studio{% endblock %}</title>
+  <style>
+    :root { --bg:#0B0B0D; --panel:#151519; --line:#26262c; --fg:#f2f2f2;
+            --muted:#9a9aa2; --accent:#FF6A00; --accent2:#FFC400; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+           background:var(--bg); color:var(--fg); }
+    header { display:flex; align-items:center; justify-content:space-between;
+             padding:14px 22px; border-bottom:1px solid var(--line); background:#0f0f12; }
+    header .brand { font-weight:700; letter-spacing:.5px; }
+    header .brand span { color:var(--accent); }
+    header nav a { color:var(--muted); text-decoration:none; margin-left:18px; }
+    header nav a:hover { color:var(--fg); }
+    main { max-width:1040px; margin:0 auto; padding:26px 22px; }
+    h1 { font-size:22px; margin:0 0 18px; }
+    .cards { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+            padding:16px 18px; min-width:130px; }
+    .card .n { font-size:28px; font-weight:700; }
+    .card .l { color:var(--muted); font-size:13px; }
+    .accent { color:var(--accent); }
+    form.inline { background:var(--panel); border:1px solid var(--line);
+                  border-radius:12px; padding:18px; margin-bottom:20px; }
+    label { display:block; font-size:13px; color:var(--muted); margin:10px 0 4px; }
+    input, textarea, select { width:100%; background:#0d0d10; border:1px solid var(--line);
+            color:var(--fg); border-radius:8px; padding:10px 12px; font:inherit; }
+    textarea { min-height:80px; resize:vertical; }
+    button { background:var(--accent); color:#111; border:0; border-radius:8px;
+             padding:10px 16px; font-weight:600; cursor:pointer; margin-top:14px; }
+    button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);
+             font-size:14px; }
+    th { color:var(--muted); font-weight:500; }
+    .pill { font-size:12px; padding:2px 8px; border-radius:20px; border:1px solid var(--line); }
+    .flash { background:#2a1a0a; border:1px solid var(--accent); color:#ffcfa3;
+             padding:10px 14px; border-radius:8px; margin-bottom:16px; }
+    .muted { color:var(--muted); }
+    a { color:var(--accent2); }
+  </style>
+</head>
+<body>
+  {% if user %}
+  <header>
+    <div class="brand">CHR<span>GD</span> · Content Studio</div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/review">Review</a>
+      <form method="post" action="/logout" style="display:inline">
+        <button class="ghost" style="margin:0;padding:6px 12px">Log out</button>
+      </form>
+    </nav>
+  </header>
+  {% endif %}
+  <main>
+    {% block body %}{% endblock %}
+  </main>
+</body>
+</html>

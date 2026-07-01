@@ -59,6 +59,17 @@ class Settings(BaseSettings):
     # --- Cost guard ---
     max_spend_per_run: float = Field(default=5.0, alias="CHRGD_MAX_SPEND_PER_RUN")
 
+    # --- Web dashboard (Phase A) ---
+    web_username: str = Field(default="admin", alias="CHRGD_WEB_USERNAME")
+    # Set EITHER a pbkdf2 hash (preferred) or a plaintext password.
+    web_password: str | None = Field(default=None, alias="CHRGD_WEB_PASSWORD")
+    web_password_hash: str | None = Field(
+        default=None, alias="CHRGD_WEB_PASSWORD_HASH"
+    )
+    # Signs session cookies. Set a long random value in prod so logins survive
+    # restarts; a random one is generated per-process if unset.
+    secret_key: str | None = Field(default=None, alias="CHRGD_SECRET_KEY")
+
     # --- Optional posting backends (milestone 7) ---
     unified_api_key: str | None = Field(default=None, alias="CHRGD_UNIFIED_API_KEY")
 

@@ -291,6 +291,25 @@ def run(count: int = typer.Option(5, "--count", "-n")) -> None:
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", help="Bind address."),
+    port: int = typer.Option(8000, "--port", help="Port."),
+    reload: bool = typer.Option(False, "--reload", help="Auto-reload (dev)."),
+) -> None:
+    """Launch the web dashboard (needs: pip install -e '.[web]')."""
+    try:
+        import uvicorn
+    except ImportError:
+        typer.secho(
+            "Web deps missing. Run: pip install -e '.[web]'", fg=typer.colors.RED
+        )
+        raise typer.Exit(code=1)
+    uvicorn.run(
+        "chrgd.webapp:create_app", factory=True, host=host, port=port, reload=reload
+    )
+
+
+@app.command()
 def review(
     show: str = typer.Option(
         None, "--show", help="Print full built JSON for one idea_id."

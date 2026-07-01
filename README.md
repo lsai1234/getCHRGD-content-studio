@@ -46,7 +46,26 @@ bulk-import one CSV into Metricool. That's the daily grind gone.
 > in `brand.toml`: slide 1 renders `high`, slides 2–5 `medium`.
 
 > **What's left:** see [`ROADMAP.md`](ROADMAP.md) for M5–M7 (trends, video,
-> orchestration), the web dashboard, and VPS deployment.
+> orchestration), the rest of the web dashboard, and VPS deployment.
+
+### Web dashboard (Phase A1 ✅)
+
+A FastAPI app wraps the same engine behind a single-user login.
+
+```bash
+pip install -e ".[web]"
+# set a password (preferred: a hash) + a session key in .env:
+python -m chrgd.webauth 'your-password'          # prints CHRGD_WEB_PASSWORD_HASH
+#   CHRGD_WEB_PASSWORD_HASH=pbkdf2_sha256$...     (or CHRGD_WEB_PASSWORD=plaintext)
+#   CHRGD_SECRET_KEY=<long random string>
+chrgd serve                                        # http://127.0.0.1:8000
+```
+
+Ships now: session login/logout, a dashboard (counts, spend, capture form,
+backlog), a review page with approve, a JSON API (`/api/backlog`, `/api/capture`,
+`/api/render/{id}`, `/api/export`, `/api/runs`, …), and path-safe asset serving
+(`/media/...`). Long-running build/render move to a background worker in Phase A2;
+richer screens in A4. **Higgsfield video infra is present but off** — see ROADMAP.
 
 > **Deployment (agreed plan):** engine first (M2–4), then a FastAPI web
 > dashboard + backend, hosted on a small always-on VPS with Caddy for automatic

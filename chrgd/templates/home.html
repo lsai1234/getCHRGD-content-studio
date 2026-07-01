@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CHRGD{% endblock %}
+{% block body %}
+<h1>Dashboard</h1>
+
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="cards">
+  <div class="card"><div class="n">{{ counts.queued }}</div><div class="l">Queued</div></div>
+  <div class="card"><div class="n">{{ counts.done }}</div><div class="l">Built</div></div>
+  <div class="card"><div class="n accent">{{ counts.review }}</div><div class="l">Needs review</div></div>
+  <div class="card"><div class="n">{{ counts.total }}</div><div class="l">Total ideas</div></div>
+  <div class="card"><div class="n">${{ '%.2f'|format(spend) }}</div><div class="l">Spend (all runs)</div></div>
+</div>
+
+<form class="inline" method="post" action="/capture">
+  <strong>Capture ideas</strong>
+  <label>One idea per line</label>
+  <textarea name="dump" placeholder="gym bros who hog the squat rack&#10;pre-workout that makes you feel invincible"></textarea>
+  <div style="display:flex; gap:12px;">
+    <div style="flex:1"><label>Category</label><input name="category" placeholder="humour"></div>
+    <div style="width:120px"><label>Priority</label>
+      <select name="priority"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+    </div>
+  </div>
+  <button type="submit">Capture</button>
+</form>
+
+<h1 style="font-size:18px;">Backlog</h1>
+<table>
+  <tr><th>ID</th><th>Status</th><th>Pri</th><th>Category</th><th>Concept</th></tr>
+  {% for i in ideas %}
+  <tr>
+    <td>{{ i.idea_id }}</td>
+    <td><span class="pill">{{ i.status.value }}</span></td>
+    <td>{{ i.priority }}</td>
+    <td class="muted">{{ i.content_category }}</td>
+    <td>{{ i.concept_note }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">Backlog is empty — capture something above.</td></tr>
+  {% endfor %}
+</table>
+
+<p class="muted" style="margin-top:24px;">
+  Build, render, and export run from the CLI for now; the buttons land in
+  Phase A4. JSON API: <a href="/api/backlog">/api/backlog</a> ·
+  <a href="/api/runs">/api/runs</a>
+</p>
+{% endblock %}

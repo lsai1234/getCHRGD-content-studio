@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Sign in — CHRGD{% endblock %}
+{% block body %}
+<div style="max-width:360px; margin:8vh auto;">
+  <div class="brand" style="font-weight:700; font-size:20px; margin-bottom:20px;">
+    CHR<span class="accent">GD</span> · Content Studio
+  </div>
+  {% if error %}<div class="flash">{{ error }}</div>{% endif %}
+  {% if not configured %}
+  <div class="flash">
+    No web password is set. Add <code>CHRGD_WEB_PASSWORD_HASH</code> (or
+    <code>CHRGD_WEB_PASSWORD</code>) to your <code>.env</code> to enable login.
+  </div>
+  {% endif %}
+  <form method="post" action="/login">
+    <label>Username</label>
+    <input name="username" autocomplete="username" autofocus>
+    <label>Password</label>
+    <input name="password" type="password" autocomplete="current-password">
+    <button type="submit">Sign in</button>
+  </form>
+</div>
+{% endblock %}
