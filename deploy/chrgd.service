@@ -1,0 +1,31 @@
+# systemd unit for CHRGD Content Studio.
+# Install:  sudo cp deploy/chrgd.service /etc/systemd/system/chrgd.service
+#           sudo systemctl daemon-reload && sudo systemctl enable --now chrgd
+#
+# IMPORTANT: a SINGLE process only. The background job worker is a singleton;
+# running multiple uvicorn workers would spawn duplicate workers and process
+# each job more than once. Do not add --workers >1.
+
+[Unit]
+Description=CHRGD Content Studio (FastAPI + background worker)
+After=network.target
+
+[Service]
+Type=simple
+User=chrgd
+Group=chrgd
+WorkingDirectory=/opt/chrgd/app
+EnvironmentFile=/opt/chrgd/app/.env
+ExecStart=/opt/chrgd/app/.venv/bin/uvicorn chrgd.webapp:create_app \
+    --factory --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/chrgd/app/data /opt/chrgd/app/output
+
+[Install]
+WantedBy=multi-user.target

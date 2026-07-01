@@ -47,20 +47,21 @@ the CLI uses. One process, no build step, cheap on a small VPS.
   the public internet; your API keys sit behind it.
 - SQLite switched to **WAL mode** for safe concurrent web + worker access.
 
-### A2 — Background jobs · **M**
-- `build` / `render` (and later `video`) run off the request via a lightweight
-  in-process worker driven by the **`jobs` table** (already built). Resumable,
-  no Redis/Celery.
-- Live progress in the UI via HTMX polling.
+### A2 — Background jobs · **DONE ✅**
+- `build` / `render` (and later `video`) run off the request via a single
+  in-process worker driven by the **`jobs` table**. Resumable (interrupted
+  paid work is failed, not re-billed), no Redis/Celery.
+- Live progress in the dashboard via JS polling (`/api/jobs`).
 
-### A3 — Deploy early · **M**
-Get A1+A2 live on the box before building all the screens, so you test on real
-infrastructure.
-- **VPS:** ~£4/mo (Hetzner/DigitalOcean), Ubuntu, always-on.
-- **Runtime:** uvicorn under **systemd**; **Caddy** for automatic HTTPS.
-- **DNS:** one `A` record `contentstudio` → the VPS IP (see note below).
-- `.env` on the box (`chmod 600`); `ffmpeg` + fonts installed for later.
-- Nightly backup of the SQLite file + `output/`.
+### A3 — Deploy · **DONE ✅ (artifacts ready — run on your VPS)**
+Turnkey deploy kit in `deploy/` + step-by-step [`DEPLOY.md`](DEPLOY.md):
+- **VPS:** ~£4/mo (Hetzner CX22/DigitalOcean), Ubuntu, always-on.
+- **Runtime:** uvicorn under **systemd** (single process — the worker is a
+  singleton); **Caddy** for automatic Let's Encrypt HTTPS.
+- **DNS:** one Cloudflare `A` record `contentstudio` → the VPS IP.
+- `deploy/setup.sh` bootstraps the box; `.env` `chmod 600`; ffmpeg installed.
+- Nightly `deploy/chrgd-backup.sh` (WAL-safe DB snapshot + asset tarball).
+- **Left to do (needs you):** provision the VPS + run the kit (§1–6 of DEPLOY.md).
 
 ### A4 — The screens · **M–L**
 Backlog · Build queue · **Review & approve** (slide previews, edit copy,
@@ -124,8 +125,9 @@ Everything here plugs into infra that already exists.
 ---
 
 ## Suggested order
-**A1 → A2 → A3 (deploy) → A4 → B1 → B2 → C (video) → D.**
-Ship the website around carousels first; fold video in via Phase C with no rework.
+**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 → B1 → B2 → C (video) → D.**
+Next: get it live on the VPS (DEPLOY.md), then A4 screens. Ship the website
+around carousels first; fold video in via Phase C with no rework.
 
 ---
 

@@ -64,8 +64,14 @@ chrgd serve                                        # http://127.0.0.1:8000
 Ships now: session login/logout, a dashboard (counts, spend, capture form,
 backlog), a review page with approve, a JSON API (`/api/backlog`, `/api/capture`,
 `/api/render/{id}`, `/api/export`, `/api/runs`, …), and path-safe asset serving
-(`/media/...`). Long-running build/render move to a background worker in Phase A2;
-richer screens in A4. **Higgsfield video infra is present but off** — see ROADMAP.
+(`/media/...`). **Build/render run as background jobs** (Phase A2) via an
+in-process worker over the `jobs` table — the dashboard live-polls `/api/jobs`.
+Richer screens land in A4. **Higgsfield video infra is present but off.**
+
+**Deploying it:** a turnkey kit lives in [`deploy/`](deploy/) (systemd unit,
+Caddyfile, backup + bootstrap scripts) with a step-by-step guide in
+[`DEPLOY.md`](DEPLOY.md) — get it live at `contentstudio.getchrgd.co.uk` on a
+~£4/mo VPS with automatic HTTPS.
 
 > **Deployment (agreed plan):** engine first (M2–4), then a FastAPI web
 > dashboard + backend, hosted on a small always-on VPS with Caddy for automatic

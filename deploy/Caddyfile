@@ -1,0 +1,21 @@
+# Caddy reverse proxy for CHRGD Content Studio.
+# Install:  sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+#           sudo systemctl reload caddy
+#
+# Caddy fetches and renews a free Let's Encrypt certificate automatically, so
+# https://contentstudio.getchrgd.co.uk just works once DNS points at this box
+# and ports 80 + 443 are open. The app itself listens only on 127.0.0.1:8000.
+
+contentstudio.getchrgd.co.uk {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000
+
+	# Uploads/exports can be a few MB; give proxied requests room.
+	request_body {
+		max_size 50MB
+	}
+
+	log {
+		output file /var/log/caddy/chrgd.log
+	}
+}
