@@ -23,7 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings, get_settings
 from .db import Store
-from .models import Status
+from .models import Idea, Status
 from .webauth import auth_configured, verify_credentials
 from .worker import Worker, enqueue_build, enqueue_render
 
@@ -126,32 +126,130 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         request.session.clear()
         return RedirectResponse("/login", status_code=303)
 
-    # --- dashboard (HTML) ---------------------------------------------------
+    # --- page rendering helper ---------------------------------------------
+
+    def render_page(request: Request, name: str, active: str, **ctx):
+        with _store(settings) as store:
+            review_count = store.count(Status.review)
+        ctx.update(
+            request=request,
+            user=current_user(request),
+            active=active,
+            review_count=review_count,
+            flash=request.query_params.get("flash"),
+        )
+        return templates.TemplateResponse(request=request, name=name, context=ctx)
+
+    def _counts(store) -> dict:
+        exported = store.conn.execute(
+            "SELECT COUNT(*) AS c FROM ideas WHERE exported_at IS NOT NULL"
+        ).fetchone()["c"]
+        return {
+            "queued": store.count(Status.queued),
+            "done": store.count(Status.done),
+            "review": store.count(Status.review),
+            "exported": int(exported),
+            "total": store.count(),
+        }
+
+    def _post_view(idea) -> dict:
+        slides = json.loads(idea.slides_json) if idea.slides_json else []
+        hashtags = json.loads(idea.hashtags) if idea.hashtags else []
+        route = json.loads(idea.route_json) if idea.route_json else {}
+        assets = (
+            [Path(p).name for p in json.loads(idea.asset_paths_json)]
+            if idea.asset_paths_json
+            else []
+        )
+        return {
+            "idea_id": idea.idea_id,
+            "status": idea.status.value,
+            "concept_note": idea.concept_note,
+            "hook": idea.hook,
+            "caption": idea.caption,
+            "comment_trigger": idea.comment_trigger,
+            "hashtags": " ".join(hashtags),
+            "slides": slides,
+            "qa": route.get("qa", {}),
+            "assets": assets,
+        }
+
+    # --- pages (HTML) -------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request, _: str = Depends(require_user_page)):
         with _store(settings) as store:
-            ideas = store.list_ideas()
-            counts = {
-                "queued": store.count(Status.queued),
-                "done": store.count(Status.done),
-                "review": store.count(Status.review),
-                "total": store.count(),
-            }
-            row = store.conn.execute(
-                "SELECT COALESCE(SUM(spend_usd),0) AS s FROM runs"
-            ).fetchone()
-            spend = float(row["s"])
-        return templates.TemplateResponse(
-            request=request,
-            name="home.html",
-            context={
-                "user": current_user(request),
-                "ideas": ideas,
-                "counts": counts,
-                "spend": spend,
-                "flash": request.query_params.get("flash"),
-            },
+            counts = _counts(store)
+            spend = float(
+                store.conn.execute(
+                    "SELECT COALESCE(SUM(spend_usd),0) AS s FROM runs"
+                ).fetchone()["s"]
+            )
+            scheduled = [
+                Idea.model_validate(dict(r))
+                for r in store.conn.execute(
+                    "SELECT * FROM ideas WHERE scheduled_for IS NOT NULL "
+                    "ORDER BY scheduled_for ASC LIMIT 20"
+                ).fetchall()
+            ]
+            runs = [dict(r) for r in store.list_runs(20)]
+        return render_page(
+            request, "home.html", "dashboard",
+            counts=counts, spend=spend, scheduled=scheduled, runs=runs,
+        )
+
+    @app.get("/backlog", response_class=HTMLResponse)
+    def backlog_page(
+        request: Request, status: str | None = None, _: str = Depends(require_user_page)
+    ):
+        st = Status(status) if status else None
+        with _store(settings) as store:
+            ideas = store.list_ideas(status=st)
+        return render_page(
+            request, "backlog.html", "backlog",
+            ideas=ideas, statuses=[s.value for s in Status], current_status=status or "",
+        )
+
+    @app.get("/build", response_class=HTMLResponse)
+    def build_page(request: Request, _: str = Depends(require_user_page)):
+        with _store(settings) as store:
+            counts = _counts(store)
+        return render_page(request, "build.html", "build", counts=counts)
+
+    @app.get("/review", response_class=HTMLResponse)
+    def review_page(request: Request, _: str = Depends(require_user_page)):
+        with _store(settings) as store:
+            review = store.list_ideas(status=Status.review)
+            done = [i for i in store.list_ideas(status=Status.done) if i.slides_json]
+        posts = [_post_view(i) for i in review] + [_post_view(i) for i in done]
+        return render_page(request, "review.html", "review", posts=posts)
+
+    @app.get("/export", response_class=HTMLResponse)
+    def export_page(request: Request, sample: int = 0, _: str = Depends(require_user_page)):
+        from .publisher import get_publisher
+
+        publisher = get_publisher("metricool_csv")
+        if sample:
+            publisher.write_sample(settings)
+            return RedirectResponse("/export?flash=Sample+CSV+written+to+ready/", 303)
+
+        ready = Path(settings.output_dir) / "ready"
+        csvs = []
+        if ready.exists():
+            for f in sorted(ready.glob("*.csv"), reverse=True):
+                csvs.append({"name": f.name, "size": f"{f.stat().st_size} B"})
+        with _store(settings) as store:
+            exported = [
+                Idea.model_validate(dict(r))
+                for r in store.conn.execute(
+                    "SELECT * FROM ideas WHERE exported_at IS NOT NULL "
+                    "ORDER BY scheduled_for ASC"
+                ).fetchall()
+            ]
+            ready_count = len(publisher._selectable(store, None))
+        return render_page(
+            request, "export.html", "export",
+            csvs=csvs, exported=exported, ready_count=ready_count,
         )
 
     @app.post("/capture")
@@ -172,28 +270,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             flash = f"Captured {len(created)}, skipped {len(skipped)} duplicate(s)."
         else:
             flash = "Nothing to capture."
-        return RedirectResponse(f"/?flash={flash}", status_code=303)
+        return RedirectResponse(f"/backlog?flash={flash}", status_code=303)
 
-    @app.get("/review", response_class=HTMLResponse)
-    def review_page(request: Request, _: str = Depends(require_user_page)):
+    @app.post("/export")
+    def export_run(request: Request, _: str = Depends(require_user_page)):
+        from .publisher import get_publisher
+
+        publisher = get_publisher("metricool_csv")
+        limit = publisher.cols.schedule.per_day * 7
         with _store(settings) as store:
-            flagged = store.list_ideas(status=Status.review)
-        rows = "".join(
-            f"<tr><td>{i.idea_id}</td><td>{i.concept_note}</td>"
-            f"<td><a href='/api/ideas/{i.idea_id}'>json</a> · "
-            f"<form method='post' action='/api/ideas/{i.idea_id}/approve' "
-            f"style='display:inline'><button style='margin:0;padding:4px 10px'>"
-            f"Approve</button></form></td></tr>"
-            for i in flagged
-        )
-        body = (
-            "<h1>Needs review</h1><table><tr><th>ID</th><th>Concept</th><th></th></tr>"
-            + (rows or "<tr><td colspan=3 class=muted>Nothing flagged.</td></tr>")
-            + "</table>"
-        )
-        return HTMLResponse(
-            _wrap_page(templates, request, current_user(request), body)
-        )
+            result = publisher.export(store, settings, limit=limit)
+        n = len(result.exported_ids)
+        flash = f"Exported {n} post(s)." if n else "Nothing to export (need rendered posts)."
+        return RedirectResponse(f"/export?flash={flash}", status_code=303)
 
     # --- JSON API -----------------------------------------------------------
 
@@ -237,6 +326,44 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 raise HTTPException(404, "no such idea")
             store.set_status(idea_id, Status.void)
         return {"idea_id": idea_id, "status": "void"}
+
+    @app.post("/api/ideas/{idea_id}/edit")
+    async def api_edit(idea_id: str, request: Request, _: str = Depends(require_user)):
+        """Edit approved copy (hook, caption, slides, hashtags) from the review UI."""
+        form = await request.form()
+        with _store(settings) as store:
+            idea = store.get_idea(idea_id)
+            if idea is None:
+                raise HTTPException(404, "no such idea")
+
+            slides = json.loads(idea.slides_json) if idea.slides_json else []
+            for i, slide in enumerate(slides):
+                if f"slide_headline_{i}" in form:
+                    slide["headline"] = form[f"slide_headline_{i}"]
+                if f"slide_supporting_{i}" in form:
+                    slide["supporting"] = form[f"slide_supporting_{i}"]
+
+            hashtags = [
+                t if t.startswith("#") else f"#{t}"
+                for t in str(form.get("hashtags", "")).split()
+                if t
+            ]
+            fields = {
+                "hook": form.get("hook", idea.hook),
+                "caption": form.get("caption", idea.caption),
+                "comment_trigger": form.get("comment_trigger", idea.comment_trigger),
+                "hashtags": json.dumps(hashtags),
+                "slides_json": json.dumps(slides),
+            }
+            # save_build stamps status=done; keep review posts in review.
+            prev = idea.status
+            store.save_build(idea_id, fields)
+            if prev == Status.review:
+                store.set_status(idea_id, Status.review)
+
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse("/review?flash=Saved", status_code=303)
+        return {"idea_id": idea_id, "saved": True}
 
     @app.post("/api/ideas/{idea_id}/approve")
     def api_approve(idea_id: str, request: Request, _: str = Depends(require_user)):
@@ -340,16 +467,29 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def download_ready(filename: str, _: str = Depends(require_user)):
         return FileResponse(_safe_output_path(settings, "ready", filename))
 
+    @app.get("/download/assets.zip")
+    def download_assets_zip(_: str = Depends(require_user)):
+        import io
+        import zipfile
+
+        from fastapi.responses import StreamingResponse
+
+        ready = Path(settings.output_dir) / "ready"
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            if ready.exists():
+                for f in ready.iterdir():
+                    if f.is_file():
+                        zf.write(f, arcname=f.name)
+        buf.seek(0)
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=chrgd_ready.zip"},
+        )
+
     @app.get("/healthz")
     def healthz():
         return JSONResponse({"ok": True})
 
     return app
-
-
-def _wrap_page(templates, request, user, inner_html: str) -> str:
-    """Render base.html with a raw inner body (used for simple pages)."""
-    tpl = templates.get_template("base.html")
-    # base.html defines a {% block body %}; render via a tiny child string.
-    child = "{% extends 'base.html' %}{% block body %}" + inner_html + "{% endblock %}"
-    return templates.env.from_string(child).render(request=request, user=user)

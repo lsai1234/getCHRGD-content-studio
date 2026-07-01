@@ -48,7 +48,7 @@ bulk-import one CSV into Metricool. That's the daily grind gone.
 > **What's left:** see [`ROADMAP.md`](ROADMAP.md) for M5–M7 (trends, video,
 > orchestration), the rest of the web dashboard, and VPS deployment.
 
-### Web dashboard (Phase A1 ✅)
+### Web dashboard (Phases A1–A4 ✅)
 
 A FastAPI app wraps the same engine behind a single-user login.
 
@@ -61,12 +61,14 @@ python -m chrgd.webauth 'your-password'          # prints CHRGD_WEB_PASSWORD_HAS
 chrgd serve                                        # http://127.0.0.1:8000
 ```
 
-Ships now: session login/logout, a dashboard (counts, spend, capture form,
-backlog), a review page with approve, a JSON API (`/api/backlog`, `/api/capture`,
-`/api/render/{id}`, `/api/export`, `/api/runs`, …), and path-safe asset serving
-(`/media/...`). **Build/render run as background jobs** (Phase A2) via an
-in-process worker over the `jobs` table — the dashboard live-polls `/api/jobs`.
-Richer screens land in A4. **Higgsfield video infra is present but off.**
+Full screens behind a session login: **Dashboard** (counts, spend, scheduled
+posts, recent runs), **Backlog** (capture, filter, void, render), **Build**
+(build control + live job polling), **Review & approve** (slide-thumbnail
+previews, editable copy, re-render, approve), **Export** (run export, download
+CSV + assets zip). **Build/render run as background jobs** via an in-process
+worker over the `jobs` table (the UI live-polls `/api/jobs`). A JSON API backs
+every action, with path-safe asset serving (`/media/...`). **Higgsfield video
+infra is present but off.**
 
 **Deploying it:** a turnkey kit lives in [`deploy/`](deploy/) (systemd unit,
 Caddyfile, backup + bootstrap scripts) with a step-by-step guide in

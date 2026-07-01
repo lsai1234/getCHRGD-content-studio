@@ -16,6 +16,14 @@
     header .brand span { color:var(--accent); }
     header nav a { color:var(--muted); text-decoration:none; margin-left:18px; }
     header nav a:hover { color:var(--fg); }
+    header nav a.on { color:var(--fg); border-bottom:2px solid var(--accent); padding-bottom:4px; }
+    .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+    .thumb { width:100%; border-radius:8px; border:1px solid var(--line); display:block; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .post { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+            padding:16px 18px; margin-bottom:18px; }
+    input[type=checkbox]{ width:auto; }
+    small.k { color:var(--muted); }
     main { max-width:1040px; margin:0 auto; padding:26px 22px; }
     h1 { font-size:22px; margin:0 0 18px; }
     .cards { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
@@ -49,8 +57,11 @@
   <header>
     <div class="brand">CHR<span>GD</span> · Content Studio</div>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/review">Review</a>
+      <a href="/" class="{{ 'on' if active=='dashboard' }}">Dashboard</a>
+      <a href="/backlog" class="{{ 'on' if active=='backlog' }}">Backlog</a>
+      <a href="/build" class="{{ 'on' if active=='build' }}">Build</a>
+      <a href="/review" class="{{ 'on' if active=='review' }}">Review{% if review_count %} ({{ review_count }}){% endif %}</a>
+      <a href="/export" class="{{ 'on' if active=='export' }}">Export</a>
       <form method="post" action="/logout" style="display:inline">
         <button class="ghost" style="margin:0;padding:6px 12px">Log out</button>
       </form>

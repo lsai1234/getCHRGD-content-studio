@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Build — CHRGD{% endblock %}
+{% block body %}
+<h1>Build queue</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<form class="inline row" method="post" action="/api/jobs/build">
+  <strong>Build ideas</strong>
+  <label style="margin:0">Count</label>
+  <input name="count" type="number" value="3" min="1" max="20" style="width:80px">
+  <label style="margin:0" class="row"><input name="dry_run" type="checkbox" value="true"> dry-run</label>
+  <button type="submit" style="margin:0">Build next</button>
+  <small class="k">runs the OpenAI pipeline in the background · {{ counts.queued }} queued</small>
+</form>
+
+<h1 style="font-size:18px;">Jobs</h1>
+<table id="jobs"><tr><th>#</th><th>Kind</th><th>Idea</th><th>Status</th><th>Result</th></tr>
+  <tr><td colspan="5" class="muted">loading…</td></tr></table>
+
+<script>
+async function refreshJobs(){
+  try{
+    const jobs = await (await fetch('/api/jobs')).json();
+    let html='<tr><th>#</th><th>Kind</th><th>Idea</th><th>Status</th><th>Result</th></tr>';
+    if(!jobs.length) html+='<tr><td colspan=5 class=muted>No jobs yet.</td></tr>';
+    for(const j of jobs.slice(0,15)){
+      let res='';
+      try{const r=JSON.parse(j.result_json||'{}');
+        if(r.built) res=`built ${r.built.length}, review ${(r.review||[]).length}, $${(r.spend_usd||0).toFixed(3)}`;
+        else if(r.paths) res=`${r.paths.length} slides, $${(r.spend_usd||0).toFixed(3)}`;
+      }catch(e){}
+      if(j.error) res=`<span class="accent">${j.error}</span>`;
+      const cls = j.status==='PROCESSING'?'accent':'';
+      html+=`<tr><td>${j.job_id}</td><td>${j.kind}</td><td>${j.idea_id||''}</td>`+
+            `<td><span class="pill ${cls}">${j.status}</span></td><td class="muted">${res}</td></tr>`;
+    }
+    document.getElementById('jobs').innerHTML=html;
+  }catch(e){}
+}
+refreshJobs(); setInterval(refreshJobs, 2000);
+</script>
+{% endblock %}

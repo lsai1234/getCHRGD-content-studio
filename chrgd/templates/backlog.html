@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Backlog — CHRGD{% endblock %}
+{% block body %}
+<h1>Backlog</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<form class="inline" method="post" action="/capture">
+  <strong>Capture ideas</strong>
+  <label>One idea per line</label>
+  <textarea name="dump" placeholder="gym bros who hog the squat rack&#10;pre-workout that makes you feel invincible"></textarea>
+  <div class="row">
+    <div style="flex:1"><label>Category</label><input name="category" placeholder="humour"></div>
+    <div style="width:120px"><label>Priority</label>
+      <select name="priority"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+    </div>
+  </div>
+  <button type="submit">Capture</button>
+</form>
+
+<div class="row" style="margin-bottom:12px;">
+  <strong style="margin-right:auto">All ideas</strong>
+  <form method="get" action="/backlog">
+    <select name="status" onchange="this.form.submit()">
+      <option value="">all statuses</option>
+      {% for s in statuses %}
+      <option value="{{ s }}" {{ 'selected' if current_status==s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<table>
+  <tr><th>ID</th><th>Status</th><th>Pri</th><th>Category</th><th>Concept</th><th>Actions</th></tr>
+  {% for i in ideas %}
+  <tr>
+    <td>{{ i.idea_id }}</td>
+    <td><span class="pill">{{ i.status.value }}</span></td>
+    <td>{{ i.priority }}</td>
+    <td class="muted">{{ i.content_category }}</td>
+    <td>{{ i.concept_note }}</td>
+    <td class="row">
+      {% if i.slides_json %}
+      <button class="ghost" style="margin:0;padding:4px 10px"
+              onclick="renderIdea('{{ i.idea_id }}')">Render</button>
+      {% endif %}
+      {% if i.status.value != 'void' %}
+      <form method="post" action="/api/ideas/{{ i.idea_id }}/void" style="display:inline">
+        <button class="ghost" style="margin:0;padding:4px 10px">Void</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6" class="muted">No ideas — capture something above.</td></tr>
+  {% endfor %}
+</table>
+
+<script>
+async function renderIdea(id){
+  await fetch(`/api/jobs/render/${id}?dry_run=true`, {method:'POST', headers:{accept:'application/json'}});
+  location.href='/build';
+}
+</script>
+{% endblock %}

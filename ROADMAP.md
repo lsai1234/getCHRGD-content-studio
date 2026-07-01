@@ -63,10 +63,12 @@ Turnkey deploy kit in `deploy/` + step-by-step [`DEPLOY.md`](DEPLOY.md):
 - Nightly `deploy/chrgd-backup.sh` (WAL-safe DB snapshot + asset tarball).
 - **Left to do (needs you):** provision the VPS + run the kit (§1–6 of DEPLOY.md).
 
-### A4 — The screens · **M–L**
-Backlog · Build queue · **Review & approve** (slide previews, edit copy,
-re-render) · Export (generate CSV, download) · Trends · Dashboard (runs, spend,
-schedule).
+### A4 — The screens · **DONE ✅**
+Dashboard (counts, spend, scheduled posts, recent runs) · Backlog (capture,
+filter, void, render) · Build queue (build control + live job polling) ·
+**Review & approve** (slide-thumbnail previews, editable hook/slides/caption/
+hashtags, re-render, approve) · Export (run export, download CSV + assets zip,
+see what's scheduled). Trends screen arrives with B1.
 
 ---
 
@@ -125,9 +127,10 @@ Everything here plugs into infra that already exists.
 ---
 
 ## Suggested order
-**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 → B1 → B2 → C (video) → D.**
-Next: get it live on the VPS (DEPLOY.md), then A4 screens. Ship the website
-around carousels first; fold video in via Phase C with no rework.
+**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 → B2 → C (video) → D.**
+The full web app is built. Next: get it live on the VPS (DEPLOY.md), then B1
+(trend scout). Ship the website around carousels first; fold video in via
+Phase C with no rework.
 
 ---
 

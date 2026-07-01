@@ -2,92 +2,46 @@
 {% block title %}Dashboard — CHRGD{% endblock %}
 {% block body %}
 <h1>Dashboard</h1>
-
 {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
 
 <div class="cards">
   <div class="card"><div class="n">{{ counts.queued }}</div><div class="l">Queued</div></div>
   <div class="card"><div class="n">{{ counts.done }}</div><div class="l">Built</div></div>
   <div class="card"><div class="n accent">{{ counts.review }}</div><div class="l">Needs review</div></div>
-  <div class="card"><div class="n">{{ counts.total }}</div><div class="l">Total ideas</div></div>
+  <div class="card"><div class="n">{{ counts.exported }}</div><div class="l">Exported</div></div>
   <div class="card"><div class="n">${{ '%.2f'|format(spend) }}</div><div class="l">Spend (all runs)</div></div>
 </div>
 
-<form class="inline" method="post" action="/capture">
-  <strong>Capture ideas</strong>
-  <label>One idea per line</label>
-  <textarea name="dump" placeholder="gym bros who hog the squat rack&#10;pre-workout that makes you feel invincible"></textarea>
-  <div style="display:flex; gap:12px;">
-    <div style="flex:1"><label>Category</label><input name="category" placeholder="humour"></div>
-    <div style="width:120px"><label>Priority</label>
-      <select name="priority"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
-    </div>
-  </div>
-  <button type="submit">Capture</button>
-</form>
+<div class="row" style="margin-bottom:22px;">
+  <a href="/backlog"><button>Capture ideas</button></a>
+  <a href="/build"><button class="ghost">Build queue</button></a>
+  <a href="/review"><button class="ghost">Review{% if counts.review %} ({{ counts.review }}){% endif %}</button></a>
+  <a href="/export"><button class="ghost">Export week</button></a>
+</div>
 
-<form class="inline" method="post" action="/api/jobs/build" style="display:flex;align-items:center;gap:14px;">
-  <strong>Build queue</strong>
-  <label style="margin:0">Count</label>
-  <input name="count" type="number" value="3" min="1" max="20" style="width:80px">
-  <label style="margin:0;display:flex;align-items:center;gap:6px;">
-    <input name="dry_run" type="checkbox" value="true" style="width:auto"> dry-run
-  </label>
-  <button type="submit" style="margin:0">Build next</button>
-  <span class="muted" style="font-size:13px">runs in the background</span>
-</form>
-
-<h1 style="font-size:18px;">Jobs</h1>
-<table id="jobs"><tr><th>#</th><th>Kind</th><th>Idea</th><th>Status</th><th>Result</th></tr>
-  <tr><td colspan="5" class="muted">loading…</td></tr>
-</table>
-
-<h1 style="font-size:18px; margin-top:26px;">Backlog</h1>
+<h1 style="font-size:18px;">Scheduled posts</h1>
 <table>
-  <tr><th>ID</th><th>Status</th><th>Pri</th><th>Category</th><th>Concept</th><th></th></tr>
-  {% for i in ideas %}
+  <tr><th>When</th><th>ID</th><th>Post</th><th>Exported</th></tr>
+  {% for i in scheduled %}
   <tr>
+    <td>{{ i.scheduled_for.strftime('%d %b %H:%M') if i.scheduled_for else '—' }}</td>
     <td>{{ i.idea_id }}</td>
-    <td><span class="pill">{{ i.status.value }}</span></td>
-    <td>{{ i.priority }}</td>
-    <td class="muted">{{ i.content_category }}</td>
-    <td>{{ i.concept_note }}</td>
-    <td>
-      {% if i.slides_json %}
-      <button class="ghost" style="margin:0;padding:4px 10px"
-              onclick="enqueueRender('{{ i.idea_id }}')">Render</button>
-      {% endif %}
-    </td>
+    <td>{{ i.hook or i.concept_note }}</td>
+    <td class="muted">{{ 'yes' if i.exported_at else 'no' }}</td>
   </tr>
   {% else %}
-  <tr><td colspan="6" class="muted">Backlog is empty — capture something above.</td></tr>
+  <tr><td colspan="4" class="muted">Nothing scheduled yet — build, render, then export.</td></tr>
   {% endfor %}
 </table>
 
-<script>
-async function refreshJobs() {
-  try {
-    const jobs = await (await fetch('/api/jobs')).json();
-    const t = document.getElementById('jobs');
-    let html = '<tr><th>#</th><th>Kind</th><th>Idea</th><th>Status</th><th>Result</th></tr>';
-    if (!jobs.length) html += '<tr><td colspan=5 class=muted>No jobs yet.</td></tr>';
-    for (const j of jobs.slice(0, 12)) {
-      let res = '';
-      try { const r = JSON.parse(j.result_json || '{}');
-        if (r.built) res = `built ${r.built.length}, review ${(r.review||[]).length}`;
-        else if (r.paths) res = `${r.paths.length} slides`;
-      } catch (e) {}
-      if (j.error) res = `<span class="accent">${j.error}</span>`;
-      html += `<tr><td>${j.job_id}</td><td>${j.kind}</td><td>${j.idea_id||''}</td>`+
-              `<td><span class="pill">${j.status}</span></td><td class="muted">${res}</td></tr>`;
-    }
-    t.innerHTML = html;
-  } catch (e) {}
-}
-async function enqueueRender(id) {
-  await fetch(`/api/jobs/render/${id}?dry_run=true`, {method:'POST'});
-  refreshJobs();
-}
-refreshJobs(); setInterval(refreshJobs, 2000);
-</script>
+<h1 style="font-size:18px; margin-top:26px;">Recent runs</h1>
+<table>
+  <tr><th>#</th><th>Command</th><th>Built</th><th>Spend</th><th>When</th></tr>
+  {% for r in runs %}
+  <tr><td>{{ r.run_id }}</td><td>{{ r.command }}</td><td>{{ r.built }}</td>
+      <td>${{ '%.4f'|format(r.spend_usd) }}</td><td class="muted">{{ r.started_at[:16] }}</td></tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No runs yet.</td></tr>
+  {% endfor %}
+</table>
 {% endblock %}

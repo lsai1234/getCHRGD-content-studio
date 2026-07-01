@@ -191,3 +191,81 @@ def test_render_job_endpoint_then_worker(client, settings):
 def test_render_job_missing_idea_404(client):
     _login(client)
     assert client.post("/api/jobs/render/NOPE").status_code == 404
+
+
+# --- A4 pages + editing -----------------------------------------------------
+
+
+def test_all_pages_render(client):
+    _login(client)
+    for path in ("/", "/backlog", "/build", "/review", "/export"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert "CHRGD" in r.text
+
+
+def test_pages_redirect_when_anonymous(client):
+    for path in ("/backlog", "/build", "/export"):
+        r = client.get(path, follow_redirects=False)
+        assert r.status_code == 307 and r.headers["location"] == "/login"
+
+
+def test_edit_updates_copy_and_keeps_review_status(client, settings):
+    with Store(settings.db_path) as store:
+        slides = [{"headline": "old", "supporting": "old", "image_prompt": "p", "visual_intent": "v"}]
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x", slides_json=json.dumps(slides)))
+        store.mark_review("G-0001", {"hook": "old hook"})
+    _login(client)
+    r = client.post(
+        "/api/ideas/G-0001/edit",
+        data={
+            "hook": "new hook",
+            "slide_headline_0": "new headline",
+            "slide_supporting_0": "new support",
+            "caption": "new cap",
+            "hashtags": "gym uk",
+        },
+    )
+    assert r.json()["saved"] is True
+    with Store(settings.db_path) as store:
+        idea = store.get_idea("G-0001")
+        assert idea.hook == "new hook"
+        assert idea.status is Status.review  # edit didn't silently approve it
+        slides = json.loads(idea.slides_json)
+        assert slides[0]["headline"] == "new headline"
+        assert slides[0]["image_prompt"] == "p"  # untouched fields preserved
+        assert json.loads(idea.hashtags) == ["#gym", "#uk"]
+
+
+def test_review_page_shows_slide_previews(client, settings):
+    with Store(settings.db_path) as store:
+        slides = [{"headline": f"h{i}", "supporting": "s", "image_prompt": "p", "visual_intent": "v"} for i in range(5)]
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x", slides_json=json.dumps(slides)))
+        store.mark_review("G-0001", {"hook": "h"})
+        store.save_asset_paths("G-0001", [f"/out/G-0001/slide_{i}.jpg" for i in range(1, 6)])
+    _login(client)
+    html = client.get("/review").text
+    assert "/media/G-0001/slide_1.jpg" in html
+    assert "Approve" in html
+
+
+def test_export_run_via_page(client, settings, tmp_path):
+    # a done + rendered idea
+    out = Path(settings.output_dir) / "G-0001"
+    out.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(1, 6):
+        p = out / f"slide_{i}.jpg"
+        p.write_bytes(b"\xff\xd8\xff")
+        paths.append(str(p))
+    with Store(settings.db_path) as store:
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+        store.save_build("G-0001", {"hook": "h", "caption": "c", "hashtags": "[]", "slides_json": "[]"})
+        store.save_asset_paths("G-0001", paths)
+    _login(client)
+    r = client.post("/export", follow_redirects=False)
+    assert r.status_code == 303
+    with Store(settings.db_path) as store:
+        assert store.get_idea("G-0001").exported_at is not None
+    # zip download works
+    assert client.get("/download/assets.zip").status_code == 200

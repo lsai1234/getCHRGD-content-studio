@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Review — CHRGD{% endblock %}
+{% block body %}
+<h1>Review &amp; approve</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+<p class="muted">Preview slides, tweak the copy, re-render, and approve. Approved
+(done) posts are eligible for export.</p>
+
+{% for p in posts %}
+<div class="post" id="{{ p.idea_id }}">
+  <div class="row" style="justify-content:space-between">
+    <strong>{{ p.idea_id }} · <span class="pill">{{ p.status }}</span></strong>
+    <small class="k">{{ p.concept_note }}</small>
+  </div>
+
+  {% if p.assets %}
+  <div class="grid" style="margin:14px 0">
+    {% for a in p.assets %}<img class="thumb" src="/media/{{ p.idea_id }}/{{ a }}" alt="slide">{% endfor %}
+  </div>
+  {% else %}
+  <p class="muted" style="margin:12px 0">Not rendered yet.</p>
+  {% endif %}
+
+  {% if p.qa %}<small class="k">QA: {% for k,v in p.qa.items() %}{{ k }}={{ v }} {% endfor %}</small>{% endif %}
+
+  <form method="post" action="/api/ideas/{{ p.idea_id }}/edit" style="margin-top:12px">
+    <label>Hook</label>
+    <input name="hook" value="{{ p.hook or '' }}">
+    {% for s in p.slides %}
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:1"><label>Slide {{ loop.index }} headline</label>
+        <input name="slide_headline_{{ loop.index0 }}" value="{{ s.headline }}"></div>
+      <div style="flex:2"><label>Supporting</label>
+        <input name="slide_supporting_{{ loop.index0 }}" value="{{ s.supporting }}"></div>
+    </div>
+    {% endfor %}
+    <label>Caption</label>
+    <textarea name="caption">{{ p.caption or '' }}</textarea>
+    <div class="row">
+      <div style="flex:1"><label>Comment trigger</label><input name="comment_trigger" value="{{ p.comment_trigger or '' }}"></div>
+      <div style="flex:1"><label>Hashtags (space-separated)</label><input name="hashtags" value="{{ p.hashtags }}"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button type="submit">Save copy</button>
+      <button type="button" class="ghost" onclick="reRender('{{ p.idea_id }}', this)">Re-render</button>
+      <label class="row" style="margin:0"><input type="checkbox" id="dry_{{ p.idea_id }}" checked> dry-run</label>
+      {% if p.status != 'done' %}
+      <span style="margin-left:auto"></span>
+      <button type="button" onclick="approve('{{ p.idea_id }}')" style="background:var(--accent2)">Approve →</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% else %}
+<p class="muted">Nothing built yet. Head to <a href="/build">Build</a>.</p>
+{% endfor %}
+
+<script>
+async function reRender(id, btn){
+  const dry = document.getElementById('dry_'+id).checked;
+  btn.textContent='queued…';
+  await fetch(`/api/jobs/render/${id}?dry_run=${dry}`, {method:'POST', headers:{accept:'application/json'}});
+  setTimeout(()=>location.reload(), 2500);
+}
+async function approve(id){
+  await fetch(`/api/ideas/${id}/approve`, {method:'POST', headers:{accept:'application/json'}});
+  location.reload();
+}
+</script>
+{% endblock %}

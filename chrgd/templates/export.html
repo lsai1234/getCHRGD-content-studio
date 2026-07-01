@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Export — CHRGD{% endblock %}
+{% block body %}
+<h1>Export to Metricool</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="inline">
+  <strong>Export the week</strong>
+  <p class="muted" style="margin:8px 0 14px">
+    Builds a Metricool bulk-import CSV + <code>ready/</code> assets from
+    <b>{{ ready_count }}</b> done &amp; rendered post(s) not yet exported.
+  </p>
+  <form method="post" action="/export" class="row">
+    <button type="submit">Export week</button>
+    <a href="/export?sample=1"><button type="button" class="ghost">Write sample CSV</button></a>
+    {% if csvs %}<a href="/download/assets.zip"><button type="button" class="ghost">Download all assets (zip)</button></a>{% endif %}
+  </form>
+</div>
+
+<h1 style="font-size:18px;">CSV files in ready/</h1>
+<table>
+  <tr><th>File</th><th>Size</th><th></th></tr>
+  {% for f in csvs %}
+  <tr><td>{{ f.name }}</td><td class="muted">{{ f.size }}</td>
+      <td><a href="/download/ready/{{ f.name }}">download</a></td></tr>
+  {% else %}
+  <tr><td colspan="3" class="muted">No CSVs yet — run an export.</td></tr>
+  {% endfor %}
+</table>
+
+<h1 style="font-size:18px; margin-top:26px;">Exported &amp; scheduled</h1>
+<table>
+  <tr><th>When</th><th>ID</th><th>Post</th></tr>
+  {% for i in exported %}
+  <tr><td>{{ i.scheduled_for.strftime('%d %b %H:%M') if i.scheduled_for else '—' }}</td>
+      <td>{{ i.idea_id }}</td><td>{{ i.hook or i.concept_note }}</td></tr>
+  {% else %}
+  <tr><td colspan="3" class="muted">Nothing exported yet.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

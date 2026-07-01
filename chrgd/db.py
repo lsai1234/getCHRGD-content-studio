@@ -331,6 +331,11 @@ class Store:
         self.conn.commit()
         return int(cur.lastrowid)
 
+    def list_runs(self, limit: int = 50) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM runs ORDER BY run_id DESC LIMIT ?", (limit,)
+        ).fetchall()
+
     def finish_run(
         self,
         run_id: int,
