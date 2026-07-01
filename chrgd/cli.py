@@ -20,6 +20,14 @@ app = typer.Typer(
 )
 
 
+@app.callback()
+def _main() -> None:
+    """Configure logging once for every command."""
+    from .logging_setup import configure_logging
+
+    configure_logging(get_settings().log_level)
+
+
 def _store() -> Store:
     settings = get_settings()
     settings.ensure_dirs()
@@ -219,8 +227,9 @@ def render(
     zones, and writes JPEG/WebP slides to output/<idea_id>/. `--dry-run`
     produces branded placeholder backgrounds with no spend.
     """
-    from .images import ImageError, render_carousel
+    from .images import ImageError
     from .models import PostType
+    from .services import render_idea
     from .video import VideoDisabledError, render_video
 
     settings = get_settings()
@@ -243,11 +252,10 @@ def render(
             return
 
         try:
-            result = render_carousel(idea, settings, dry_run=dry_run)
+            result = render_idea(store, settings, idea, dry_run=dry_run)
         except ImageError as exc:
             typer.secho(f"Render error: {exc}", fg=typer.colors.RED)
             raise typer.Exit(code=1)
-        store.save_asset_paths(idea_id, result.paths)
 
     for p in result.paths:
         typer.secho(f"  ✓ {p}", fg=typer.colors.GREEN)
@@ -320,9 +328,38 @@ def export(
 
 
 @app.command()
-def run(count: int = typer.Option(5, "--count", "-n")) -> None:
-    """Full chain: scout → pick → build → render → export. (Milestone 7)"""
-    _not_yet("run", 7)
+def run(
+    count: int = typer.Option(5, "--count", "-n", help="Ideas to build this run."),
+    scout: bool = typer.Option(False, "--scout", help="Trend-scout + seed first."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Skip paid image calls."),
+    no_export: bool = typer.Option(False, "--no-export", help="Stop before export."),
+) -> None:
+    """Full chain: [scout] → build → render → export. For cron/scheduled runs."""
+    from .orchestrate import run_chain
+    from .pipeline import LLMError
+    from .trends import TrendError
+
+    settings = get_settings()
+    try:
+        with _store() as store:
+            summary = run_chain(
+                store, settings, count,
+                scout=scout, dry_run=dry_run, do_export=not no_export,
+            )
+    except (LLMError, TrendError) as exc:
+        typer.secho(f"Run aborted: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    typer.secho(
+        f"built {len(summary.built)} · review {len(summary.review)} · "
+        f"rendered {len(summary.rendered)} · exported {len(summary.exported)} · "
+        f"est. spend ${summary.spend_usd:.4f}",
+        fg=typer.colors.GREEN,
+    )
+    if summary.scouted:
+        typer.echo(f"scouted + seeded {summary.scouted} trend row(s)")
+    if summary.stopped:
+        typer.secho(f"stopped: {summary.stopped}", fg=typer.colors.YELLOW)
 
 
 @app.command()

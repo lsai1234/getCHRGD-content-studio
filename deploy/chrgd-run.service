@@ -1,0 +1,17 @@
+# One-shot service that runs the full content chain. Triggered by the timer.
+# Install alongside chrgd-run.timer:
+#   sudo cp deploy/chrgd-run.* /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now chrgd-run.timer
+
+[Unit]
+Description=CHRGD content chain (scout-optional build/render/export)
+After=network.target
+
+[Service]
+Type=oneshot
+User=chrgd
+Group=chrgd
+WorkingDirectory=/opt/chrgd/app
+EnvironmentFile=/opt/chrgd/app/.env
+# Edit the flags to taste (e.g. add --scout, change --count).
+ExecStart=/opt/chrgd/app/.venv/bin/chrgd run --count 5

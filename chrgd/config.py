@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # --- Cost guard ---
     max_spend_per_run: float = Field(default=5.0, alias="CHRGD_MAX_SPEND_PER_RUN")
 
+    # --- Logging ---
+    log_level: str = Field(default="INFO", alias="CHRGD_LOG_LEVEL")
+
     # --- Web dashboard (Phase A) ---
     web_username: str = Field(default="admin", alias="CHRGD_WEB_USERNAME")
     # Set EITHER a pbkdf2 hash (preferred) or a plaintext password.

@@ -274,6 +274,7 @@ def build_ideas(
     *,
     client: ChatClient | None = None,
     dry_run: bool = False,
+    record_run: bool = True,
 ) -> list[BuildResult]:
     """Build the next `count` queued ideas.
 
@@ -281,12 +282,14 @@ def build_ideas(
     build (done) or flags it for review. `dry_run` still calls the LLM (that's
     the point of the pipeline) but the caller can pass a fake client to avoid
     spend; paid image/video calls are skipped entirely in later milestones.
+    `record_run=False` skips the `runs` row so an outer chain can record one
+    combined run instead of double-counting spend.
     """
     if client is None:
         client = OpenAIChatClient(settings)
 
     ideas = store.next_unprocessed(count)
-    run_id = store.start_run("build")
+    run_id = store.start_run("build") if record_run else None
     results: list[BuildResult] = []
     total_spend = 0.0
 
@@ -331,11 +334,12 @@ def build_ideas(
             results.append(result)
     finally:
         built = sum(1 for r in results if r.status is Status.done)
-        store.finish_run(
-            run_id,
-            built=built,
-            spend_usd=round(total_spend, 4),
-            notes=f"dry_run={dry_run}",
-        )
+        if run_id is not None:
+            store.finish_run(
+                run_id,
+                built=built,
+                spend_usd=round(total_spend, 4),
+                notes=f"dry_run={dry_run}",
+            )
 
     return results

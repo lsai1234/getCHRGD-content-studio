@@ -81,11 +81,16 @@ priority (days→P1). States the limit (no live TikTok in-app sounds). Shipped:
 `chrgd trends [--seed]`, a `trends` background job kind, and a Trends screen
 (run scout, view ranked hooks, one-click "seed all").
 
-### B2 — M7 Orchestration & cost-guard polish · **M**
-- `chrgd run --count N`: trend-scout → pick → build → render → export.
-- Scheduled runs via systemd timer / APScheduler.
-- Per-run pre-estimate + hard spend cap spanning build+render(+video); structured
-  logging; the `runs` table already records built/spent/exported.
+### B2 — M7 Orchestration & cost-guard polish · **DONE ✅**
+- `chrgd run --count N [--scout] [--dry-run] [--no-export]`: chains
+  [scout] → build → render → export; also a `run` background job kind + a
+  "Run full chain" control on the Build screen.
+- Scheduled runs via `deploy/chrgd-run.{service,timer}` (weekly systemd timer),
+  documented in DEPLOY.md.
+- Cost guard: one run-wide spend cap across build+render; a single combined
+  `runs` row (no double-counting), and image spend is now logged too (via
+  `services.render_idea`). Structured logging (`chrgd/logging_setup.py`) on
+  CLI + web.
 
 ---
 
@@ -129,10 +134,10 @@ Everything here plugs into infra that already exists.
 ---
 
 ## Suggested order
-**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 ✅ → B2 → C (video) → D.**
-The full web app + trend scout are built. Next: get it live on the VPS
-(DEPLOY.md), then B2 (orchestration / `chrgd run`). Ship the website around
-carousels first; fold video in via Phase C with no rework.
+**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 ✅ → B2 ✅ → C (video) → D.**
+The full web app, trend scout, and orchestration are built. Everything through
+M7 (bar video) is done. Next: get it live on the VPS (DEPLOY.md), then Phase C
+(turn video on) when you have a Higgsfield key.
 
 ---
 

@@ -110,15 +110,14 @@ def _handle_build(store: Store, settings: Settings, job: dict) -> dict:
 
 
 def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
-    from .images import render_carousel
+    from .services import render_idea
 
     params = json.loads(job["params_json"] or "{}")
     dry_run = bool(params.get("dry_run", False))
     idea = store.get_idea(job["idea_id"])
     if idea is None:
         raise ValueError(f"no such idea {job['idea_id']}")
-    result = render_carousel(idea, settings, dry_run=dry_run)
-    store.save_asset_paths(idea.idea_id, result.paths)
+    result = render_idea(store, settings, idea, dry_run=dry_run)
     return {"paths": result.paths, "spend_usd": result.spend_usd}
 
 
@@ -140,11 +139,33 @@ def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_run(store: Store, settings: Settings, job: dict) -> dict:
+    from .orchestrate import run_chain
+
+    params = json.loads(job["params_json"] or "{}")
+    s = run_chain(
+        store,
+        settings,
+        int(params.get("count", 5)),
+        scout=bool(params.get("scout", False)),
+        dry_run=bool(params.get("dry_run", False)),
+    )
+    return {
+        "built": s.built,
+        "review": s.review,
+        "rendered": s.rendered,
+        "exported": s.exported,
+        "spend_usd": s.spend_usd,
+        "stopped": s.stopped,
+    }
+
+
 _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "build": _handle_build,
     "render": _handle_render,
     "video": _handle_video,
     "trends": _handle_trends,
+    "run": _handle_run,
 }
 
 
@@ -164,3 +185,9 @@ def enqueue_render(store: Store, idea_id: str, *, dry_run: bool) -> int:
 
 def enqueue_trends(store: Store, *, count: int) -> int:
     return store.create_job("trends", params={"count": count})
+
+
+def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:
+    return store.create_job(
+        "run", params={"count": count, "scout": scout, "dry_run": dry_run}
+    )

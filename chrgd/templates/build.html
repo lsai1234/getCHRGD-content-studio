@@ -13,6 +13,16 @@
   <small class="k">runs the OpenAI pipeline in the background · {{ counts.queued }} queued</small>
 </form>
 
+<form class="inline row" method="post" action="/api/jobs/run">
+  <strong>Run full chain</strong>
+  <label style="margin:0">Count</label>
+  <input name="count" type="number" value="5" min="1" max="20" style="width:80px">
+  <label style="margin:0" class="row"><input name="scout" type="checkbox" value="true"> scout first</label>
+  <label style="margin:0" class="row"><input name="dry_run" type="checkbox" value="true"> dry-run</label>
+  <button type="submit" style="margin:0">Run</button>
+  <small class="k">[scout] → build → render → export, one job</small>
+</form>
+
 <h1 style="font-size:18px;">Jobs</h1>
 <table id="jobs"><tr><th>#</th><th>Kind</th><th>Idea</th><th>Status</th><th>Result</th></tr>
   <tr><td colspan="5" class="muted">loading…</td></tr></table>

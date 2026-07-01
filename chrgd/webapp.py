@@ -48,6 +48,9 @@ def _safe_output_path(settings: Settings, *parts: str) -> Path:
 
 def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> FastAPI:
     settings = settings or get_settings()
+    from .logging_setup import configure_logging
+
+    configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -421,6 +424,22 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 raise HTTPException(404, "no such idea")
             job_id = enqueue_render(store, idea_id, dry_run=dry_run)
         return {"job_id": job_id, "kind": "render", "idea_id": idea_id}
+
+    @app.post("/api/jobs/run")
+    def api_job_run(
+        request: Request,
+        count: int = Form(5),
+        scout: bool = Form(False),
+        dry_run: bool = Form(False),
+        _: str = Depends(require_user),
+    ):
+        from .worker import enqueue_run
+
+        with _store(settings) as store:
+            job_id = enqueue_run(store, count=count, scout=scout, dry_run=dry_run)
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(f"/build?flash=Run+job+%23{job_id}+queued", 303)
+        return {"job_id": job_id, "kind": "run"}
 
     @app.post("/api/jobs/trends")
     def api_job_trends(

@@ -237,6 +237,16 @@ def test_seed_unknown_trends_job_404(client):
     assert client.post("/api/trends/seed/999").status_code == 404
 
 
+def test_run_chain_job_enqueue(client, settings):
+    _login(client)
+    r = client.post("/api/jobs/run", data={"count": 3, "scout": False})
+    job_id = r.json()["job_id"]
+    job = client.get(f"/api/jobs/{job_id}").json()
+    assert job["kind"] == "run" and job["status"] == "QUEUED"
+    params = json.loads(job["params_json"])
+    assert params["count"] == 3
+
+
 def test_pages_redirect_when_anonymous(client):
     for path in ("/backlog", "/build", "/export"):
         r = client.get(path, follow_redirects=False)

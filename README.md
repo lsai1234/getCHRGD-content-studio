@@ -36,8 +36,7 @@ Implemented now:
 - `chrgd export` — write the Metricool CSV + `ready/` folder for the week.
 
 - `chrgd trends` — scout current UK-gym topical hooks and (with `--seed`) queue them.
-
-The remaining command (`run`, full chain) is a stub reporting its milestone.
+- `chrgd run` — the full chain: `[--scout] → build → render → export` (for cron).
 
 **The weekly loop now:** `capture` → `build` → `render` → `export`, then
 bulk-import one CSV into Metricool. That's the daily grind gone.

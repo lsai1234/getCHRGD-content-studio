@@ -104,8 +104,16 @@ sudo systemctl restart chrgd
 ```
 This keeps 14 days of DB snapshots + asset tarballs in `/opt/chrgd/backups`.
 
-**Scheduled runs (optional, later):** once `chrgd run` lands (M7), a cron line
-or systemd timer can trigger the weekly build/export automatically.
+**Scheduled runs:** `chrgd run` chains scout→build→render→export. Trigger it
+weekly with the bundled timer:
+```bash
+sudo cp deploy/chrgd-run.* /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now chrgd-run.timer
+systemctl list-timers chrgd-run.timer     # confirm next run
+```
+Edit `deploy/chrgd-run.service` to change the flags (e.g. add `--scout`, adjust
+`--count`) and `deploy/chrgd-run.timer` for the schedule. Runs honour
+`CHRGD_MAX_SPEND_PER_RUN`, so a single run can't overspend.
 
 ## 8. Cloudflare proxy (optional hardening)
 Once it works on grey cloud you can flip the record to **orange (proxied)** for
