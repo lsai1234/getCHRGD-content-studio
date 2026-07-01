@@ -40,9 +40,13 @@ The remaining commands (`trends`, `run`) are stubs reporting their milestone.
 **The weekly loop now:** `capture` → `build` → `render` → `export`, then
 bulk-import one CSV into Metricool. That's the daily grind gone.
 
-> **Provider:** this build uses **OpenAI** (chat for the pipeline, `gpt-image-1`
-> for carousel backgrounds in M3) — one key covers everything. The model is
-> configurable via `CHRGD_OPENAI_MODEL`.
+> **Provider:** this build uses **OpenAI** (chat for the pipeline, `gpt-image-2`
+> for carousel backgrounds) — one key covers everything. Models are configurable
+> via `CHRGD_OPENAI_MODEL` / `CHRGD_IMAGE_MODEL`. Per-slide image quality is set
+> in `brand.toml`: slide 1 renders `high`, slides 2–5 `medium`.
+
+> **What's left:** see [`ROADMAP.md`](ROADMAP.md) for M5–M7 (trends, video,
+> orchestration), the web dashboard, and VPS deployment.
 
 > **Deployment (agreed plan):** engine first (M2–4), then a FastAPI web
 > dashboard + backend, hosted on a small always-on VPS with Caddy for automatic

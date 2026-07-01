@@ -96,7 +96,9 @@ def _placeholder_background(brand: Brand, seed: int) -> Image.Image:
     return img
 
 
-def _generate_background(prompt: str, settings: Settings, brand: Brand) -> Image.Image:
+def _generate_background(
+    prompt: str, settings: Settings, brand: Brand, quality: str
+) -> Image.Image:
     """Call the image API for one background. Raises ImageError on failure."""
     key = settings.get_image_key()
     if not key:
@@ -122,7 +124,7 @@ def _generate_background(prompt: str, settings: Settings, brand: Brand) -> Image
             model=settings.image_model,
             prompt=prompt,
             size=brand.generation.size,
-            quality=brand.generation.quality,
+            quality=quality,
             n=1,
         )
         b64 = resp.data[0].b64_json
@@ -275,18 +277,21 @@ def render_carousel(
     ext = "webp" if brand.canvas.format.lower() == "webp" else "jpg"
     pil_format = "WEBP" if ext == "webp" else "JPEG"
     result = RenderResult(idea_id=idea.idea_id, dry_run=dry_run)
-    per_image = _IMAGE_COST.get(brand.generation.quality, 0.042)
 
     for i, slide in enumerate(slides):
         if dry_run:
             background = _placeholder_background(brand, i)
         else:
+            quality = brand.generation.quality_for(i)  # slide 1 high, rest medium
+            per_image = _IMAGE_COST.get(quality, 0.042)
             if result.spend_usd + per_image > settings.max_spend_per_run:
                 raise ImageError(
                     f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
                     f"at slide {i + 1} — aborting render"
                 )
-            background = _generate_background(slide.image_prompt, settings, brand)
+            background = _generate_background(
+                slide.image_prompt, settings, brand, quality
+            )
             result.spend_usd += per_image
             result.generated += 1
 

@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     # --- Image generation (milestone 3+) ---
     # Defaults to OpenAI images so one key covers text + images.
     image_provider: str = Field(default="openai", alias="CHRGD_IMAGE_PROVIDER")
-    image_model: str = Field(default="gpt-image-1", alias="CHRGD_IMAGE_MODEL")
+    image_model: str = Field(default="gpt-image-2", alias="CHRGD_IMAGE_MODEL")
     # Falls back to OPENAI_API_KEY when the provider is openai (see get_image_key).
     image_api_key: str | None = Field(default=None, alias="CHRGD_IMAGE_API_KEY")
 

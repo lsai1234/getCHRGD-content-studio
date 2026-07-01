@@ -30,7 +30,12 @@ class Canvas(BaseModel):
 
 class Generation(BaseModel):
     size: str = "1024x1536"
-    quality: str = "medium"
+    # Slide 1 leads the carousel, so it renders at a stronger quality tier.
+    quality_first: str = "high"
+    quality_rest: str = "medium"
+
+    def quality_for(self, slide_index: int) -> str:
+        return self.quality_first if slide_index == 0 else self.quality_rest
 
 
 class SafeZones(BaseModel):

@@ -72,6 +72,26 @@ def test_non_dry_run_without_key_errors(settings):
         render_carousel(make_idea(), settings, dry_run=False)
 
 
+def test_per_slide_quality_selection():
+    brand = load_brand()
+    assert brand.generation.quality_for(0) == "high"   # slide 1
+    assert brand.generation.quality_for(1) == "medium"  # slides 2-5
+    assert brand.generation.quality_for(4) == "medium"
+
+
+def test_non_dry_run_cost_uses_high_then_medium(settings, monkeypatch):
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    monkeypatch.setattr(
+        images, "_generate_background", lambda *a, **k: Image.new("RGB", (100, 150))
+    )
+    result = images.render_carousel(make_idea(), settings, dry_run=False)
+    expected = images._IMAGE_COST["high"] + 4 * images._IMAGE_COST["medium"]
+    assert result.generated == 5
+    assert result.spend_usd == pytest.approx(expected)
+
+
 def test_webp_format(tmp_path):
     settings = Settings(CHRGD_OUTPUT_DIR=tmp_path / "out")
     brand = load_brand()
