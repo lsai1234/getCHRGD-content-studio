@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Trends — CHRGD{% endblock %}
+{% block body %}
+<h1>Trend scout</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="inline">
+  <div class="row" style="justify-content:space-between">
+    <strong>Scout current UK-gym hooks</strong>
+    <form method="post" action="/api/jobs/trends" class="row" style="margin:0">
+      <label style="margin:0">Count</label>
+      <input name="count" type="number" value="6" min="1" max="12" style="width:70px">
+      <button type="submit" style="margin:0">Run scout</button>
+    </form>
+  </div>
+  <p class="muted" style="margin:10px 0 0">
+    Uses OpenAI web search in the background. <b>Topical/cultural hooks only</b> —
+    no live TikTok in-app trending sounds or hashtags.
+  </p>
+</div>
+
+<div id="status" class="muted" style="margin-bottom:14px"></div>
+<div id="results"></div>
+
+<script>
+let lastJob = null;
+async function poll(){
+  try{
+    const jobs = await (await fetch('/api/jobs')).json();
+    const tj = jobs.find(j => j.kind === 'trends');
+    const st = document.getElementById('status');
+    if(!tj){ st.textContent = 'No scout run yet.'; return; }
+    if(tj.status === 'PROCESSING' || tj.status === 'QUEUED'){
+      st.innerHTML = `Scout job #${tj.job_id}: <span class="accent">${tj.status}…</span>`;
+      return;
+    }
+    if(tj.status === 'ERROR'){ st.innerHTML = `<span class="accent">Scout failed: ${tj.error}</span>`; return; }
+    if(tj.job_id === lastJob) return;         // already rendered this one
+    lastJob = tj.job_id;
+    const data = JSON.parse(tj.result_json || '{}');
+    st.textContent = data.limitation || '';
+    render(tj.job_id, data.trends || []);
+  }catch(e){}
+}
+function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function render(jobId, trends){
+  const box = document.getElementById('results');
+  if(!trends.length){ box.innerHTML = '<p class="muted">No brand-safe trends returned.</p>'; return; }
+  let html = `<div class="row" style="margin:6px 0 14px">
+      <strong>${trends.length} hook(s)</strong>
+      <form method="post" action="/api/trends/seed/${jobId}" style="margin:0">
+        <button>Seed all as backlog rows</button></form></div>`;
+  for(const t of trends){
+    const fast = t.decay_speed === 'days' ? ' · ⏱ ship fast' : '';
+    html += `<div class="post">
+      <div class="row" style="justify-content:space-between">
+        <strong>${esc(t.trend)}</strong>
+        <small class="k">${esc(t.decay_speed)}${fast}</small></div>
+      <p style="margin:8px 0 4px">${esc(t.why_now)}</p>
+      <small class="k">concept: ${esc(t.concept_note)}</small><br>
+      <small class="k">mechanic: ${esc(t.mechanic)} · visual: ${esc(t.visual_engine)}
+        · brand_fit: ${esc(t.brand_fit)} · claim_safety: ${esc(t.claim_safety)}</small>
+    </div>`;
+  }
+  box.innerHTML = html;
+}
+poll(); setInterval(poll, 2000);
+</script>
+{% endblock %}

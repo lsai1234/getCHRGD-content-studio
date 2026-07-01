@@ -129,10 +129,22 @@ def _handle_video(store: Store, settings: Settings, job: dict) -> dict:
     return {}
 
 
+def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
+    from .trends import scout_trends
+
+    params = json.loads(job["params_json"] or "{}")
+    result = scout_trends(settings, int(params.get("count", 6)))
+    return {
+        "limitation": result.limitation,
+        "trends": [t.model_dump(mode="json") for t in result.trends],
+    }
+
+
 _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "build": _handle_build,
     "render": _handle_render,
     "video": _handle_video,
+    "trends": _handle_trends,
 }
 
 
@@ -148,3 +160,7 @@ def enqueue_render(store: Store, idea_id: str, *, dry_run: bool) -> int:
     if existing:
         return existing["job_id"]  # don't double-queue the same render
     return store.create_job("render", idea_id=idea_id, params={"dry_run": dry_run})
+
+
+def enqueue_trends(store: Store, *, count: int) -> int:
+    return store.create_job("trends", params={"count": count})

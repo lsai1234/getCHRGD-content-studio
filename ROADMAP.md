@@ -74,10 +74,12 @@ see what's scheduled). Trends screen arrives with B1.
 
 ## Phase B — Content-engine additions
 
-### B1 — M5 Trend scout · **S–M**
-OpenAI web search → UK-gym topical signals → seed rows with `decay_speed` +
-ship-fast priority. Filter for brand fit + claim safety. State the limit (no
-live TikTok in-app sounds). Wire the `chrgd trends` stub + a UI button.
+### B1 — M5 Trend scout · **DONE ✅**
+OpenAI web search (Responses API) → ranked UK-gym topical hooks, filtered for
+brand fit + claim safety, seeded as rows with `decay_speed` + ship-fast
+priority (days→P1). States the limit (no live TikTok in-app sounds). Shipped:
+`chrgd trends [--seed]`, a `trends` background job kind, and a Trends screen
+(run scout, view ranked hooks, one-click "seed all").
 
 ### B2 — M7 Orchestration & cost-guard polish · **M**
 - `chrgd run --count N`: trend-scout → pick → build → render → export.
@@ -127,10 +129,10 @@ Everything here plugs into infra that already exists.
 ---
 
 ## Suggested order
-**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 → B2 → C (video) → D.**
-The full web app is built. Next: get it live on the VPS (DEPLOY.md), then B1
-(trend scout). Ship the website around carousels first; fold video in via
-Phase C with no rework.
+**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 ✅ → B2 → C (video) → D.**
+The full web app + trend scout are built. Next: get it live on the VPS
+(DEPLOY.md), then B2 (orchestration / `chrgd run`). Ship the website around
+carousels first; fold video in via Phase C with no rework.
 
 ---
 

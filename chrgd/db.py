@@ -401,7 +401,8 @@ class Store:
         """
         cur = self.conn.execute(
             "UPDATE jobs SET status = 'ERROR', error = 'interrupted — re-run', "
-            "updated_at = ? WHERE status = 'PROCESSING' AND kind IN ('build','render')",
+            "updated_at = ? WHERE status = 'PROCESSING' "
+            "AND kind IN ('build','render','trends')",
             (datetime.now().astimezone().isoformat(),),
         )
         self.conn.commit()

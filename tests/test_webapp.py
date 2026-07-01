@@ -198,10 +198,43 @@ def test_render_job_missing_idea_404(client):
 
 def test_all_pages_render(client):
     _login(client)
-    for path in ("/", "/backlog", "/build", "/review", "/export"):
+    for path in ("/", "/backlog", "/build", "/trends", "/review", "/export"):
         r = client.get(path)
         assert r.status_code == 200, path
         assert "CHRGD" in r.text
+
+
+def test_trends_job_enqueue_and_seed(client, settings):
+    _login(client)
+    # enqueue a scout job
+    job_id = client.post("/api/jobs/trends", data={"count": 2}).json()["job_id"]
+    assert client.get(f"/api/jobs/{job_id}").json()["kind"] == "trends"
+
+    # simulate the worker completing it with a result
+    with Store(settings.db_path) as store:
+        store.update_job(
+            job_id,
+            status="COMPLETED",
+            result_json=json.dumps(
+                {
+                    "limitation": "topical only",
+                    "trends": [
+                        {"trend": "t", "concept_note": "the fan everyone fights over",
+                         "decay_speed": "days", "mechanic": "rage_agreement"}
+                    ],
+                }
+            ),
+        )
+    r = client.post(f"/api/trends/seed/{job_id}")
+    assert r.json()["created"]  # one row seeded
+    with Store(settings.db_path) as store:
+        seeded = store.list_ideas(status=Status.queued)
+        assert any(i.content_category == "trend" for i in seeded)
+
+
+def test_seed_unknown_trends_job_404(client):
+    _login(client)
+    assert client.post("/api/trends/seed/999").status_code == 404
 
 
 def test_pages_redirect_when_anonymous(client):

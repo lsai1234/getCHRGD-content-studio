@@ -116,9 +116,44 @@ def _not_yet(name: str, milestone: int) -> None:
 
 
 @app.command()
-def trends() -> None:
-    """Scout topical hooks and seed rows. (Milestone 5)"""
-    _not_yet("trends", 5)
+def trends(
+    count: int = typer.Option(6, "--count", "-n", help="How many hooks to find."),
+    seed: bool = typer.Option(False, "--seed", help="Seed the results as backlog rows."),
+) -> None:
+    """Scout current UK-gym topical hooks (OpenAI web search).
+
+    Prints a ranked, brand-safe list. With --seed, writes them as queued rows
+    (fast-decaying trends get higher priority). Topical hooks only — no live
+    TikTok in-app sounds/hashtags.
+    """
+    from .trends import TrendError, scout_trends, seed_trends
+
+    settings = get_settings()
+    try:
+        result = scout_trends(settings, count)
+    except TrendError as exc:
+        typer.secho(f"Trend scout error: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    typer.secho(f"⚠ {result.limitation}", fg=typer.colors.YELLOW)
+    for i, t in enumerate(result.trends, 1):
+        fast = "  ⏱ ship fast" if t.ships_fast else ""
+        typer.secho(f"\n{i}. {t.trend}  [{t.decay_speed.value}]{fast}", fg=typer.colors.GREEN)
+        typer.echo(f"   why now: {t.why_now}")
+        typer.echo(f"   mechanic: {t.mechanic} · visual: {t.visual_engine}")
+        typer.echo(f"   concept: {t.concept_note}")
+        typer.echo(f"   brand_fit: {t.brand_fit} · claim_safety: {t.claim_safety}")
+
+    if seed:
+        with _store() as store:
+            outcome = seed_trends(store, settings, result.trends)
+        typer.secho(
+            f"\nSeeded {len(outcome.created)} row(s), skipped "
+            f"{len(outcome.skipped)} duplicate(s).",
+            fg=typer.colors.BLUE,
+        )
+    elif result.trends:
+        typer.secho("\nRe-run with --seed to add these to the backlog.", fg=typer.colors.BLUE)
 
 
 @app.command()

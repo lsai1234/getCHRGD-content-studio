@@ -35,7 +35,9 @@ Implemented now:
 - `chrgd render` — generate the five carousel images for a built post.
 - `chrgd export` — write the Metricool CSV + `ready/` folder for the week.
 
-The remaining commands (`trends`, `run`) are stubs reporting their milestone.
+- `chrgd trends` — scout current UK-gym topical hooks and (with `--seed`) queue them.
+
+The remaining command (`run`, full chain) is a stub reporting its milestone.
 
 **The weekly loop now:** `capture` → `build` → `render` → `export`, then
 bulk-import one CSV into Metricool. That's the daily grind gone.

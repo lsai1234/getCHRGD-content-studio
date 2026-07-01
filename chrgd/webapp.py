@@ -224,6 +224,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         posts = [_post_view(i) for i in review] + [_post_view(i) for i in done]
         return render_page(request, "review.html", "review", posts=posts)
 
+    @app.get("/trends", response_class=HTMLResponse)
+    def trends_page(request: Request, _: str = Depends(require_user_page)):
+        return render_page(request, "trends.html", "trends")
+
     @app.get("/export", response_class=HTMLResponse)
     def export_page(request: Request, sample: int = 0, _: str = Depends(require_user_page)):
         from .publisher import get_publisher
@@ -417,6 +421,39 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 raise HTTPException(404, "no such idea")
             job_id = enqueue_render(store, idea_id, dry_run=dry_run)
         return {"job_id": job_id, "kind": "render", "idea_id": idea_id}
+
+    @app.post("/api/jobs/trends")
+    def api_job_trends(
+        request: Request, count: int = Form(6), _: str = Depends(require_user)
+    ):
+        from .worker import enqueue_trends
+
+        with _store(settings) as store:
+            job_id = enqueue_trends(store, count=count)
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse("/trends", 303)
+        return {"job_id": job_id, "kind": "trends"}
+
+    @app.post("/api/trends/seed/{job_id}")
+    def api_trends_seed(job_id: int, request: Request, _: str = Depends(require_user)):
+        """Seed the trends captured by a completed scout job as backlog rows."""
+        from .trends import Trend, seed_trends
+
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+            if job is None or job["kind"] != "trends":
+                raise HTTPException(404, "no such trends job")
+            data = json.loads(job["result_json"] or "{}")
+            trends = [Trend.model_validate(t) for t in data.get("trends", [])]
+            outcome = seed_trends(store, settings, trends)
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(
+                f"/backlog?flash=Seeded+{len(outcome.created)}+trend+row(s)", 303
+            )
+        return {
+            "created": [i.idea_id for i in outcome.created],
+            "skipped": outcome.skipped,
+        }
 
     @app.get("/api/jobs")
     def api_jobs(_: str = Depends(require_user)):
