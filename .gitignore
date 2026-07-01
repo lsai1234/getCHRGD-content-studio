@@ -1,0 +1,26 @@
+# Secrets
+.env
+
+# Data + generated assets
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+output/
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
