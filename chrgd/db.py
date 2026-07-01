@@ -84,6 +84,28 @@ CREATE TABLE IF NOT EXISTS runs (
     spend_usd   REAL NOT NULL DEFAULT 0,
     notes       TEXT
 );
+
+-- Async job state (long-running video jobs, and later the web worker).
+-- Persisted so a crash/restart resumes instead of re-billing.
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    idea_id     TEXT NOT NULL,
+    kind        TEXT NOT NULL,              -- e.g. 'video'
+    provider    TEXT,                       -- e.g. 'higgsfield'
+    external_id TEXT,                       -- provider generation_id
+    status      TEXT NOT NULL DEFAULT 'QUEUED',
+    media_url   TEXT,
+    output_path TEXT,
+    error       TEXT,
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    cost_usd    REAL NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    FOREIGN KEY (idea_id) REFERENCES ideas(idea_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_idea ON jobs(idea_id);
 """
 
 
@@ -307,6 +329,56 @@ class Store:
                 notes,
                 run_id,
             ),
+        )
+        self.conn.commit()
+
+    # --- async jobs ---------------------------------------------------------
+
+    def create_job(
+        self, idea_id: str, kind: str, provider: str | None = None
+    ) -> int:
+        now = datetime.now().astimezone().isoformat()
+        cur = self.conn.execute(
+            "INSERT INTO jobs (idea_id, kind, provider, status, created_at, "
+            "updated_at) VALUES (?, ?, ?, 'QUEUED', ?, ?)",
+            (idea_id, kind, provider, now, now),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def get_job(self, job_id: int) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM jobs WHERE job_id = ?", (job_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def active_job_for(self, idea_id: str, kind: str) -> dict | None:
+        """An unfinished job for this idea/kind, so we never double-submit."""
+        row = self.conn.execute(
+            "SELECT * FROM jobs WHERE idea_id = ? AND kind = ? "
+            "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1",
+            (idea_id, kind),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def update_job(self, job_id: int, **fields) -> None:
+        allowed = {
+            "external_id",
+            "status",
+            "media_url",
+            "output_path",
+            "error",
+            "attempts",
+            "cost_usd",
+        }
+        sets = {k: v for k, v in fields.items() if k in allowed}
+        if not sets:
+            return
+        sets["updated_at"] = datetime.now().astimezone().isoformat()
+        assignments = ", ".join(f"{k} = ?" for k in sets)
+        self.conn.execute(
+            f"UPDATE jobs SET {assignments} WHERE job_id = ?",
+            [*sets.values(), job_id],
         )
         self.conn.commit()
 

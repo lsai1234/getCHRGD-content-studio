@@ -41,11 +41,20 @@ class Settings(BaseSettings):
     # Falls back to OPENAI_API_KEY when the provider is openai (see get_image_key).
     image_api_key: str | None = Field(default=None, alias="CHRGD_IMAGE_API_KEY")
 
-    # --- Video generation (milestone 6+) ---
+    # --- Video generation (milestone 6 — infra present, feature OFF) ---
+    # Master switch. Video plumbing (provider client, jobs table, CLI guards)
+    # ships now, but nothing calls the paid video API until this is true.
+    video_enabled: bool = Field(default=False, alias="CHRGD_VIDEO_ENABLED")
+    video_provider: str = Field(default="higgsfield", alias="CHRGD_VIDEO_PROVIDER")
     higgsfield_api_key: str | None = Field(default=None, alias="HIGGSFIELD_API_KEY")
-    higgsfield_base_url: str | None = Field(
-        default=None, alias="CHRGD_HIGGSFIELD_BASE_URL"
+    # Base-URL override lets the provider swap cleanly (e.g. Segmind aggregator).
+    higgsfield_base_url: str = Field(
+        default="https://platform.higgsfield.ai",
+        alias="CHRGD_HIGGSFIELD_BASE_URL",
     )
+    # Default audio mode for video: "draft" (visuals only, add sound in-app) or
+    # "auto" (render with a neutral bed). Trend-driven videos should stay draft.
+    audio_mode: str = Field(default="draft", alias="CHRGD_AUDIO_MODE")
 
     # --- Cost guard ---
     max_spend_per_run: float = Field(default=5.0, alias="CHRGD_MAX_SPEND_PER_RUN")

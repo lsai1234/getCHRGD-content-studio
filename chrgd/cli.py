@@ -185,6 +185,8 @@ def render(
     produces branded placeholder backgrounds with no spend.
     """
     from .images import ImageError, render_carousel
+    from .models import PostType
+    from .video import VideoDisabledError, render_video
 
     settings = get_settings()
     with _store() as store:
@@ -192,6 +194,19 @@ def render(
         if idea is None:
             typer.secho(f"No idea {idea_id}.", fg=typer.colors.RED)
             raise typer.Exit(code=1)
+
+        if idea.post_type == PostType.video:
+            # Video plumbing exists but the feature is off (see ROADMAP M6).
+            try:
+                render_video(idea, settings, store)
+            except VideoDisabledError as exc:
+                typer.secho(f"Video disabled: {exc}", fg=typer.colors.YELLOW)
+                raise typer.Exit(code=2)
+            except NotImplementedError as exc:
+                typer.secho(f"Video not built yet: {exc}", fg=typer.colors.YELLOW)
+                raise typer.Exit(code=2)
+            return
+
         try:
             result = render_carousel(idea, settings, dry_run=dry_run)
         except ImageError as exc:
