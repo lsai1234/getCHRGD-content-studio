@@ -71,10 +71,26 @@ chrgd serve                                        # http://127.0.0.1:8000
 ```
 
 Full screens behind a session login: **Dashboard** (counts, spend, scheduled
-posts, recent runs), **Backlog** (capture, filter, void, render), **Build**
+posts, recent runs), **Create** (instant posts + fact finder — below),
+**Backlog** (capture, filter, void, render), **Build**
 (build control + live job polling), **Review & approve** (slide-thumbnail
 previews, editable copy, re-render, approve), **Export** (run export, download
-CSV + assets zip). **Build/render run as background jobs** via an in-process
+CSV + assets zip).
+
+**The Create page** is the fast lane, three tools on one screen:
+
+- **Saw a story? → post.** Paste a news story you saw on another platform
+  (text or screenshot caption), or just drop a link/headline — the studio
+  web-searches it into a factual digest, stores it on the idea as *source
+  material*, and builds a full CHRGD post anchored to the real facts. Add
+  your own angle if you have one.
+- **Quick idea → post.** One box, one button: the idea is captured and built
+  immediately (it skips the queue), landing in Review a minute later.
+- **Fact finder.** Give it one "huh, that's true" seed thought (e.g. *"tonight
+  is lots of people's first time staying up for an England game"*) and it
+  web-searches for more verified facts your UK audience will actually feel —
+  each with why it lands, its source, and a ready-made post angle. Seed them
+  all to the backlog, or hit **Build post now** on any single fact. **Build/render run as background jobs** via an in-process
 worker over the `jobs` table (the UI live-polls `/api/jobs`). A JSON API backs
 every action, with path-safe asset serving (`/media/...`). **Higgsfield video
 infra is present but off.**

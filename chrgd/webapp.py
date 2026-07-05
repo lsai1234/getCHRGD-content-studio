@@ -23,7 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings, get_settings
 from .db import Store
-from .models import Idea, Status
+from .models import DecaySpeed, Idea, Status
 from .webauth import auth_configured, verify_credentials
 from .worker import Worker, enqueue_build, enqueue_render
 
@@ -225,6 +225,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         with _store(settings) as store:
             counts = _counts(store)
         return render_page(request, "build.html", "build", counts=counts)
+
+    @app.get("/create", response_class=HTMLResponse)
+    def create_page(request: Request, _: str = Depends(require_user_page)):
+        return render_page(request, "create.html", "create")
 
     @app.get("/review", response_class=HTMLResponse)
     def review_page(request: Request, _: str = Depends(require_user_page)):
@@ -488,6 +492,128 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "created": [i.idea_id for i in outcome.created],
             "skipped": outcome.skipped,
         }
+
+    # --- create page: instant post + fact finder ----------------------------
+
+    @app.post("/api/spark/post")
+    def api_spark_post(
+        request: Request,
+        idea: str = Form(""),
+        story: str = Form(""),
+        url: str = Form(""),
+        _: str = Depends(require_user),
+    ):
+        """One-shot: capture an idea (optionally with a shared story) and
+        immediately queue a build of exactly that idea.
+
+        `idea`  — the angle / quick thought (optional if a story is given).
+        `story` — pasted story text or screenshot caption (kept as source).
+        `url`   — a link or headline to research via web search first.
+        """
+        from .worker import enqueue_spark
+
+        idea_text = idea.strip()
+        story_text = story.strip()
+        url_text = url.strip()
+        if not (idea_text or story_text or url_text):
+            raise HTTPException(400, "give me an idea, a story, or a link")
+
+        # The concept note is the angle if given, else the story's first line.
+        story_first_line = story_text.splitlines()[0] if story_text else ""
+        note = (idea_text or story_first_line or url_text)[:200]
+        is_news = bool(story_text or url_text)
+
+        with _store(settings) as store:
+            existing = store.find_by_concept_note(note)
+            if existing:
+                idea_id = existing.idea_id
+                if story_text and not existing.source_context:
+                    store.set_source_context(idea_id, story_text)
+            else:
+                row = Idea(
+                    idea_id=store.next_idea_id(settings.id_prefix),
+                    status=Status.queued,
+                    priority=1,
+                    content_category="news" if is_news else "quick",
+                    concept_note=note,
+                    source_context=story_text,
+                    learning_tag="create-page",
+                    decay_speed=DecaySpeed.days if is_news else None,
+                )
+                store.add_idea(row)
+                idea_id = row.idea_id
+            job_id = enqueue_spark(store, idea_id, research=url_text)
+
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(
+                f"/create?flash=Building+{idea_id}+%28job+%23{job_id}%29", 303
+            )
+        return {"job_id": job_id, "kind": "spark", "idea_id": idea_id}
+
+    @app.post("/api/jobs/facts")
+    def api_job_facts(
+        request: Request,
+        seed: str = Form(...),
+        count: int = Form(6),
+        _: str = Depends(require_user),
+    ):
+        from .worker import enqueue_facts
+
+        if not seed.strip():
+            raise HTTPException(400, "give the fact finder a seed thought")
+        with _store(settings) as store:
+            job_id = enqueue_facts(store, seed=seed.strip(), count=count)
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse("/create", 303)
+        return {"job_id": job_id, "kind": "facts"}
+
+    def _facts_from_job(store: Store, job_id: int) -> list:
+        from .spark import Fact
+
+        job = store.get_job(job_id)
+        if job is None or job["kind"] != "facts":
+            raise HTTPException(404, "no such facts job")
+        data = json.loads(job["result_json"] or "{}")
+        return [Fact.model_validate(f) for f in data.get("facts", [])]
+
+    @app.post("/api/facts/seed/{job_id}")
+    def api_facts_seed(job_id: int, request: Request, _: str = Depends(require_user)):
+        """Seed every fact from a completed finder job as backlog rows."""
+        from .spark import seed_facts
+
+        with _store(settings) as store:
+            outcome = seed_facts(store, settings, _facts_from_job(store, job_id))
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(
+                f"/backlog?flash=Seeded+{len(outcome.created)}+fact+row(s)", 303
+            )
+        return {
+            "created": [i.idea_id for i in outcome.created],
+            "skipped": outcome.skipped,
+        }
+
+    @app.post("/api/facts/build/{job_id}/{index}")
+    def api_facts_build(
+        job_id: int, index: int, _: str = Depends(require_user)
+    ):
+        """Turn ONE found fact straight into a post (seed + instant build)."""
+        from .spark import fact_to_idea
+        from .worker import enqueue_spark
+
+        with _store(settings) as store:
+            facts = _facts_from_job(store, job_id)
+            if not (0 <= index < len(facts)):
+                raise HTTPException(404, "no such fact in that job")
+            fact = facts[index]
+            existing = store.find_by_concept_note(fact.concept_note)
+            if existing:
+                idea_id = existing.idea_id
+            else:
+                row = fact_to_idea(store, settings, fact)
+                store.add_idea(row)
+                idea_id = row.idea_id
+            build_job = enqueue_spark(store, idea_id)
+        return {"job_id": build_job, "kind": "spark", "idea_id": idea_id}
 
     @app.get("/api/jobs")
     def api_jobs(_: str = Depends(require_user)):

@@ -160,6 +160,10 @@ class Idea(BaseModel):
     pain_point: str = ""
     core_tension: str = ""
     concept_note: str = ""
+    # Optional raw source material (a pasted news story, a research digest).
+    # Fed to the engine as background facts it may use — keeps a news post
+    # anchored to the actual story instead of the model's guess at it.
+    source_context: str = ""
     learning_tag: str = ""
     decay_speed: DecaySpeed | None = None
     created_at: datetime = Field(default_factory=_now)

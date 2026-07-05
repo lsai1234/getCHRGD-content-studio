@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Create — CHRGD{% endblock %}
+{% block body %}
+<h1>Create</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+<p class="muted">Instant posts from a shared story or a quick thought, and a
+fact finder for audience-ready hooks. Built posts land in
+<a href="/review">Review</a> for approval and rendering.</p>
+
+<div class="row" style="align-items:stretch">
+  <form class="inline" method="post" action="/api/spark/post" style="flex:1;min-width:300px">
+    <strong>Saw a story? → post</strong>
+    <label>Paste the story (text from the post/article/screenshot)</label>
+    <textarea name="story" placeholder="Paste what you saw…"></textarea>
+    <label>Or a link / headline to look up (web search)</label>
+    <input name="url" placeholder="https://… or 'England squad announcement'">
+    <label>Your angle (optional — the CHRGD take on it)</label>
+    <input name="idea" placeholder="e.g. every office in Britain is running on 4 hours sleep">
+    <button type="submit">Build post now</button>
+  </form>
+
+  <form class="inline" method="post" action="/api/spark/post" style="flex:1;min-width:300px">
+    <strong>Quick idea → post</strong>
+    <label>The idea, as it came to you</label>
+    <textarea name="idea" placeholder="e.g. gym lads who plan their whole week around the 1AM kickoff"></textarea>
+    <p class="muted" style="margin:8px 0 0">One click: captured, built, and in
+    Review a minute later. No queue, no faff.</p>
+    <button type="submit">Build post now</button>
+  </form>
+</div>
+
+<div id="spark-status" class="muted" style="margin-bottom:20px"></div>
+
+<div class="inline">
+  <div class="row" style="justify-content:space-between">
+    <strong>Fact finder</strong>
+    <form method="post" action="/api/jobs/facts" class="row" style="margin:0" id="facts-form">
+      <input name="seed" style="width:420px" placeholder="e.g. tonight is lots of people's FIRST time staying up for an England game">
+      <label style="margin:0">Count</label>
+      <input name="count" type="number" value="6" min="1" max="10" style="width:70px">
+      <button type="submit" style="margin:0">Find facts</button>
+    </form>
+  </div>
+  <p class="muted" style="margin:10px 0 0">
+    Give it one "huh, that's true" thought — it web-searches for more verified
+    facts your UK audience will actually feel, each ready to seed or build.
+  </p>
+</div>
+
+<div id="facts-status" class="muted" style="margin-bottom:14px"></div>
+<div id="facts-results"></div>
+
+<script>
+function esc(s){ return (s||'').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+let lastFactsJob = null;
+
+async function poll(){
+  try{
+    const jobs = await (await fetch('/api/jobs')).json();
+
+    // Latest instant-post job.
+    const sp = jobs.find(j => j.kind === 'spark');
+    const ss = document.getElementById('spark-status');
+    if(sp){
+      if(sp.status === 'QUEUED' || sp.status === 'PROCESSING'){
+        ss.innerHTML = `Building ${esc(sp.idea_id)}… <span class="accent">${sp.status}</span>`;
+      } else if(sp.status === 'ERROR'){
+        ss.innerHTML = `<span class="accent">Build of ${esc(sp.idea_id)} failed: ${esc(sp.error)}</span>`;
+      } else {
+        const r = JSON.parse(sp.result_json || '{}');
+        const where = r.status === 'done' ? 'ready' : 'flagged at QA';
+        ss.innerHTML = `✓ ${esc(sp.idea_id)} built (${esc(r.status)}) — ${where} in <a href="/review#${esc(sp.idea_id)}">Review</a>`;
+      }
+    }
+
+    // Latest fact-finder job.
+    const fj = jobs.find(j => j.kind === 'facts');
+    const fs = document.getElementById('facts-status');
+    if(!fj) return;
+    if(fj.status === 'QUEUED' || fj.status === 'PROCESSING'){
+      fs.innerHTML = `Fact finder job #${fj.job_id}: <span class="accent">${fj.status}…</span>`;
+      return;
+    }
+    if(fj.status === 'ERROR'){ fs.innerHTML = `<span class="accent">Fact finder failed: ${esc(fj.error)}</span>`; return; }
+    if(fj.job_id === lastFactsJob) return;
+    lastFactsJob = fj.job_id;
+    fs.textContent = '';
+    renderFacts(fj.job_id, (JSON.parse(fj.result_json || '{}').facts) || []);
+  }catch(e){}
+}
+
+function renderFacts(jobId, facts){
+  const box = document.getElementById('facts-results');
+  if(!facts.length){ box.innerHTML = '<p class="muted">No verified facts returned — try a different seed.</p>'; return; }
+  let html = `<div class="row" style="margin:6px 0 14px">
+      <strong>${facts.length} fact(s)</strong>
+      <form method="post" action="/api/facts/seed/${jobId}" style="margin:0">
+        <button style="margin:0">Seed all as backlog rows</button></form></div>`;
+  facts.forEach((f, i) => {
+    const fast = f.decay_speed === 'days' ? ' · ⏱ ship fast' : '';
+    html += `<div class="post">
+      <div class="row" style="justify-content:space-between">
+        <strong>${esc(f.fact)}</strong>
+        <small class="k">${esc(f.decay_speed)}${fast}</small></div>
+      <p style="margin:8px 0 4px">${esc(f.why_it_lands)}</p>
+      <small class="k">post: ${esc(f.concept_note)}</small><br>
+      <small class="k">source: ${esc(f.source_note)}</small>
+      <div class="row" style="margin-top:10px">
+        <button style="margin:0" onclick="buildFact(${jobId}, ${i}, this)">Build post now</button>
+      </div>
+    </div>`;
+  });
+  box.innerHTML = html;
+}
+
+async function buildFact(jobId, index, btn){
+  btn.disabled = true; btn.textContent = 'queued…';
+  const r = await fetch(`/api/facts/build/${jobId}/${index}`, {method:'POST', headers:{accept:'application/json'}});
+  if(r.ok){ const d = await r.json(); btn.textContent = `building ${d.idea_id}`; }
+  else { btn.textContent = 'failed'; btn.disabled = false; }
+}
+
+poll(); setInterval(poll, 2000);
+</script>
+{% endblock %}

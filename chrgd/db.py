@@ -28,6 +28,7 @@ _COLUMNS = [
     "pain_point",
     "core_tension",
     "concept_note",
+    "source_context",
     "learning_tag",
     "decay_speed",
     "created_at",
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS ideas (
     pain_point        TEXT NOT NULL DEFAULT '',
     core_tension      TEXT NOT NULL DEFAULT '',
     concept_note      TEXT NOT NULL DEFAULT '',
+    source_context    TEXT NOT NULL DEFAULT '',
     learning_tag      TEXT NOT NULL DEFAULT '',
     decay_speed       TEXT,
     created_at        TEXT NOT NULL,
@@ -162,8 +164,13 @@ class Store:
             r["name"]
             for r in self.conn.execute("PRAGMA table_info(ideas)").fetchall()
         }
-        if "pinned_comments_json" not in ideas_cols:
-            self.conn.execute("ALTER TABLE ideas ADD COLUMN pinned_comments_json TEXT")
+        ideas_additions = {
+            "pinned_comments_json": "TEXT",
+            "source_context": "TEXT NOT NULL DEFAULT ''",
+        }
+        for name, decl in ideas_additions.items():
+            if name not in ideas_cols:
+                self.conn.execute(f"ALTER TABLE ideas ADD COLUMN {name} {decl}")
 
     def close(self) -> None:
         self.conn.close()
@@ -254,6 +261,14 @@ class Store:
         )
         self.conn.commit()
         return self.get_idea(idea_id)
+
+    def set_source_context(self, idea_id: str, text: str) -> None:
+        """Attach/replace an idea's source material (pasted story, digest)."""
+        self.conn.execute(
+            "UPDATE ideas SET source_context = ? WHERE idea_id = ?",
+            (text, idea_id),
+        )
+        self.conn.commit()
 
     def save_asset_paths(self, idea_id: str, paths: list[str]) -> None:
         """Record rendered asset paths without changing status. Idempotent."""
@@ -412,7 +427,7 @@ class Store:
         cur = self.conn.execute(
             "UPDATE jobs SET status = 'ERROR', error = 'interrupted — re-run', "
             "updated_at = ? WHERE status = 'PROCESSING' "
-            "AND kind IN ('build','render','trends','run')",
+            "AND kind IN ('build','render','trends','run','spark','facts')",
             (datetime.now().astimezone().isoformat(),),
         )
         self.conn.commit()

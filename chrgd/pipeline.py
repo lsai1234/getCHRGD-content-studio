@@ -180,6 +180,14 @@ def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> st
         if value:
             lines.append(f"- {key}: {value}")
 
+    if idea.source_context:
+        lines.append("")
+        lines.append(
+            "Source material (background facts you may draw on — stay true to "
+            "them, never invent specifics beyond them):"
+        )
+        lines.append(idea.source_context.strip())
+
     if retry_reasons:
         lines.append("")
         lines.append(
@@ -269,6 +277,56 @@ def build_fields_from_post(post: Post) -> dict:
         "route_json": json.dumps(post.route),
         "processed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def build_one(
+    store: Store,
+    settings: Settings,
+    idea_id: str,
+    *,
+    client: ChatClient | None = None,
+    record_run: bool = True,
+) -> BuildResult:
+    """Build one SPECIFIC idea immediately (the Create-page instant path).
+
+    Unlike `build_ideas` this doesn't pull from the queue — it builds exactly
+    the idea named, regardless of what else is queued. On a hard LLM error the
+    idea is released back to `queued` for a later retry.
+    """
+    if client is None:
+        client = OpenAIChatClient(settings)
+
+    idea = store.get_idea(idea_id)
+    if idea is None:
+        raise ValueError(f"no such idea {idea_id}")
+
+    run_id = store.start_run("spark") if record_run else None
+    store.mark_processing(idea_id)
+    try:
+        result = run_pipeline_for_idea(idea, client, settings.openai_model)
+    except LLMError:
+        store.set_status(idea_id, Status.queued)  # release for retry
+        if run_id is not None:
+            store.finish_run(run_id, built=0, notes=f"llm error on {idea_id}")
+        raise
+
+    if result.post is not None:
+        fields = build_fields_from_post(result.post)
+        if result.status is Status.done:
+            store.save_build(idea_id, fields)
+        else:
+            store.mark_review(idea_id, fields)
+    else:
+        store.mark_review(idea_id, {})
+
+    if run_id is not None:
+        store.finish_run(
+            run_id,
+            built=1 if result.status is Status.done else 0,
+            spend_usd=round(result.spend_usd, 4),
+            notes=f"spark {idea_id} -> {result.status.value}",
+        )
+    return result
 
 
 def build_ideas(

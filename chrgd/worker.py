@@ -160,12 +160,61 @@ def _handle_run(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_spark(store: Store, settings: Settings, job: dict) -> dict:
+    """Instant post: (optionally research a shared story, then) build one idea."""
+    from .pipeline import build_one
+
+    params = json.loads(job["params_json"] or "{}")
+    idea_id = job["idea_id"]
+    idea = store.get_idea(idea_id)
+    if idea is None:
+        raise ValueError(f"no such idea {idea_id}")
+
+    story = params.get("research") or ""
+    if story:
+        from .spark import research_story
+
+        digest = research_story(settings, story)
+        parts = [idea.source_context, ""] if idea.source_context else []
+        if digest.headline:
+            parts.append(f"Story: {digest.headline}")
+        parts.append(digest.digest)
+        if digest.uk_relevance:
+            parts.append(f"UK relevance: {digest.uk_relevance}")
+        if not digest.found:
+            parts.append(
+                "NOTE: story could not be fully verified — build only on the "
+                "confirmed parts above."
+            )
+        store.set_source_context(idea_id, "\n".join(p for p in parts if p is not None))
+
+    result = build_one(store, settings, idea_id)
+    return {
+        "idea_id": idea_id,
+        "status": result.status.value,
+        "qa_failures": result.qa_failures,
+        "spend_usd": result.spend_usd,
+    }
+
+
+def _handle_facts(store: Store, settings: Settings, job: dict) -> dict:
+    from .spark import find_facts
+
+    params = json.loads(job["params_json"] or "{}")
+    result = find_facts(
+        settings, str(params.get("seed", "")), int(params.get("count", 6))
+    )
+    return {"facts": [f.model_dump(mode="json") for f in result.facts]}
+
+
 _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "build": _handle_build,
     "render": _handle_render,
     "video": _handle_video,
     "trends": _handle_trends,
     "run": _handle_run,
+    "spark": _handle_spark,
+    "facts": _handle_facts,
 }
 
 
@@ -191,3 +240,15 @@ def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:
     return store.create_job(
         "run", params={"count": count, "scout": scout, "dry_run": dry_run}
     )
+
+
+def enqueue_spark(store: Store, idea_id: str, *, research: str = "") -> int:
+    """Instant build of one idea; `research` is a story/URL to look up first."""
+    existing = store.active_job_for(idea_id, "spark")
+    if existing:
+        return existing["job_id"]  # don't double-bill the same instant build
+    return store.create_job("spark", idea_id=idea_id, params={"research": research})
+
+
+def enqueue_facts(store: Store, *, seed: str, count: int) -> int:
+    return store.create_job("facts", params={"seed": seed, "count": count})

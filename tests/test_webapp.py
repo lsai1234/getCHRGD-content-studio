@@ -198,7 +198,7 @@ def test_render_job_missing_idea_404(client):
 
 def test_all_pages_render(client):
     _login(client)
-    for path in ("/", "/backlog", "/build", "/trends", "/review", "/export"):
+    for path in ("/", "/create", "/backlog", "/build", "/trends", "/review", "/export"):
         r = client.get(path)
         assert r.status_code == 200, path
         assert "CHRGD" in r.text
@@ -235,6 +235,89 @@ def test_trends_job_enqueue_and_seed(client, settings):
 def test_seed_unknown_trends_job_404(client):
     _login(client)
     assert client.post("/api/trends/seed/999").status_code == 404
+
+
+# --- create page: instant post + fact finder ---------------------------------
+
+
+def test_spark_post_quick_idea(client, settings):
+    _login(client)
+    r = client.post("/api/spark/post", data={"idea": "gym lads planning around 1AM kickoff"})
+    body = r.json()
+    assert body["kind"] == "spark"
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(body["idea_id"])
+        assert idea.content_category == "quick"
+        assert idea.priority == 1
+        job = store.get_job(body["job_id"])
+        assert job["kind"] == "spark" and job["idea_id"] == idea.idea_id
+
+
+def test_spark_post_story_keeps_source_and_url(client, settings):
+    _login(client)
+    story = "England play Mexico at 1AM\nKickoff 01:00 BST, altitude 2,240m."
+    r = client.post(
+        "/api/spark/post",
+        data={"story": story, "url": "https://example.com/story"},
+    )
+    body = r.json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(body["idea_id"])
+        assert idea.content_category == "news"
+        assert idea.concept_note == "England play Mexico at 1AM"
+        assert "altitude 2,240m" in idea.source_context
+        params = json.loads(store.get_job(body["job_id"])["params_json"])
+        assert params["research"] == "https://example.com/story"
+
+
+def test_spark_post_empty_400(client):
+    _login(client)
+    assert client.post("/api/spark/post", data={}).status_code == 400
+
+
+def test_facts_job_seed_and_build(client, settings):
+    _login(client)
+    job_id = client.post(
+        "/api/jobs/facts", data={"seed": "first late England game", "count": 3}
+    ).json()["job_id"]
+
+    fact = {
+        "fact": "England last had a 1AM UK kickoff in 1986",
+        "why_it_lands": "half the audience wasn't born",
+        "source_note": "FIFA archive",
+        "decay_speed": "days",
+        "concept_note": "your first ever 1AM England game",
+        "target_viewer": "20s gym-goers",
+        "pain_point": "work tomorrow",
+        "core_tension": "loyalty vs sleep",
+    }
+    with Store(settings.db_path) as store:
+        store.update_job(
+            job_id, status="COMPLETED", result_json=json.dumps({"facts": [fact]})
+        )
+
+    # Build one fact straight into a post.
+    r = client.post(f"/api/facts/build/{job_id}/0")
+    body = r.json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(body["idea_id"])
+        assert idea.content_category == "fact"
+        assert "FIFA archive" in idea.source_context
+        assert store.get_job(body["job_id"])["kind"] == "spark"
+
+    # Seed-all skips the one already created by the build.
+    r = client.post(f"/api/facts/seed/{job_id}")
+    assert r.json()["created"] == []
+    assert r.json()["skipped"] == ["your first ever 1AM England game"]
+
+    # Out-of-range index 404s.
+    assert client.post(f"/api/facts/build/{job_id}/5").status_code == 404
+
+
+def test_facts_endpoints_unknown_job_404(client):
+    _login(client)
+    assert client.post("/api/facts/seed/999").status_code == 404
+    assert client.post("/api/facts/build/999/0").status_code == 404
 
 
 def test_run_chain_job_enqueue(client, settings):
