@@ -36,6 +36,15 @@ about right now: seasonal/weather hooks (heatwaves, January, dark mornings),
 gym discourse and arguments doing the rounds, broader viral formats/memes you
 can bend to gym culture, relevant news, cultural moments.
 
+PRIORITY SIGNAL — event collisions: upcoming fixtures/events with awkward UK
+timing (late-night World Cup kickoffs, early-morning F1/boxing, midweek
+Champions League, marathon weekends) that crash into work, sleep, or training
+the next day. These feed the proven best-performing "survival playbook" format
+(genuinely useful tactics + British humour, save-first). For each, name the
+exact collision (event time x obligation time) in the concept_note and set
+decay_speed to "days" — a match-day playbook must post 1-3 days BEFORE the
+event.
+
 Filter HARD before returning anything:
 - Brand fit: UK gym/supplement culture, dry mate-to-mate voice, no parody dialect.
 - Claim safety: NO medical/cure/treat/prevent/guaranteed-outcome language;
@@ -53,7 +62,7 @@ Return a SINGLE JSON object, no markdown, no commentary:
       "trend": "the trend in one line",
       "why_now": "why this UK gym audience cares right now",
       "decay_speed": "days | weeks | evergreen",
-      "mechanic": "a virality mechanic (e.g. rage_agreement, archetype_ranking)",
+      "mechanic": "a virality mechanic (e.g. survival_playbook, event_collision, rage_agreement, archetype_ranking)",
       "visual_engine": "a visual engine (e.g. real_gym_micro_scene)",
       "brand_fit": "ok | flag: <reason>",
       "claim_safety": "ok | flag: <reason>",

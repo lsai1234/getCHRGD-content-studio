@@ -36,6 +36,7 @@ _COLUMNS = [
     "slides_json",
     "caption",
     "comment_trigger",
+    "pinned_comments_json",
     "hashtags",
     "route_json",
     "asset_paths_json",
@@ -63,6 +64,7 @@ CREATE TABLE IF NOT EXISTS ideas (
     slides_json       TEXT,
     caption           TEXT,
     comment_trigger   TEXT,
+    pinned_comments_json TEXT,
     hashtags          TEXT,
     route_json        TEXT,
     asset_paths_json  TEXT,
@@ -143,18 +145,25 @@ class Store:
 
     def _migrate(self) -> None:
         """Add columns introduced after a DB was first created (idempotent)."""
-        cols = {
+        jobs_cols = {
             r["name"]
             for r in self.conn.execute("PRAGMA table_info(jobs)").fetchall()
         }
-        additions = {
+        jobs_additions = {
             "params_json": "TEXT",
             "result_json": "TEXT",
             "progress": "INTEGER NOT NULL DEFAULT 0",
         }
-        for name, decl in additions.items():
-            if name not in cols:
+        for name, decl in jobs_additions.items():
+            if name not in jobs_cols:
                 self.conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {decl}")
+
+        ideas_cols = {
+            r["name"]
+            for r in self.conn.execute("PRAGMA table_info(ideas)").fetchall()
+        }
+        if "pinned_comments_json" not in ideas_cols:
+            self.conn.execute("ALTER TABLE ideas ADD COLUMN pinned_comments_json TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -228,6 +237,7 @@ class Store:
             "slides_json",
             "caption",
             "comment_trigger",
+            "pinned_comments_json",
             "hashtags",
             "route_json",
             "asset_paths_json",

@@ -30,12 +30,12 @@ def store(tmp_path):
     s.close()
 
 
-def _rendered_idea(store, settings, idea_id="G-0001"):
-    """Insert a done idea with five fake rendered slide files on disk."""
+def _rendered_idea(store, settings, idea_id="G-0001", slides=5, pinned=None):
+    """Insert a done idea with fake rendered slide files on disk."""
     out = Path(settings.output_dir) / idea_id
     out.mkdir(parents=True, exist_ok=True)
     paths = []
-    for i in range(1, 6):
+    for i in range(1, slides + 1):
         p = out / f"slide_{i}.jpg"
         p.write_bytes(b"\xff\xd8\xff")  # minimal JPEG-ish bytes
         paths.append(str(p))
@@ -47,6 +47,7 @@ def _rendered_idea(store, settings, idea_id="G-0001"):
             "caption": "line one\nline two",
             "hashtags": json.dumps(["gym", "#uk"]),
             "slides_json": json.dumps([]),
+            "pinned_comments_json": json.dumps(pinned or []),
         },
     )
     store.save_asset_paths(idea_id, paths)
@@ -75,7 +76,8 @@ def test_columns_load_from_repo_config():
     cols = load_columns()  # the real config/metricool_columns.toml
     assert cols.header.text
     assert "tiktok" in cols.networks
-    assert len(cols.media.image_columns) == 5
+    # Ten picture columns cover the longest Playbook carousel.
+    assert len(cols.media.image_columns) == 10
 
 
 # --- export -----------------------------------------------------------------
@@ -99,11 +101,44 @@ def test_export_writes_csv_and_copies_assets(store, settings):
     assert "#gym" in row[text_col]
     # network markers set
     assert row[pub.cols.networks["tiktok"]] == pub.cols.format.network_on_value
-    # five picture columns filled with lined-up filenames in ready/
+    # picture columns filled with lined-up filenames in ready/; the rest blank
     ready = Path(result.ready_dir)
     for i, col in enumerate(pub.cols.media.image_columns, 1):
-        assert row[col] == f"G-0001_slide_{i}.jpg"
-        assert (ready / f"G-0001_slide_{i}.jpg").exists()
+        if i <= 5:
+            assert row[col] == f"G-0001_slide_{i}.jpg"
+            assert (ready / f"G-0001_slide_{i}.jpg").exists()
+        else:
+            assert row[col] == ""
+
+
+def test_export_nine_slide_playbook_fills_nine_columns(store, settings):
+    _rendered_idea(store, settings, slides=9)
+    pub = MetricoolCSVPublisher()
+    result = pub.export(store, settings)
+    row = next(csv.DictReader(Path(result.csv_path).open()))
+    assert row[pub.cols.media.image_columns[8]] == "G-0001_slide_9.jpg"
+    assert row[pub.cols.media.image_columns[9]] == ""
+
+
+def test_export_writes_pinned_comments_file(store, settings):
+    pinned = [
+        "If this goes to extra time, Monday is cancelled.",
+        "Tag the mate with zero plan.",
+    ]
+    _rendered_idea(store, settings, pinned=pinned)
+    pub = MetricoolCSVPublisher()
+    result = pub.export(store, settings)
+    assert result.pinned_comments_path is not None
+    text = Path(result.pinned_comments_path).read_text()
+    assert "G-0001" in text
+    for c in pinned:
+        assert c in text
+
+
+def test_export_skips_pinned_file_when_none(store, settings):
+    _rendered_idea(store, settings)
+    result = MetricoolCSVPublisher().export(store, settings)
+    assert result.pinned_comments_path is None
 
 
 def test_export_marks_exported_and_is_idempotent(store, settings):

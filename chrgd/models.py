@@ -65,6 +65,15 @@ QA_ENGAGEMENT_GATES = {
 }
 QA_ENGAGEMENT_MIN = 8
 
+# Carousel length: Sketch posts are exactly 5 slides; Playbook posts run 7–10.
+# The gate allows the whole 5–10 range and lets format-specific rules live in
+# the prompt, where they can evolve without a code change.
+MIN_SLIDES = 5
+MAX_SLIDES = 10
+
+# Playbook posts live or die on saves — enforce the prompt's extra gate.
+QA_PLAYBOOK_SAVEABILITY_MIN = 8
+
 
 class Post(BaseModel):
     """The finished post produced by the 6-stage pipeline."""
@@ -74,9 +83,18 @@ class Post(BaseModel):
     slides: list[Slide] = Field(default_factory=list)
     caption: str = ""
     comment_trigger: str = ""
+    # 1–2 comments to pin manually right after publishing — the encore joke
+    # plus a tag/confession prompt (see the content engine prompt).
+    pinned_comments: list[str] = Field(default_factory=list)
     hashtags: list[str] = Field(default_factory=list)
-    # Routing/QA bookkeeping: mechanic, visual engine, QA scores, etc.
+    # Routing/QA bookkeeping: format, mechanic, visual engine, QA scores, etc.
     route: dict = Field(default_factory=dict)
+
+    @property
+    def post_format(self) -> str:
+        """"sketch" or "playbook" (from route); defaults to sketch."""
+        fmt = str((self.route or {}).get("format", "")).strip().lower()
+        return fmt if fmt in ("sketch", "playbook") else "sketch"
 
     @property
     def qa_scores(self) -> dict[str, float]:
@@ -96,8 +114,17 @@ class Post(BaseModel):
         scores = self.qa_scores
         reasons: list[str] = []
 
-        if len(self.slides) != 5:
-            reasons.append(f"expected 5 slides, got {len(self.slides)}")
+        n = len(self.slides)
+        if self.post_format == "playbook":
+            if not (7 <= n <= MAX_SLIDES):
+                reasons.append(f"playbook needs 7–{MAX_SLIDES} slides, got {n}")
+            save = scores.get("saveability")
+            if save is not None and save < QA_PLAYBOOK_SAVEABILITY_MIN:
+                reasons.append(
+                    f"playbook saveability {save:g} < {QA_PLAYBOOK_SAVEABILITY_MIN}"
+                )
+        elif not (MIN_SLIDES <= n <= MAX_SLIDES):
+            reasons.append(f"expected {MIN_SLIDES}–{MAX_SLIDES} slides, got {n}")
 
         for gate, minimum in QA_HARD_GATES.items():
             if gate not in scores:
@@ -143,6 +170,7 @@ class Idea(BaseModel):
     slides_json: str | None = None
     caption: str | None = None
     comment_trigger: str | None = None
+    pinned_comments_json: str | None = None
     hashtags: str | None = None
     route_json: str | None = None
     asset_paths_json: str | None = None

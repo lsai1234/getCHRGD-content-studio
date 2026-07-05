@@ -20,7 +20,9 @@ from chrgd.pipeline import (
 )
 
 
-def make_post_dict(*, overall=9, hook=9, visual=9, group=9, slides=5):
+def make_post_dict(
+    *, overall=9, hook=9, visual=9, group=9, save=8, slides=5, fmt="sketch"
+):
     return {
         "post_type": "carousel",
         "hook": "you're the locker hogger, aren't you",
@@ -35,8 +37,13 @@ def make_post_dict(*, overall=9, hook=9, visual=9, group=9, slides=5):
         ],
         "caption": "caption text",
         "comment_trigger": "which one are you?",
+        "pinned_comments": [
+            "if this goes to extra time, Monday is cancelled",
+            "tag the mate with zero plan",
+        ],
         "hashtags": ["#gym", "#uk"],
         "route": {
+            "format": fmt,
             "mechanic": "identity_exposure",
             "visual_engine": "real_gym_micro_scene",
             "primary_goal": "comments",
@@ -47,7 +54,7 @@ def make_post_dict(*, overall=9, hook=9, visual=9, group=9, slides=5):
                 "identity_recognition": 8,
                 "group_chat_share": group,
                 "comment_fight": 8,
-                "saveability": 8,
+                "saveability": save,
                 "visual_originality": visual,
                 "dopamine_density": 8,
                 "clarity": 9,
@@ -114,6 +121,24 @@ def test_qa_fails_when_no_engagement_gate_hits_8():
 def test_qa_fails_on_wrong_slide_count():
     post = Post.model_validate(make_post_dict(slides=4))
     assert any("slides" in r for r in post.qa_failures())
+    post = Post.model_validate(make_post_dict(slides=11))
+    assert any("slides" in r for r in post.qa_failures())
+
+
+def test_qa_passes_nine_slide_playbook():
+    """The proven best-performer shape: a 9-slide funny-useful playbook."""
+    post = Post.model_validate(make_post_dict(slides=9, fmt="playbook"))
+    assert post.post_format == "playbook"
+    assert post.passes_qa(), post.qa_failures()
+
+
+def test_qa_playbook_needs_seven_slides_and_saves():
+    # Too short for a playbook.
+    post = Post.model_validate(make_post_dict(slides=5, fmt="playbook"))
+    assert any("playbook" in r for r in post.qa_failures())
+    # Long enough, but not save-worthy — playbooks live on saves.
+    post = Post.model_validate(make_post_dict(slides=8, fmt="playbook", save=6))
+    assert any("saveability" in r for r in post.qa_failures())
 
 
 # --- cost -------------------------------------------------------------------
@@ -183,6 +208,7 @@ def test_build_ideas_persists_and_marks(store, settings):
     assert g1.hook is not None
     assert g1.slides_json is not None
     assert json.loads(g1.hashtags) == ["#gym", "#uk"]
+    assert len(json.loads(g1.pinned_comments_json)) == 2
 
 
 def test_build_ideas_flags_review_in_db(store, settings):

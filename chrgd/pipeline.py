@@ -46,16 +46,19 @@ in exactly this shape:
       "image_prompt": "string, uses ONLY approved slide text",
       "visual_intent": "string: subject, setting, action, prop, double-take"
     }
-    // EXACTLY 5 slide objects, in order
+    // One object per slide, in order.
+    // Sketch format: EXACTLY 5 slides. Playbook format: 7-10 slides.
   ],
   "caption": "string",
   "comment_trigger": "string",
+  "pinned_comments": ["string", "string (1-2 comments to pin after posting)"],
   "hashtags": ["string", "..."],
   "route": {
+    "format": "sketch | playbook",
     "mechanic": "string (one of the virality mechanics)",
     "visual_engine": "string (one of the visual engines)",
     "primary_goal": "string",
-    "build_note": "mechanic · visual engine · primary goal · QA overall",
+    "build_note": "format · mechanic · visual engine · primary goal · QA overall",
     "qa": {
       "hook": 0, "swipe_loop": 0, "identity_recognition": 0,
       "group_chat_share": 0, "comment_fight": 0, "saveability": 0,
@@ -261,6 +264,7 @@ def build_fields_from_post(post: Post) -> dict:
         "slides_json": json.dumps([s.model_dump() for s in post.slides]),
         "caption": post.caption,
         "comment_trigger": post.comment_trigger,
+        "pinned_comments_json": json.dumps(post.pinned_comments),
         "hashtags": json.dumps(post.hashtags),
         "route_json": json.dumps(post.route),
         "processed_at": datetime.now(timezone.utc).isoformat(),

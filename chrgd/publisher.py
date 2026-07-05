@@ -53,8 +53,10 @@ class HeaderCfg(BaseModel):
 
 
 class MediaCfg(BaseModel):
+    # Ten picture columns cover the longest Playbook carousel; Sketch rows
+    # just leave the trailing columns blank.
     image_columns: list[str] = Field(
-        default_factory=lambda: [f"Picture {i}" for i in range(1, 6)]
+        default_factory=lambda: [f"Picture {i}" for i in range(1, 11)]
     )
     video_column: str = "Video"
 
@@ -127,6 +129,9 @@ def _schedule_datetimes(cfg: ScheduleCfg, count: int) -> list[datetime]:
 class ExportResult:
     csv_path: str | None = None
     ready_dir: str | None = None
+    # Manual-steps sheet: pinned comments to post right after each post goes
+    # live (Metricool can't pin comments, so this is a human step).
+    pinned_comments_path: str | None = None
     exported_ids: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)  # (id, reason)
 
@@ -243,6 +248,9 @@ class MetricoolCSVPublisher:
             for row in rows:
                 writer.writerow({h: row.get(h, "") for h in headers})
 
+        pinned_path = self._write_pinned_comments(ideas, whens, ready_dir, stamp)
+        result.pinned_comments_path = pinned_path
+
         for idea, when in zip(ideas, whens):
             store.conn.execute(
                 "UPDATE ideas SET scheduled_for = ? WHERE idea_id = ?",
@@ -255,6 +263,43 @@ class MetricoolCSVPublisher:
         result.csv_path = str(csv_path)
         result.ready_dir = str(ready_dir)
         return result
+
+    def _write_pinned_comments(
+        self,
+        ideas: list[Idea],
+        whens: list[datetime],
+        ready_dir: Path,
+        stamp: str,
+    ) -> str | None:
+        """Write the manual pinned-comments sheet alongside the CSV.
+
+        Metricool publishes the post but can't pin comments, so this file is
+        the checklist: after each post goes live, paste + pin these.
+        """
+        import json
+
+        entries: list[str] = []
+        for idea, when in zip(ideas, whens):
+            comments = (
+                json.loads(idea.pinned_comments_json)
+                if idea.pinned_comments_json
+                else []
+            )
+            if not comments:
+                continue
+            lines = [f"{idea.idea_id} — scheduled {when.strftime('%d/%m/%Y %H:%M')}"]
+            lines += [f"  pin {i}: {c}" for i, c in enumerate(comments, 1)]
+            entries.append("\n".join(lines))
+        if not entries:
+            return None
+
+        path = ready_dir / f"metricool_{stamp}_pinned_comments.txt"
+        header = (
+            "Pinned comments — post and pin these right after each post goes "
+            "live (Metricool can't do this bit).\n"
+        )
+        path.write_text(header + "\n" + "\n\n".join(entries) + "\n", encoding="utf-8")
+        return str(path)
 
     def write_sample(self, settings: Settings) -> str:
         """Emit a one-row sample CSV to diff against Metricool's template."""

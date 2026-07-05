@@ -7,8 +7,9 @@ Beats the old system by never asking the image model to render text:
   2. Overlay the approved headline + supporting text in code with Pillow,
      inside the TikTok-safe zones, with a contrast panel on busy backgrounds.
 
-Output is JPEG/WebP (never PNG — TikTok rejects it), vertical, <=1080p, five
-images per carousel, saved to `output/<idea_id>/slide_1..5.<ext>`.
+Output is JPEG/WebP (never PNG — TikTok rejects it), vertical, <=1080p, one
+image per slide (5 for Sketch posts, up to 10 for Playbooks), saved to
+`output/<idea_id>/slide_1..N.<ext>`.
 
 `--dry-run` skips the paid image API and paints a branded placeholder
 background instead, so layout/typography can be tested offline for free.
@@ -82,7 +83,7 @@ def _placeholder_background(brand: Brand, seed: int) -> Image.Image:
     img = Image.new("RGB", (w, h), base)
     px = img.load()
     # Vertical gradient darkening toward the bottom, with a faint accent tint
-    # drifting across slides so the five aren't identical.
+    # drifting across slides so they aren't identical.
     for y in range(h):
         t = y / h
         for x in range(0, w, 4):  # step for speed; fill 4px blocks
@@ -268,7 +269,7 @@ def render_carousel(
     brand: Brand | None = None,
     dry_run: bool = False,
 ) -> RenderResult:
-    """Render all five slides for one idea to disk. Returns paths + spend."""
+    """Render every slide for one idea to disk. Returns paths + spend."""
     brand = brand or load_brand()
     slides = _slides_from_idea(idea)
     out_dir = Path(settings.output_dir) / idea.idea_id

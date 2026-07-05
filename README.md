@@ -5,6 +5,14 @@ It turns a backlog of ideas into import-ready TikTok/Instagram **carousels** (an
 later, short videos) and hands them to a scheduler as a **Metricool-compatible CSV
 + `ready/` asset folder** — so the only daily step is gone.
 
+Posts come in two formats (chosen by the engine at routing): **Sketch** — the
+original 5-slide humour format — and **Playbook** — a 7–10-slide
+genuinely-useful-plus-funny survival guide, modelled on the account's proven
+best performer (the 9-slide "England vs Mexico at 1AM" post). Every post also
+ships **1–2 pinned comments**; the export writes them to a
+`*_pinned_comments.txt` sheet next to the CSV, since pinning is the one manual
+step Metricool can't do.
+
 It replaces an old n8n workflow. The content *reasoning* lives in
 `content_engine_prompt.md` (the "CHRGD Content Engine" instructions); this repo is
 the app built around it: storage, generation, assembly, and a scheduler-ready export.

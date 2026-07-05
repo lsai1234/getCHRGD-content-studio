@@ -158,6 +158,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def _post_view(idea) -> dict:
         slides = json.loads(idea.slides_json) if idea.slides_json else []
         hashtags = json.loads(idea.hashtags) if idea.hashtags else []
+        pinned = (
+            json.loads(idea.pinned_comments_json)
+            if idea.pinned_comments_json
+            else []
+        )
         route = json.loads(idea.route_json) if idea.route_json else {}
         assets = (
             [Path(p).name for p in json.loads(idea.asset_paths_json)]
@@ -171,8 +176,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "hook": idea.hook,
             "caption": idea.caption,
             "comment_trigger": idea.comment_trigger,
+            "pinned_comments": pinned,
             "hashtags": " ".join(hashtags),
             "slides": slides,
+            "format": route.get("format", ""),
             "qa": route.get("qa", {}),
             "assets": assets,
         }
@@ -362,6 +369,14 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 "hashtags": json.dumps(hashtags),
                 "slides_json": json.dumps(slides),
             }
+            if "pinned_comments" in form:
+                # One pinned comment per line in the textarea.
+                pinned = [
+                    line.strip()
+                    for line in str(form["pinned_comments"]).splitlines()
+                    if line.strip()
+                ]
+                fields["pinned_comments_json"] = json.dumps(pinned)
             # save_build stamps status=done; keep review posts in review.
             prev = idea.status
             store.save_build(idea_id, fields)
@@ -500,6 +515,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "exported": result.exported_ids,
             "skipped": result.skipped,
             "csv_path": result.csv_path,
+            "pinned_comments_path": result.pinned_comments_path,
         }
 
     @app.get("/api/runs")

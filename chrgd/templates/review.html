@@ -9,7 +9,7 @@
 {% for p in posts %}
 <div class="post" id="{{ p.idea_id }}">
   <div class="row" style="justify-content:space-between">
-    <strong>{{ p.idea_id }} · <span class="pill">{{ p.status }}</span></strong>
+    <strong>{{ p.idea_id }} · <span class="pill">{{ p.status }}</span>{% if p.format %} · <span class="pill">{{ p.format }}</span>{% endif %}</strong>
     <small class="k">{{ p.concept_note }}</small>
   </div>
 
@@ -40,6 +40,8 @@
       <div style="flex:1"><label>Comment trigger</label><input name="comment_trigger" value="{{ p.comment_trigger or '' }}"></div>
       <div style="flex:1"><label>Hashtags (space-separated)</label><input name="hashtags" value="{{ p.hashtags }}"></div>
     </div>
+    <label>Pinned comments (one per line — paste + pin after posting)</label>
+    <textarea name="pinned_comments" rows="2">{{ p.pinned_comments | join('\n') }}</textarea>
     <div class="row" style="margin-top:12px">
       <button type="submit">Save copy</button>
       <button type="button" class="ghost" onclick="reRender('{{ p.idea_id }}', this)">Re-render</button>

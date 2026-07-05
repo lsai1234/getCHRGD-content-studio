@@ -320,11 +320,21 @@ def export(
         typer.secho(f"  ✓ {idea_id}", fg=typer.colors.GREEN)
     typer.secho(f"\nCSV: {result.csv_path}", fg=typer.colors.BLUE)
     typer.secho(f"Assets: {result.ready_dir}", fg=typer.colors.BLUE)
+    if result.pinned_comments_path:
+        typer.secho(
+            f"Pinned comments: {result.pinned_comments_path}", fg=typer.colors.BLUE
+        )
     typer.secho(
         f"{len(result.exported_ids)} post(s) exported. Bulk-import the CSV in "
         "Metricool and attach media from ready/.",
         fg=typer.colors.BLUE,
     )
+    if result.pinned_comments_path:
+        typer.secho(
+            "After each post goes live, paste + pin its comments from the "
+            "pinned-comments file.",
+            fg=typer.colors.BLUE,
+        )
 
 
 @app.command()
@@ -402,6 +412,11 @@ def review(
                 "hook": idea.hook,
                 "caption": idea.caption,
                 "comment_trigger": idea.comment_trigger,
+                "pinned_comments": (
+                    _json.loads(idea.pinned_comments_json)
+                    if idea.pinned_comments_json
+                    else []
+                ),
                 "hashtags": _json.loads(idea.hashtags) if idea.hashtags else [],
                 "slides": _json.loads(idea.slides_json) if idea.slides_json else [],
                 "route": _json.loads(idea.route_json) if idea.route_json else {},
