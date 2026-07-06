@@ -15,6 +15,30 @@ size = "1024x1536"
 # Slide 1 is the scroll-stopper, so it gets the strongest render.
 quality_first = "high"
 quality_rest = "medium"
+# Slide 1 gets this many background options to pick from (paid per variant).
+variants_first = 2
+# Appended to every slide prompt so the five backgrounds read as ONE carousel.
+consistency_clause = "Part of a 5-image set: keep the same location, lighting, colour grade and photographic style across all images in this set."
+# Text is always overlaid in code — the model must never paint its own.
+negative_clause = "Absolutely no text, no words, no letters, no numbers, no captions, no watermarks anywhere in the image."
+
+# --- Art-direction presets (create journey "style" picker) -------------------
+# One is chosen per post and appended to every slide's image prompt.
+[styles.gritty]
+label = "Gritty gym flash-photo"
+prompt = "Shot on a phone with harsh direct flash in a real UK commercial gym at night, candid documentary energy, slightly grainy, dark moody background, authentic not staged."
+
+[styles.editorial]
+label = "Clean editorial"
+prompt = "Premium editorial sports photography, controlled studio-grade lighting, deep blacks with a single warm orange accent, crisp detail, minimal composition with generous negative space."
+
+[styles.meme]
+label = "Meme-adjacent"
+prompt = "Deliberately mundane amateur photo look, awkward framing, fluorescent gym lighting, the visual language of a viral relatable meme, slightly cursed energy."
+
+[styles.cinematic]
+label = "Dark cinematic"
+prompt = "Cinematic film still, anamorphic depth, volumetric light cutting through chalk dust in a dark gym, teal-and-orange grade, high contrast, dramatic atmosphere."
 
 [safe_zones]          # fractions of the canvas kept clear of TikTok UI
 top = 0.10

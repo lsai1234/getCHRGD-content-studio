@@ -44,6 +44,19 @@ class RenderResult:
     spend_usd: float = 0.0
     generated: int = 0  # backgrounds actually generated via the paid API
     dry_run: bool = False
+    # slide index (0-based) -> composed variant paths (slide 1 options).
+    variants: dict[int, list[str]] = field(default_factory=dict)
+
+
+@dataclass
+class SlideRenderResult:
+    idea_id: str
+    slide_index: int
+    path: str = ""  # canonical composed slide
+    variant_paths: list[str] = field(default_factory=list)
+    spend_usd: float = 0.0
+    generated: int = 0
+    dry_run: bool = False
 
 
 # --- helpers ----------------------------------------------------------------
@@ -131,6 +144,38 @@ def _generate_background(
     except Exception as exc:  # noqa: BLE001
         raise ImageError(str(exc)) from exc
     return Image.open(BytesIO(base64.b64decode(b64)))
+
+
+# --- prompt composition -------------------------------------------------------
+
+
+def compose_image_prompt(slide_prompt: str, brand: Brand, style: str | None) -> str:
+    """The full prompt sent to the image API for one background.
+
+    `[style preset] + [slide prompt] + [consistency clause] + [negative]` —
+    text is always overlaid in code, so the model must never paint its own.
+    """
+    parts = []
+    style_block = brand.style_prompt(style)
+    if style_block:
+        parts.append(style_block)
+    if slide_prompt.strip():
+        parts.append(slide_prompt.strip())
+    if brand.generation.consistency_clause:
+        parts.append(brand.generation.consistency_clause)
+    if brand.generation.negative_clause:
+        parts.append(brand.generation.negative_clause)
+    return " ".join(parts)
+
+
+def style_for_idea(idea: Idea) -> str | None:
+    """The style preset chosen for this idea (stored in route_json)."""
+    if not idea.route_json:
+        return None
+    try:
+        return json.loads(idea.route_json).get("style")
+    except json.JSONDecodeError:
+        return None
 
 
 # --- text overlay -----------------------------------------------------------
@@ -252,6 +297,8 @@ def compose_slide(
 
 # --- public API -------------------------------------------------------------
 
+_VARIANT_KEYS = "abcdefgh"
+
 
 def _slides_from_idea(idea: Idea) -> list[Slide]:
     if not idea.slides_json:
@@ -261,44 +308,215 @@ def _slides_from_idea(idea: Idea) -> list[Slide]:
     return [Slide.model_validate(s) for s in json.loads(idea.slides_json)]
 
 
+def _ext(brand: Brand) -> tuple[str, str]:
+    ext = "webp" if brand.canvas.format.lower() == "webp" else "jpg"
+    return ext, ("WEBP" if ext == "webp" else "JPEG")
+
+
+def _out_dir(settings: Settings, idea_id: str) -> Path:
+    out = Path(settings.output_dir) / idea_id
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def _bg_path(out_dir: Path, index: int, ext: str, variant: str | None = None) -> Path:
+    suffix = f"_{variant}" if variant else ""
+    return out_dir / f"bg_{index + 1}{suffix}.{ext}"
+
+
+def _slide_path(out_dir: Path, index: int, ext: str, variant: str | None = None) -> Path:
+    suffix = f"_{variant}" if variant else ""
+    return out_dir / f"slide_{index + 1}{suffix}.{ext}"
+
+
+def _save(img: Image.Image, path: Path, pil_format: str, brand: Brand) -> None:
+    img.save(path, pil_format, quality=brand.canvas.save_quality)
+
+
+def render_slide(
+    idea: Idea,
+    slide_index: int,
+    settings: Settings,
+    *,
+    brand: Brand | None = None,
+    dry_run: bool = False,
+    variants: int | None = None,
+    spent_so_far: float = 0.0,
+) -> SlideRenderResult:
+    """Render one slide: N background variants + composed text overlay.
+
+    The raw (fitted) background is saved alongside the composed slide so copy
+    edits can re-overlay text for free, without a paid regeneration. Variant
+    files get an `_a`/`_b` suffix; the first variant also becomes the
+    canonical `slide_N` / `bg_N` until a different one is picked.
+    """
+    brand = brand or load_brand()
+    slides = _slides_from_idea(idea)
+    if not 0 <= slide_index < len(slides):
+        raise ImageError(f"slide {slide_index + 1} out of range for {idea.idea_id}")
+    slide = slides[slide_index]
+    out_dir = _out_dir(settings, idea.idea_id)
+    ext, pil_format = _ext(brand)
+    style = style_for_idea(idea)
+
+    n = variants if variants is not None else brand.generation.variants_for(slide_index)
+    n = max(1, min(n, len(_VARIANT_KEYS)))
+    quality = brand.generation.quality_for(slide_index)
+    per_image = _IMAGE_COST.get(quality, 0.042)
+
+    result = SlideRenderResult(
+        idea_id=idea.idea_id, slide_index=slide_index, dry_run=dry_run
+    )
+    for v in range(n):
+        if dry_run:
+            background = _placeholder_background(brand, slide_index + v)
+        else:
+            if spent_so_far + result.spend_usd + per_image > settings.max_spend_per_run:
+                raise ImageError(
+                    f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
+                    f"at slide {slide_index + 1} — aborting render"
+                )
+            prompt = compose_image_prompt(slide.image_prompt, brand, style)
+            background = _generate_background(prompt, settings, brand, quality)
+            result.spend_usd += per_image
+            result.generated += 1
+
+        fitted = _fit_to_canvas(background, brand.canvas.width, brand.canvas.height)
+        composed = compose_slide(fitted, slide, brand, slide_index)
+        key = _VARIANT_KEYS[v] if n > 1 else None
+        _save(fitted, _bg_path(out_dir, slide_index, ext, key), pil_format, brand)
+        _save(composed, _slide_path(out_dir, slide_index, ext, key), pil_format, brand)
+        if key:
+            result.variant_paths.append(str(_slide_path(out_dir, slide_index, ext, key)))
+        if v == 0:
+            # First variant doubles as the canonical files until a pick.
+            if key:
+                _save(fitted, _bg_path(out_dir, slide_index, ext), pil_format, brand)
+                _save(composed, _slide_path(out_dir, slide_index, ext), pil_format, brand)
+            result.path = str(_slide_path(out_dir, slide_index, ext))
+
+    return result
+
+
+def recompose_slide(
+    idea: Idea,
+    slide_index: int,
+    settings: Settings,
+    *,
+    brand: Brand | None = None,
+) -> SlideRenderResult:
+    """Re-overlay the current copy onto the saved background — free, instant.
+
+    Refreshes the canonical slide and any variant previews that still have
+    their background on disk. Raises if the slide was never rendered.
+    """
+    brand = brand or load_brand()
+    slides = _slides_from_idea(idea)
+    if not 0 <= slide_index < len(slides):
+        raise ImageError(f"slide {slide_index + 1} out of range for {idea.idea_id}")
+    slide = slides[slide_index]
+    out_dir = _out_dir(settings, idea.idea_id)
+    ext, pil_format = _ext(brand)
+
+    canonical_bg = _bg_path(out_dir, slide_index, ext)
+    if not canonical_bg.exists():
+        raise ImageError(
+            f"no saved background for slide {slide_index + 1} — generate it first"
+        )
+
+    result = SlideRenderResult(idea_id=idea.idea_id, slide_index=slide_index)
+    targets: list[tuple[Path, Path, str | None]] = [(canonical_bg, _slide_path(out_dir, slide_index, ext), None)]
+    for key in _VARIANT_KEYS:
+        bg = _bg_path(out_dir, slide_index, ext, key)
+        if bg.exists():
+            targets.append((bg, _slide_path(out_dir, slide_index, ext, key), key))
+
+    for bg, dest, key in targets:
+        composed = compose_slide(Image.open(bg), slide, brand, slide_index)
+        _save(composed, dest, pil_format, brand)
+        if key:
+            result.variant_paths.append(str(dest))
+        else:
+            result.path = str(dest)
+    return result
+
+
+def pick_variant(
+    idea: Idea,
+    slide_index: int,
+    variant: str,
+    settings: Settings,
+    *,
+    brand: Brand | None = None,
+) -> str:
+    """Promote a background variant to the canonical slide. Returns its path."""
+    brand = brand or load_brand()
+    out_dir = _out_dir(settings, idea.idea_id)
+    ext, _ = _ext(brand)
+    if variant not in _VARIANT_KEYS:
+        raise ImageError(f"unknown variant '{variant}'")
+    bg = _bg_path(out_dir, slide_index, ext, variant)
+    composed = _slide_path(out_dir, slide_index, ext, variant)
+    if not bg.exists() or not composed.exists():
+        raise ImageError(f"variant '{variant}' for slide {slide_index + 1} not found")
+    import shutil
+
+    shutil.copyfile(bg, _bg_path(out_dir, slide_index, ext))
+    shutil.copyfile(composed, _slide_path(out_dir, slide_index, ext))
+    return str(_slide_path(out_dir, slide_index, ext))
+
+
+def list_variants(idea: Idea, settings: Settings, *, brand: Brand | None = None) -> dict[int, list[str]]:
+    """Composed variant filenames on disk, keyed by 0-based slide index."""
+    brand = brand or load_brand()
+    out_dir = Path(settings.output_dir) / idea.idea_id
+    ext, _ = _ext(brand)
+    found: dict[int, list[str]] = {}
+    if not out_dir.exists():
+        return found
+    for i in range(5):
+        names = [
+            _slide_path(out_dir, i, ext, key).name
+            for key in _VARIANT_KEYS
+            if _slide_path(out_dir, i, ext, key).exists()
+        ]
+        if names:
+            found[i] = names
+    return found
+
+
 def render_carousel(
     idea: Idea,
     settings: Settings,
     *,
     brand: Brand | None = None,
     dry_run: bool = False,
+    on_slide=None,
 ) -> RenderResult:
-    """Render all five slides for one idea to disk. Returns paths + spend."""
+    """Render all five slides for one idea to disk. Returns paths + spend.
+
+    Slide 1 renders `generation.variants_first` background options; the rest
+    one each. `on_slide(done, total)` fires after each slide for job progress.
+    """
     brand = brand or load_brand()
     slides = _slides_from_idea(idea)
-    out_dir = Path(settings.output_dir) / idea.idea_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    ext = "webp" if brand.canvas.format.lower() == "webp" else "jpg"
-    pil_format = "WEBP" if ext == "webp" else "JPEG"
     result = RenderResult(idea_id=idea.idea_id, dry_run=dry_run)
 
-    for i, slide in enumerate(slides):
-        if dry_run:
-            background = _placeholder_background(brand, i)
-        else:
-            quality = brand.generation.quality_for(i)  # slide 1 high, rest medium
-            per_image = _IMAGE_COST.get(quality, 0.042)
-            if result.spend_usd + per_image > settings.max_spend_per_run:
-                raise ImageError(
-                    f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
-                    f"at slide {i + 1} — aborting render"
-                )
-            background = _generate_background(
-                slide.image_prompt, settings, brand, quality
-            )
-            result.spend_usd += per_image
-            result.generated += 1
-
-        composed = compose_slide(background, slide, brand, i)
-        path = out_dir / f"slide_{i + 1}.{ext}"
-        save_kwargs = {"quality": brand.canvas.save_quality}
-        composed.save(path, pil_format, **save_kwargs)
-        result.paths.append(str(path))
+    for i in range(len(slides)):
+        slide_result = render_slide(
+            idea,
+            i,
+            settings,
+            brand=brand,
+            dry_run=dry_run,
+            spent_so_far=result.spend_usd,
+        )
+        result.spend_usd += slide_result.spend_usd
+        result.generated += slide_result.generated
+        result.paths.append(slide_result.path)
+        if slide_result.variant_paths:
+            result.variants[i] = slide_result.variant_paths
+        if on_slide:
+            on_slide(i + 1, len(slides))
 
     return result

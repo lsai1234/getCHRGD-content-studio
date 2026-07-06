@@ -71,6 +71,9 @@ class Post(BaseModel):
 
     post_type: PostType = PostType.carousel
     hook: str
+    # Alternative hook angles for slide 1 (the engine returns 3; the user
+    # picks). `hook` is always the engine's strongest / the user's pick.
+    hook_options: list[str] = Field(default_factory=list)
     slides: list[Slide] = Field(default_factory=list)
     caption: str = ""
     comment_trigger: str = ""

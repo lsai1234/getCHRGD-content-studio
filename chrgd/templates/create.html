@@ -1,0 +1,639 @@
+{% extends "base.html" %}
+{% block title %}Create — CHRGD{% endblock %}
+{% block body %}
+<style>
+  .steps { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .step-pill { font-size:12.5px; padding:5px 12px; border-radius:20px;
+               border:1px solid var(--line); color:var(--muted); }
+  .step-pill.on { border-color:var(--accent); color:var(--fg); background:#1c1310; }
+  .step-pill.done { color:var(--accent2); }
+  .doors { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  @media(max-width:700px){ .doors { grid-template-columns:1fr; } }
+  .door { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+          padding:16px; cursor:pointer; }
+  .door.on { border-color:var(--accent); }
+  .door h3 { margin:0 0 6px; font-size:16px; }
+  .door p { margin:0; color:var(--muted); font-size:13px; }
+  .mech { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0; }
+  @media(max-width:700px){ .mech { grid-template-columns:1fr; } }
+  .mech .m { background:#0d0d10; border:1px solid var(--line); border-radius:10px;
+             padding:10px 12px; cursor:pointer; font-size:13px; }
+  .mech .m.on { border-color:var(--accent); }
+  .mech .m b { display:block; margin-bottom:4px; }
+  .mech .m span { color:var(--muted); font-size:12px; }
+  .angle { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+           padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .angle:hover { border-color:var(--accent); }
+  .angle b { color:var(--accent2); }
+  .qa-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+             gap:8px; margin:12px 0; }
+  .qa { background:#0d0d10; border:1px solid var(--line); border-radius:8px;
+        padding:8px 10px; font-size:12.5px; }
+  .qa .v { font-size:20px; font-weight:700; }
+  .qa.bad .v { color:#ff6a6a; } .qa.ok .v { color:var(--accent2); } .qa.good .v { color:#5dd177; }
+  .qa button { margin:4px 0 0; padding:2px 8px; font-size:11px; }
+  .hookopt { display:block; width:100%; text-align:left; background:#0d0d10;
+             border:1px solid var(--line); border-radius:8px; color:var(--fg);
+             padding:10px 12px; margin:6px 0; font-weight:400; }
+  .hookopt.on { border-color:var(--accent); background:#1c1310; }
+  .imgs { display:grid; grid-template-columns: 300px 1fr; gap:18px; }
+  @media(max-width:820px){ .imgs { grid-template-columns:1fr; } }
+  .phone { width:280px; aspect-ratio:1080/1350; border-radius:18px; border:2px solid var(--line);
+           position:relative; overflow:hidden; background:#0d0d10; margin:0 auto; }
+  .phone img { width:100%; height:100%; object-fit:cover; display:block; }
+  .phone .safe { position:absolute; inset:10% 18% 24% 8%; border:1px dashed rgba(255,196,0,.5);
+                 pointer-events:none; display:none; }
+  .phone.show-safe .safe { display:block; }
+  .thumbs { display:flex; gap:6px; justify-content:center; margin-top:10px; }
+  .thumbs img { width:42px; height:52px; object-fit:cover; border-radius:6px;
+                border:2px solid var(--line); cursor:pointer; }
+  .thumbs img.on { border-color:var(--accent); }
+  .variants { display:flex; gap:8px; margin:8px 0; }
+  .variants img { width:64px; height:80px; object-fit:cover; border-radius:8px;
+                  border:2px solid var(--line); cursor:pointer; }
+  .variants img.on { border-color:var(--accent2); }
+  .mini-cal { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; max-width:460px; }
+  .mini-cal .c { text-align:center; padding:8px 0; border-radius:8px; border:1px solid var(--line);
+                 cursor:pointer; font-size:13px; background:var(--panel); position:relative; }
+  .mini-cal .c.on { border-color:var(--accent); background:#1c1310; }
+  .mini-cal .c.past { opacity:.3; pointer-events:none; }
+  .mini-cal .c .dots { position:absolute; bottom:2px; left:0; right:0; font-size:8px;
+                       color:var(--accent2); line-height:1; }
+  .mini-cal .h { color:var(--muted); font-size:11px; border:0; background:none; cursor:default; }
+  .spin { display:inline-block; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .stage { display:none; } .stage.on { display:block; }
+</style>
+
+<h1>Create</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="steps">
+  <span class="step-pill" data-step="start">1 · Start</span>
+  <span class="step-pill" data-step="write">2 · Write &amp; score</span>
+  <span class="step-pill" data-step="images">3 · Images</span>
+  <span class="step-pill" data-step="finish">4 · Schedule</span>
+</div>
+
+<!-- ===================== STEP 1 · START ===================== -->
+<div class="stage" id="stage-start">
+  <div class="doors">
+    <div class="door" data-door="idea" onclick="pickDoor('idea')">
+      <h3>💡 Idea</h3><p>You've got a rough one-liner. The engine turns it into a full carousel.</p>
+    </div>
+    <div class="door" data-door="facts" onclick="pickDoor('facts')">
+      <h3>📚 Facts</h3><p>Paste research, stats or myths — get 2–3 angles per fact and pick the winner.</p>
+    </div>
+    <div class="door" data-door="blank" onclick="pickDoor('blank')">
+      <h3>⬜ Blank canvas</h3><p>Start from a proven TikTok format, or write every slide yourself.</p>
+    </div>
+  </div>
+
+  <form class="inline" id="start-form" style="margin-top:16px" onsubmit="return startCreate(event)">
+    <div id="door-idea-fields" style="display:none">
+      <label>Your idea</label>
+      <textarea name="text" id="idea-text" placeholder="gym bros who hog the squat rack for 40 mins"></textarea>
+    </div>
+    <div id="door-facts-fields" style="display:none">
+      <label>Facts / research (one per line is fine)</label>
+      <textarea name="text" id="facts-text" placeholder="Caffeine peaks in the blood ~45 min after ingestion&#10;Most 'toning' advice is just fat loss in disguise"></textarea>
+      <p class="muted" style="font-size:12.5px">Need topical material? Run the
+        <a href="/trends" target="_blank">Trend Scout</a> and paste the hooks here.</p>
+    </div>
+    <div id="door-blank-fields" style="display:none">
+      <label>Pick a proven format (the engine writes into its skeleton)</label>
+      <div class="mech" id="mech-gallery">
+        {% for m in mechanics %}
+        <div class="m" data-key="{{ m.key }}" title="{{ m.skeleton|join(' → ') }}"
+             onclick="pickMech('{{ m.key }}', this)">
+          <b>{{ m.label }}</b><span>{{ m.description }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <label>Optional: a note on the topic</label>
+      <input id="blank-text" placeholder="leave empty and the engine picks a topic that fits the format">
+      <label class="row" style="margin-top:10px">
+        <input type="checkbox" id="manual-mode" style="width:auto"> Fully manual — skip the engine, I'll write all five slides
+      </label>
+    </div>
+
+    <div id="style-picker" style="display:none">
+      <label>Visual style (applied to every slide's image)</label>
+      <select id="style-select">
+        {% for s in styles %}<option value="{{ s.key }}">{{ s.label }}</option>{% endfor %}
+        <option value="">No preset</option>
+      </select>
+      <div class="row" id="preset-day-note" style="display:none; margin-top:8px">
+        <span class="pill">📅 will be scheduled for <b id="preset-day-label"></b></span>
+      </div>
+      <button type="submit" id="start-btn" style="margin-top:16px">Start →</button>
+    </div>
+  </form>
+
+  <div id="angles-wait" style="display:none">
+    <p><span class="spin">⚙️</span> Reading your facts and proposing angles…</p>
+  </div>
+  <div id="angles-list" style="display:none">
+    <h2 style="font-size:17px">Pick an angle</h2>
+    <div id="angles-cards"></div>
+  </div>
+</div>
+
+<!-- ===================== STEP 2 · WRITE ===================== -->
+<div class="stage" id="stage-write">
+  <div id="write-wait">
+    <p><span class="spin">⚙️</span> The engine is writing your carousel — running all six stages…</p>
+  </div>
+  <div id="write-done" style="display:none">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="font-size:17px; margin:0">Scorecard</h2>
+      <small class="k" id="write-meta"></small>
+    </div>
+    <div class="qa-grid" id="qa-grid"></div>
+
+    <h2 style="font-size:17px">Pick the hook <small class="k">(slide 1 decides everything)</small></h2>
+    <div id="hook-options"></div>
+
+    <form class="inline" id="copy-form" onsubmit="return saveCopy(event)">
+      <div id="slide-fields"></div>
+      <label>Caption</label>
+      <textarea name="caption" id="f-caption"></textarea>
+      <div class="row">
+        <div style="flex:1"><label>Comment trigger</label><input id="f-trigger"></div>
+        <div style="flex:1"><label>Hashtags</label><input id="f-hashtags"></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button type="submit" class="ghost">Save copy</button>
+        <button type="button" onclick="makeImages()" id="make-images-btn">Looks good → make the images</button>
+        <label class="row" style="margin:0" title="placeholder backgrounds, no API spend — for testing">
+          <input type="checkbox" id="img-dry" style="width:auto"> test mode (free placeholders)</label>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== STEP 3 · IMAGES ===================== -->
+<div class="stage" id="stage-images">
+  <div id="img-wait" style="display:none">
+    <p><span class="spin">🎨</span> Generating backgrounds — slides appear as they finish
+       (<span id="img-progress">0%</span>)…</p>
+  </div>
+  <div class="imgs">
+    <div>
+      <div class="phone" id="phone">
+        <img id="phone-img" src="" alt="">
+        <div class="safe"></div>
+      </div>
+      <div class="thumbs" id="thumbs"></div>
+      <p style="text-align:center; margin-top:8px">
+        <label style="display:inline"><input type="checkbox" style="width:auto"
+          onchange="document.getElementById('phone').classList.toggle('show-safe', this.checked)">
+          show TikTok safe zones</label>
+      </p>
+    </div>
+    <div id="slide-tools"></div>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <button class="ghost" onclick="go('write')">← Back to copy</button>
+    <button onclick="go('finish'); drawMiniCal()">Continue → schedule</button>
+  </div>
+</div>
+
+<!-- ===================== STEP 4 · FINISH ===================== -->
+<div class="stage" id="stage-finish">
+  <h2 style="font-size:17px">When should it go out?</h2>
+  <p class="muted">Pick a day, or bank it in the tray and drag it onto the calendar later.</p>
+  <div class="mini-cal" id="mini-cal"></div>
+  <div class="row" style="margin-top:14px">
+    <div style="width:130px"><label>Time</label><input id="finish-time" value="18:00"></div>
+  </div>
+  <div class="row" style="margin-top:16px">
+    <button id="schedule-btn" onclick="finishSchedule()" disabled>Approve &amp; schedule</button>
+    <button class="ghost" onclick="finishTray()">Save to tray (no date)</button>
+  </div>
+  <p class="muted" id="finish-note" style="margin-top:12px"></p>
+</div>
+
+<script>
+const RESUME_IDEA = "{{ resume_idea }}";
+const PRESET_DAY = "{{ preset_day }}";
+const QA_HARD = {overall:8, hook:8, visual_originality:8};
+const QA_MIN = 8;
+
+let state = { ideaId: null, door: null, mech: null, detail: null, slideIdx: 0, anglesJob: null };
+
+/* ---------- step plumbing ---------- */
+function go(step){
+  document.querySelectorAll('.stage').forEach(s => s.classList.remove('on'));
+  document.getElementById('stage-'+step).classList.add('on');
+  const order = ['start','write','images','finish'];
+  document.querySelectorAll('.step-pill').forEach(p => {
+    const i = order.indexOf(p.dataset.step), cur = order.indexOf(step);
+    p.classList.toggle('on', i === cur);
+    p.classList.toggle('done', i < cur);
+  });
+}
+
+/* ---------- step 1: start ---------- */
+function pickDoor(d){
+  state.door = d;
+  document.querySelectorAll('.door').forEach(el =>
+    el.classList.toggle('on', el.dataset.door === d));
+  for (const k of ['idea','facts','blank'])
+    document.getElementById(`door-${k}-fields`).style.display = (k===d) ? '' : 'none';
+  document.getElementById('style-picker').style.display = '';
+  document.getElementById('start-btn').textContent =
+    d === 'facts' ? 'Find angles →' : 'Start →';
+  if (PRESET_DAY) {
+    document.getElementById('preset-day-note').style.display = '';
+    document.getElementById('preset-day-label').textContent = PRESET_DAY;
+  }
+}
+function pickMech(key, el){
+  state.mech = (state.mech === key) ? null : key;
+  document.querySelectorAll('.mech .m').forEach(m =>
+    m.classList.toggle('on', m.dataset.key === state.mech));
+}
+
+async function startCreate(ev){
+  ev.preventDefault();
+  const style = document.getElementById('style-select').value;
+  const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
+  const body = new URLSearchParams({mode: state.door, style, scheduled_for: sched});
+  if (state.door === 'idea') body.set('text', document.getElementById('idea-text').value);
+  if (state.door === 'facts') body.set('text', document.getElementById('facts-text').value);
+  if (state.door === 'blank') {
+    body.set('text', document.getElementById('blank-text').value);
+    if (state.mech) body.set('mechanic', state.mech);
+    if (document.getElementById('manual-mode').checked) body.set('manual', 'true');
+  }
+  const r = await post('/api/create/start', body);
+  if (!r) return false;
+
+  if (state.door === 'facts') {
+    state.anglesJob = r.job_id;
+    document.getElementById('start-form').style.display = 'none';
+    document.getElementById('angles-wait').style.display = '';
+    pollAngles();
+  } else {
+    state.ideaId = r.idea_id;
+    history.replaceState(null, '', `/create?idea=${r.idea_id}`);
+    if (r.manual) { openWriteStep(); } else { go('write'); pollBuild(); }
+  }
+  return false;
+}
+
+async function pollAngles(){
+  const job = await (await fetch(`/api/jobs/${state.anglesJob}`)).json();
+  if (job.status === 'ERROR') return fail('Angle generation failed: ' + job.error);
+  if (job.status !== 'COMPLETED') return setTimeout(pollAngles, 1500);
+  const angles = (JSON.parse(job.result_json || '{}').angles) || [];
+  document.getElementById('angles-wait').style.display = 'none';
+  const box = document.getElementById('angles-cards');
+  box.innerHTML = '';
+  angles.forEach((a, i) => {
+    const el = document.createElement('div');
+    el.className = 'angle';
+    el.innerHTML = `<b>${esc(a.title)}</b> <span class="pill">${esc(a.mechanic||'')}</span><br>
+      <span class="muted" style="font-size:13px">${esc(a.concept_note)}</span><br>
+      <small class="k">hook: “${esc(a.hook||'')}” · from: ${esc(a.fact||'')}</small>`;
+    el.onclick = () => pickAngle(i);
+    box.appendChild(el);
+  });
+  document.getElementById('angles-list').style.display = '';
+}
+
+async function pickAngle(i){
+  const style = document.getElementById('style-select').value;
+  const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
+  const r = await post(`/api/create/angle/${state.anglesJob}`,
+    new URLSearchParams({index: i, style, scheduled_for: sched}));
+  if (!r) return;
+  state.ideaId = r.idea_id;
+  history.replaceState(null, '', `/create?idea=${r.idea_id}`);
+  go('write'); pollBuild();
+}
+
+/* ---------- step 2: write ---------- */
+async function pollBuild(){
+  const d = await detail();
+  const j = d.active_jobs.build_one || d.active_jobs.revise;
+  if (!j) {
+    if (d.slides && d.slides.length) return openWriteStep();
+    if (d.last_error) {
+      document.getElementById('write-wait').innerHTML =
+        `<p>❌ The engine hit a problem: <b>${esc(d.last_error.error)}</b></p>
+         <button onclick="retryBuild()">Try again</button>`;
+      return;
+    }
+  }
+  setTimeout(pollBuild, 2000);
+}
+
+async function retryBuild(){
+  await post(`/api/ideas/${state.ideaId}/build`, new URLSearchParams());
+  document.getElementById('write-wait').innerHTML =
+    '<p><span class="spin">⚙️</span> The engine is writing your carousel — running all six stages…</p>';
+  pollBuild();
+}
+
+async function openWriteStep(){
+  const d = await detail();
+  go('write');
+  document.getElementById('write-wait').style.display = 'none';
+  document.getElementById('write-done').style.display = '';
+  document.getElementById('write-meta').textContent =
+    `${d.idea_id} · ${d.status}` + (d.mechanic ? ` · ${d.mechanic}` : '') +
+    (d.style ? ` · style: ${d.style}` : '');
+
+  // scorecard
+  const grid = document.getElementById('qa-grid');
+  grid.innerHTML = '';
+  const qa = d.qa || {};
+  for (const [k, v] of Object.entries(qa)) {
+    const el = document.createElement('div');
+    const cls = v >= 9 ? 'good' : (v >= QA_MIN ? 'ok' : 'bad');
+    el.className = `qa ${cls}`;
+    el.innerHTML = `<span class="v">${v}</span> ${esc(k.replaceAll('_',' '))}`;
+    if (v < QA_MIN && k !== 'overall') {
+      const b = document.createElement('button');
+      b.className = 'ghost'; b.textContent = '⚡ punch it up';
+      b.onclick = () => punchUp(k);
+      el.appendChild(b);
+    }
+    grid.appendChild(el);
+  }
+  if (!Object.keys(qa).length)
+    grid.innerHTML = '<p class="muted">No scorecard — manual post. Write your slides below.</p>';
+
+  // hook options
+  const hooks = document.getElementById('hook-options');
+  hooks.innerHTML = '';
+  const opts = d.hook_options && d.hook_options.length ? d.hook_options : (d.hook ? [d.hook] : []);
+  opts.forEach(h => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'hookopt' + (h === d.hook ? ' on' : '');
+    b.textContent = h;
+    b.onclick = async () => {
+      await post(`/api/ideas/${state.ideaId}/hook`, new URLSearchParams({hook: h}));
+      openWriteStep();
+    };
+    hooks.appendChild(b);
+  });
+
+  // slide copy editor
+  const sf = document.getElementById('slide-fields');
+  sf.innerHTML = '';
+  (d.slides || []).forEach((s, i) => {
+    const div = document.createElement('div');
+    div.innerHTML = `
+      <div class="row" style="align-items:flex-start">
+        <div style="flex:1"><label>Slide ${i+1} headline</label>
+          <input name="slide_headline_${i}" value="${esc(s.headline)}"></div>
+        <div style="flex:2"><label>Supporting</label>
+          <input name="slide_supporting_${i}" value="${esc(s.supporting)}"></div>
+      </div>
+      <label>Slide ${i+1} image brief <small class="k">(what the background should show — no text in it)</small></label>
+      <input name="slide_image_prompt_${i}" value="${esc(s.image_prompt)}">`;
+    sf.appendChild(div);
+  });
+  document.getElementById('f-caption').value = d.caption || '';
+  document.getElementById('f-trigger').value = d.comment_trigger || '';
+  document.getElementById('f-hashtags').value = (d.hashtags || []).join(' ');
+
+  if (d.assets && d.assets.length) {
+    // already rendered once — jump to images on resume
+    openImagesStep();
+  }
+}
+
+async function punchUp(metric){
+  if (!confirm(`Re-run the engine focused on "${metric.replaceAll('_',' ')}"? (small LLM spend)`)) return;
+  await post(`/api/ideas/${state.ideaId}/revise`, new URLSearchParams({focus: metric}));
+  document.getElementById('write-done').style.display = 'none';
+  document.getElementById('write-wait').style.display = '';
+  pollBuild();
+}
+
+async function saveCopy(ev){
+  if (ev) ev.preventDefault();
+  const form = document.getElementById('copy-form');
+  const body = new URLSearchParams(new FormData(form));
+  body.set('hashtags', document.getElementById('f-hashtags').value);
+  body.set('caption', document.getElementById('f-caption').value);
+  body.set('comment_trigger', document.getElementById('f-trigger').value);
+  await post(`/api/ideas/${state.ideaId}/edit`, body);
+  return false;
+}
+
+async function makeImages(){
+  await saveCopy();
+  const dry = document.getElementById('img-dry').checked;
+  await post(`/api/jobs/render/${state.ideaId}?dry_run=${dry}`, new URLSearchParams());
+  go('images');
+  document.getElementById('img-wait').style.display = '';
+  pollRender();
+}
+
+/* ---------- step 3: images ---------- */
+async function pollRender(){
+  const d = await detail();
+  const j = d.active_jobs.render || d.active_jobs.render_slide;
+  if (j) {
+    document.getElementById('img-progress').textContent = (j.progress || 0) + '%';
+    drawImages(d);
+    return setTimeout(pollRender, 2000);
+  }
+  document.getElementById('img-wait').style.display = 'none';
+  drawImages(d);
+}
+
+async function openImagesStep(){
+  const d = await detail();
+  go('images');
+  drawImages(d);
+  if (d.active_jobs.render || d.active_jobs.render_slide) {
+    document.getElementById('img-wait').style.display = '';
+    pollRender();
+  }
+}
+
+function mediaUrl(d, name, mtime){ return `/media/${d.idea_id}/${name}?v=${mtime||0}`; }
+
+function drawImages(d){
+  state.detail = d;
+  const assets = d.assets || [];
+  const thumbs = document.getElementById('thumbs');
+  thumbs.innerHTML = '';
+  assets.forEach((a, i) => {
+    const img = document.createElement('img');
+    img.src = mediaUrl(d, a.name, a.mtime);
+    img.className = i === state.slideIdx ? 'on' : '';
+    img.onclick = () => { state.slideIdx = i; drawImages(d); };
+    thumbs.appendChild(img);
+  });
+  const main = assets[state.slideIdx];
+  document.getElementById('phone-img').src = main ? mediaUrl(d, main.name, main.mtime) : '';
+
+  const tools = document.getElementById('slide-tools');
+  tools.innerHTML = '';
+  if (!assets.length) {
+    tools.innerHTML = '<p class="muted">No images yet — they appear here as each slide finishes.</p>';
+    return;
+  }
+  const i = state.slideIdx;
+  const s = (d.slides || [])[i] || {};
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <h2 style="font-size:16px; margin-top:0">Slide ${i+1}</h2>
+    <label>Headline</label><input id="t-head" value="${esc(s.headline||'')}">
+    <label>Supporting</label><input id="t-supp" value="${esc(s.supporting||'')}">
+    <label>Image brief</label><textarea id="t-prompt" style="min-height:60px">${esc(s.image_prompt||'')}</textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" onclick="relayText()" title="free — re-overlays the text on the same background">✎ Re-lay text (free)</button>
+      <button onclick="regenSlide()" title="paid — a brand-new background from the image brief">🎨 Regenerate background</button>
+    </div>
+    <div id="variant-box"></div>`;
+  tools.appendChild(wrap);
+
+  const vnames = (d.variants || {})[String(i)] || [];
+  if (vnames.length) {
+    const vb = wrap.querySelector('#variant-box');
+    vb.innerHTML = '<label>Background options — tap to use</label>';
+    const row = document.createElement('div'); row.className = 'variants';
+    vnames.forEach(name => {
+      const img = document.createElement('img');
+      img.src = mediaUrl(d, name, Date.now());
+      img.title = name;
+      img.onclick = async () => {
+        const variant = name.replace(/\.[^.]+$/, '').split('_').pop();
+        await post(`/api/ideas/${d.idea_id}/slides/${i}/variant`,
+          new URLSearchParams({variant}));
+        drawImages(await detail());
+      };
+      row.appendChild(img);
+    });
+    vb.appendChild(row);
+  }
+}
+
+async function relayText(){
+  await saveSlideCopy();
+  const r = await post(`/api/ideas/${state.ideaId}/slides/${state.slideIdx}/recompose`, new URLSearchParams());
+  if (r) drawImages(await detail());
+}
+
+async function regenSlide(){
+  await saveSlideCopy();
+  const dry = document.getElementById('img-dry').checked;
+  if (!dry && !confirm('Generate a new paid background for this slide?')) return;
+  await post(`/api/ideas/${state.ideaId}/slides/${state.slideIdx}/regenerate?dry_run=${dry}`, new URLSearchParams());
+  document.getElementById('img-wait').style.display = '';
+  pollRender();
+}
+
+async function saveSlideCopy(){
+  const i = state.slideIdx;
+  const body = new URLSearchParams();
+  body.set(`slide_headline_${i}`, document.getElementById('t-head').value);
+  body.set(`slide_supporting_${i}`, document.getElementById('t-supp').value);
+  body.set(`slide_image_prompt_${i}`, document.getElementById('t-prompt').value);
+  await post(`/api/ideas/${state.ideaId}/edit`, body);
+}
+
+/* ---------- step 4: finish ---------- */
+let pickedDay = null;
+async function drawMiniCal(){
+  const cal = document.getElementById('mini-cal');
+  cal.innerHTML = '';
+  for (const d of ['Mo','Tu','We','Th','Fr','Sa','Su'])
+    cal.insertAdjacentHTML('beforeend', `<div class="c h">${d}</div>`);
+
+  const today = new Date();
+  const start = new Date(today); start.setDate(today.getDate() - ((today.getDay()+6)%7)); // this Monday
+  const from = isoD(start);
+  const endD = new Date(start); endD.setDate(start.getDate() + 28);
+  const booked = (await (await fetch(
+    `/api/calendar?date_from=${from}T00:00:00&date_to=${isoD(endD)}T00:00:00`)).json()).days;
+
+  for (let i = 0; i < 28; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const key = isoD(d);
+    const el = document.createElement('div');
+    el.className = 'c' + (d < today && key !== isoD(today) ? ' past' : '');
+    el.innerHTML = `${d.getDate()}<div class="dots">${'●'.repeat(Math.min((booked[key]||[]).length,3))}</div>`;
+    el.title = `${key} — ${(booked[key]||[]).length} scheduled`;
+    el.onclick = () => {
+      pickedDay = key;
+      cal.querySelectorAll('.c').forEach(c => c.classList.remove('on'));
+      el.classList.add('on');
+      document.getElementById('schedule-btn').disabled = false;
+    };
+    cal.appendChild(el);
+  }
+  if (PRESET_DAY) {
+    const target = [...cal.querySelectorAll('.c')].find(c => c.title.startsWith(PRESET_DAY));
+    if (target) target.click();
+  }
+}
+const isoD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+async function approveIfNeeded(){
+  const d = await detail();
+  if (d.status !== 'done')
+    await post(`/api/ideas/${state.ideaId}/approve`, new URLSearchParams());
+}
+
+async function finishSchedule(){
+  if (!pickedDay) return;
+  await approveIfNeeded();
+  const t = document.getElementById('finish-time').value || '18:00';
+  await post(`/api/ideas/${state.ideaId}/schedule`, new URLSearchParams({when: `${pickedDay}T${t}`}));
+  document.getElementById('finish-note').innerHTML =
+    `✅ Scheduled for <b>${pickedDay} ${t}</b>. See it on the <a href="/calendar">calendar</a> —
+     export that week when you're ready to load Metricool.`;
+}
+
+async function finishTray(){
+  await approveIfNeeded();
+  await post(`/api/ideas/${state.ideaId}/schedule`, new URLSearchParams({when: ''}));
+  document.getElementById('finish-note').innerHTML =
+    `✅ Saved to the tray. Drag it onto a day on the <a href="/calendar">calendar</a> whenever.`;
+}
+
+/* ---------- shared ---------- */
+async function detail(){
+  const r = await fetch(`/api/ideas/${state.ideaId}/detail`);
+  if (!r.ok) { fail('Could not load the post.'); throw new Error('detail'); }
+  return r.json();
+}
+async function post(url, body){
+  const r = await fetch(url, {method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded', accept:'application/json'}, body});
+  if (!r.ok) {
+    let msg = r.statusText;
+    try { msg = (await r.json()).detail || msg; } catch(e){}
+    alert(msg);
+    return null;
+  }
+  return r.json();
+}
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fail(msg){ alert(msg); }
+
+/* ---------- boot ---------- */
+if (RESUME_IDEA) {
+  state.ideaId = RESUME_IDEA;
+  (async () => {
+    const d = await detail();
+    if (!d.slides.length) { go('write'); pollBuild(); }
+    else if (!d.assets.length) { openWriteStep(); }
+    else { openImagesStep(); }
+  })();
+} else {
+  go('start');
+}
+</script>
+{% endblock %}

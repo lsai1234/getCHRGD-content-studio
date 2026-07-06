@@ -87,14 +87,19 @@ def test_non_dry_run_cost_uses_high_then_medium(settings, monkeypatch):
         images, "_generate_background", lambda *a, **k: Image.new("RGB", (100, 150))
     )
     result = images.render_carousel(make_idea(), settings, dry_run=False)
-    expected = images._IMAGE_COST["high"] + 4 * images._IMAGE_COST["medium"]
-    assert result.generated == 5
+    # Slide 1 renders `variants_first` high-quality options; slides 2-5 one
+    # medium background each.
+    n_first = load_brand().generation.variants_first
+    expected = n_first * images._IMAGE_COST["high"] + 4 * images._IMAGE_COST["medium"]
+    assert result.generated == 4 + n_first
     assert result.spend_usd == pytest.approx(expected)
+    assert len(result.variants.get(0, [])) == n_first
 
 
 def test_webp_format(tmp_path):
     settings = Settings(CHRGD_OUTPUT_DIR=tmp_path / "out")
-    brand = load_brand()
+    # Copy — load_brand() is cached and mutating it would poison other tests.
+    brand = load_brand().model_copy(deep=True)
     brand.canvas.format = "webp"
     result = render_carousel(make_idea(), settings, brand=brand, dry_run=True)
     assert result.paths[0].endswith(".webp")

@@ -33,9 +33,30 @@ class Generation(BaseModel):
     # Slide 1 leads the carousel, so it renders at a stronger quality tier.
     quality_first: str = "high"
     quality_rest: str = "medium"
+    # How many background options slide 1 gets to choose from (paid each).
+    variants_first: int = 2
+    # Composed into every image prompt (see images.compose_image_prompt).
+    consistency_clause: str = (
+        "Part of a 5-image set: keep the same location, lighting, colour "
+        "grade and photographic style across all images in this set."
+    )
+    negative_clause: str = (
+        "Absolutely no text, no words, no letters, no numbers, no captions, "
+        "no watermarks anywhere in the image."
+    )
 
     def quality_for(self, slide_index: int) -> str:
         return self.quality_first if slide_index == 0 else self.quality_rest
+
+    def variants_for(self, slide_index: int) -> int:
+        return max(1, self.variants_first) if slide_index == 0 else 1
+
+
+class StylePreset(BaseModel):
+    """A named art-direction block appended to every slide prompt."""
+
+    label: str = ""
+    prompt: str = ""
 
 
 class SafeZones(BaseModel):
@@ -75,6 +96,13 @@ class Brand(BaseModel):
     colors: Colors = Field(default_factory=Colors)
     fonts: Fonts = Field(default_factory=Fonts)
     text: TextOpts = Field(default_factory=TextOpts)
+    styles: dict[str, StylePreset] = Field(default_factory=dict)
+
+    def style_prompt(self, name: str | None) -> str:
+        """The art-direction block for a named preset ('' if unknown/unset)."""
+        if name and name in self.styles:
+            return self.styles[name].prompt
+        return ""
 
     def safe_box(self) -> tuple[int, int, int, int]:
         """Pixel box (x0, y0, x1, y1) that text must stay inside."""

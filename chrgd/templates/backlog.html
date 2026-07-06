@@ -1,8 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Backlog — CHRGD{% endblock %}
+{% block title %}Library — CHRGD{% endblock %}
 {% block body %}
-<h1>Backlog</h1>
+<h1>Library</h1>
 {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<p class="muted" style="margin-top:-8px">
+  Every idea and post in one place. The engine screens live here too:
+  <a href="/review">Review queue{% if review_count %} ({{ review_count }}){% endif %}</a> ·
+  <a href="/build">Batch build</a> ·
+  <a href="/trends">Trend scout</a> ·
+  <a href="/export">Export</a> ·
+  <a href="/dashboard">Stats</a>
+</p>
+
+<div class="row" style="margin-bottom:16px">
+  <a href="/create"><button style="margin:0">+ Create a post</button></a>
+</div>
 
 <form class="inline" method="post" action="/capture">
   <strong>Capture ideas</strong>
@@ -39,6 +52,10 @@
     <td class="muted">{{ i.content_category }}</td>
     <td>{{ i.concept_note }}</td>
     <td class="row">
+      {% if i.status.value != 'void' %}
+      <a href="/create?idea={{ i.idea_id }}" style="text-decoration:none">
+        <button class="ghost" style="margin:0;padding:4px 10px">Open</button></a>
+      {% endif %}
       {% if i.slides_json %}
       <button class="ghost" style="margin:0;padding:4px 10px"
               onclick="renderIdea('{{ i.idea_id }}')">Render</button>

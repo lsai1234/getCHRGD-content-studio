@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .config import Settings
 from .db import Store
@@ -38,7 +38,10 @@ in exactly this shape:
 
 {
   "post_type": "carousel",
-  "hook": "string",
+  "hook": "string — the STRONGEST of the three hook_options",
+  "hook_options": [
+    "string — 3 genuinely different hook angles for slide 1, strongest first"
+  ],
   "slides": [
     {
       "headline": "string",
@@ -177,6 +180,20 @@ def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> st
         if value:
             lines.append(f"- {key}: {value}")
 
+    # A mechanic chosen up-front (create journey "blank canvas" door) constrains
+    # Stage 2 instead of leaving format selection free.
+    lock = creation_prefs(idea).get("mechanic_lock")
+    if lock:
+        lines.append("")
+        lines.append(
+            f"FORMAT CONSTRAINT: build this as a '{lock.get('name')}' carousel."
+        )
+        skeleton = lock.get("skeleton") or []
+        if skeleton:
+            lines.append("Follow this 5-slide skeleton (one line per slide):")
+            for i, step in enumerate(skeleton, 1):
+                lines.append(f"  {i}. {step}")
+
     if retry_reasons:
         lines.append("")
         lines.append(
@@ -187,6 +204,21 @@ def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> st
             lines.append(f"- {reason}")
 
     return "\n".join(lines)
+
+
+def creation_prefs(idea: Idea) -> dict:
+    """Pre-build choices (style, mechanic lock) stashed in route_json.
+
+    The create journey writes these when the idea is started; builds must
+    carry them forward because `save_build` overwrites route_json.
+    """
+    if not idea.route_json:
+        return {}
+    try:
+        route = json.loads(idea.route_json)
+    except json.JSONDecodeError:
+        return {}
+    return {k: route[k] for k in ("style", "mechanic_lock") if k in route}
 
 
 def parse_post(content: str) -> Post:
@@ -251,10 +283,20 @@ def run_pipeline_for_idea(idea: Idea, client: ChatClient, model: str) -> BuildRe
     )
 
 
-def build_fields_from_post(post: Post) -> dict:
-    """Serialise a Post into the DB build-field columns."""
+def build_fields_from_post(post: Post, extra_route: dict | None = None) -> dict:
+    """Serialise a Post into the DB build-field columns.
+
+    `extra_route` re-applies keys that must survive the build overwriting
+    route_json (creation prefs like style/mechanic_lock). Hook options ride
+    in route_json too — the schema has no dedicated column and doesn't need one.
+    """
     from datetime import datetime, timezone
 
+    route = dict(post.route or {})
+    if post.hook_options:
+        route["hook_options"] = post.hook_options
+    if extra_route:
+        route.update(extra_route)
     return {
         "post_type": post.post_type.value,
         "hook": post.hook,
@@ -262,7 +304,7 @@ def build_fields_from_post(post: Post) -> dict:
         "caption": post.caption,
         "comment_trigger": post.comment_trigger,
         "hashtags": json.dumps(post.hashtags),
-        "route_json": json.dumps(post.route),
+        "route_json": json.dumps(route),
         "processed_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -324,7 +366,7 @@ def build_ideas(
 
             total_spend += result.spend_usd
             if result.post is not None:
-                fields = build_fields_from_post(result.post)
+                fields = build_fields_from_post(result.post, creation_prefs(idea))
                 if result.status is Status.done:
                     store.save_build(idea.idea_id, fields)
                 else:
@@ -343,3 +385,171 @@ def build_ideas(
             )
 
     return results
+
+
+def build_single_idea(
+    store: Store,
+    settings: Settings,
+    idea_id: str,
+    *,
+    client: ChatClient | None = None,
+    record_run: bool = True,
+) -> BuildResult:
+    """Build one specific idea (the create journey), regardless of queue order.
+
+    Same persistence rules as `build_ideas`: pass → done, QA miss → review,
+    LLM failure → released back to queued.
+    """
+    idea = store.get_idea(idea_id)
+    if idea is None:
+        raise ValueError(f"no such idea {idea_id}")
+    if client is None:
+        client = OpenAIChatClient(settings)
+
+    run_id = store.start_run("build") if record_run else None
+    store.mark_processing(idea_id)
+    try:
+        result = run_pipeline_for_idea(idea, client, settings.openai_model)
+    except LLMError as exc:
+        store.set_status(idea_id, Status.queued)
+        if run_id is not None:
+            store.finish_run(run_id, notes=f"error: {exc}")
+        return BuildResult(idea_id=idea_id, status=Status.queued, error=str(exc))
+
+    if result.post is not None:
+        fields = build_fields_from_post(result.post, creation_prefs(idea))
+        if result.status is Status.done:
+            store.save_build(idea_id, fields)
+        else:
+            store.mark_review(idea_id, fields)
+    else:
+        store.mark_review(idea_id, {})
+
+    if run_id is not None:
+        store.finish_run(
+            run_id,
+            built=1 if result.status is Status.done else 0,
+            spend_usd=round(result.spend_usd, 4),
+            notes=idea_id,
+        )
+    return result
+
+
+# --- facts → angles (create journey, "facts" door) ---------------------------
+
+ANGLES_CONTRACT = """
+---
+
+## Output contract (STRICT — this run only)
+
+You are NOT building a post this run. The user gives you raw facts/research.
+For EACH promising fact, propose up to {count} distinct carousel ANGLES that
+would perform on TikTok for this brand. Angles must be genuinely different
+takes (myth-bust, "nobody tells you this", listicle, hot take, story...), not
+rewordings. Respect claim safety — drop facts that can't be made safe.
+
+Return a SINGLE JSON object, nothing else:
+
+{{
+  "angles": [
+    {{
+      "title": "short label for the picker UI",
+      "mechanic": "one of the virality mechanics",
+      "hook": "the slide-1 hook this angle would open with",
+      "concept_note": "1-2 sentence brief a builder could work from",
+      "pain_point": "string",
+      "core_tension": "string",
+      "target_viewer": "string",
+      "fact": "the source fact this angle came from, verbatim-ish"
+    }}
+  ]
+}}
+"""
+
+
+class Angle(BaseModel):
+    """One proposed take on a fact — pickable in the create journey."""
+
+    title: str
+    mechanic: str = ""
+    hook: str = ""
+    concept_note: str
+    pain_point: str = ""
+    core_tension: str = ""
+    target_viewer: str = ""
+    fact: str = ""
+
+
+@dataclass
+class AnglesResult:
+    angles: list[Angle] = field(default_factory=list)
+    spend_usd: float = 0.0
+
+
+def generate_angles(
+    facts: str,
+    settings: Settings,
+    *,
+    client: ChatClient | None = None,
+    per_fact: int = 3,
+) -> AnglesResult:
+    """Turn pasted facts/research into pickable carousel angles."""
+    if client is None:
+        client = OpenAIChatClient(settings)
+    base = PROMPT_FILE.read_text(encoding="utf-8")
+    system = base + "\n" + ANGLES_CONTRACT.format(count=per_fact)
+    user = "Here are the facts/research to turn into angles:\n\n" + facts.strip()
+    result = client.complete(system, user)
+    spend = estimate_cost(
+        settings.openai_model, result.prompt_tokens, result.completion_tokens
+    )
+    data = json.loads(result.content)
+    angles = [Angle.model_validate(a) for a in data.get("angles", [])]
+    return AnglesResult(angles=angles, spend_usd=spend)
+
+
+# --- targeted revision (the scorecard's "punch it up") ------------------------
+
+REVISE_INSTRUCTION = (
+    "REVISION RUN: below is a post you already built, plus one focus. "
+    "Rewrite it to maximise the focus while keeping everything that already "
+    "works — same core idea, same mechanic, same slide count. Re-run the "
+    "brutal QA stage on the revision before returning it."
+)
+
+
+def revise_post(
+    idea: Idea,
+    focus: str,
+    settings: Settings,
+    *,
+    client: ChatClient | None = None,
+) -> tuple[Post, float]:
+    """One focused revision pass, e.g. focus='saveability'. Returns (post, spend)."""
+    if not idea.slides_json:
+        raise ValueError(f"{idea.idea_id} has no built post to revise")
+    if client is None:
+        client = OpenAIChatClient(settings)
+
+    current = {
+        "hook": idea.hook,
+        "slides": json.loads(idea.slides_json),
+        "caption": idea.caption,
+        "comment_trigger": idea.comment_trigger,
+        "hashtags": json.loads(idea.hashtags) if idea.hashtags else [],
+    }
+    user = "\n".join(
+        [
+            REVISE_INSTRUCTION,
+            "",
+            f"FOCUS: maximise **{focus}**.",
+            "",
+            "Current post:",
+            json.dumps(current, indent=2),
+        ]
+    )
+    result = client.complete(load_system_prompt(), user)
+    spend = estimate_cost(
+        settings.openai_model, result.prompt_tokens, result.completion_tokens
+    )
+    return parse_post(result.content), spend

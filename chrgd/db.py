@@ -272,6 +272,24 @@ class Store:
         self.set_status(idea_id, Status.review)
         return self.get_idea(idea_id)
 
+    def set_schedule(self, idea_id: str, when: datetime | None) -> None:
+        """Set or clear the user-chosen posting datetime. Idempotent."""
+        self.conn.execute(
+            "UPDATE ideas SET scheduled_for = ? WHERE idea_id = ?",
+            (when.isoformat() if when else None, idea_id),
+        )
+        self.conn.commit()
+
+    def ideas_scheduled_between(self, start: datetime, end: datetime) -> list[Idea]:
+        """Non-void ideas with scheduled_for in [start, end), soonest first."""
+        rows = self.conn.execute(
+            "SELECT * FROM ideas WHERE scheduled_for IS NOT NULL "
+            "AND scheduled_for >= ? AND scheduled_for < ? AND status != 'void' "
+            "ORDER BY scheduled_for ASC",
+            (start.isoformat(), end.isoformat()),
+        ).fetchall()
+        return [self._row_to_idea(r) for r in rows]
+
     def set_status(self, idea_id: str, status: Status) -> None:
         self.conn.execute(
             "UPDATE ideas SET status = ? WHERE idea_id = ?",
@@ -402,7 +420,8 @@ class Store:
         cur = self.conn.execute(
             "UPDATE jobs SET status = 'ERROR', error = 'interrupted — re-run', "
             "updated_at = ? WHERE status = 'PROCESSING' "
-            "AND kind IN ('build','render','trends','run')",
+            "AND kind IN ('build','build_one','render','render_slide',"
+            "'angles','revise','trends','run')",
             (datetime.now().astimezone().isoformat(),),
         )
         self.conn.commit()

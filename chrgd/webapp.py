@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import secrets
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -23,9 +24,20 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings, get_settings
 from .db import Store
-from .models import Idea, Status
+from .models import Idea, PostType, Status
 from .webauth import auth_configured, verify_credentials
-from .worker import Worker, enqueue_build, enqueue_render
+from .worker import (
+    Worker,
+    enqueue_angles,
+    enqueue_build,
+    enqueue_build_one,
+    enqueue_render,
+    enqueue_render_slide,
+    enqueue_revise,
+)
+
+# Days a topical idea stays fresh before the calendar flags it as going stale.
+_DECAY_SHELF_DAYS = {"days": 5, "weeks": 21}
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -181,6 +193,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request, _: str = Depends(require_user_page)):
+        # The dashboard folded into the calendar header — two journeys, not a hub.
+        flash = request.query_params.get("flash")
+        target = f"/calendar?flash={flash}" if flash else "/calendar"
+        return RedirectResponse(target, status_code=303)
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard(request: Request, _: str = Depends(require_user_page)):
         with _store(settings) as store:
             counts = _counts(store)
             spend = float(
@@ -199,6 +218,45 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         return render_page(
             request, "home.html", "dashboard",
             counts=counts, spend=spend, scheduled=scheduled, runs=runs,
+        )
+
+    @app.get("/create", response_class=HTMLResponse)
+    def create_page(
+        request: Request, idea: str | None = None, day: str | None = None,
+        _: str = Depends(require_user_page),
+    ):
+        from .brand import load_brand
+        from .mechanics import load_mechanics
+
+        brand = load_brand()
+        return render_page(
+            request, "create.html", "create",
+            mechanics=[m.model_dump() for m in load_mechanics().values()],
+            styles=[
+                {"key": k, "label": s.label or k}
+                for k, s in brand.styles.items()
+            ],
+            resume_idea=idea or "",
+            preset_day=day or "",
+        )
+
+    @app.get("/calendar", response_class=HTMLResponse)
+    def calendar_page(request: Request, _: str = Depends(require_user_page)):
+        from .publisher import load_columns
+
+        sched = load_columns().schedule
+        with _store(settings) as store:
+            counts = _counts(store)
+            spend = float(
+                store.conn.execute(
+                    "SELECT COALESCE(SUM(spend_usd),0) AS s FROM runs"
+                ).fetchone()["s"]
+            )
+        return render_page(
+            request, "calendar.html", "calendar",
+            counts=counts, spend=spend,
+            default_time=(sched.times[0] if sched.times else "18:00"),
+            per_day=sched.per_day,
         )
 
     @app.get("/backlog", response_class=HTMLResponse)
@@ -349,6 +407,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     slide["headline"] = form[f"slide_headline_{i}"]
                 if f"slide_supporting_{i}" in form:
                     slide["supporting"] = form[f"slide_supporting_{i}"]
+                if f"slide_image_prompt_{i}" in form:
+                    slide["image_prompt"] = form[f"slide_image_prompt_{i}"]
 
             hashtags = [
                 t if t.startswith("#") else f"#{t}"
@@ -472,6 +532,392 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         return {
             "created": [i.idea_id for i in outcome.created],
             "skipped": outcome.skipped,
+        }
+
+    # --- create journey -----------------------------------------------------
+
+    def _parse_when(raw: str | None) -> datetime | None:
+        raw = (raw or "").strip()
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw)
+        except ValueError:
+            raise HTTPException(400, f"bad datetime: {raw!r}")
+
+    def _idea_or_404(store: Store, idea_id: str) -> Idea:
+        idea = store.get_idea(idea_id)
+        if idea is None:
+            raise HTTPException(404, "no such idea")
+        return idea
+
+    def _new_seed(
+        store: Store,
+        *,
+        concept_note: str,
+        content_category: str = "",
+        target_viewer: str = "",
+        pain_point: str = "",
+        core_tension: str = "",
+        style: str = "",
+        mechanic_key: str = "",
+        scheduled_for: datetime | None = None,
+    ) -> Idea:
+        """One seed row carrying the create journey's up-front choices."""
+        from .mechanics import get_mechanic
+
+        route: dict = {}
+        if style:
+            route["style"] = style
+        if mechanic_key:
+            mech = get_mechanic(mechanic_key)
+            if mech is None:
+                raise HTTPException(400, f"unknown mechanic '{mechanic_key}'")
+            route["mechanic_lock"] = {"name": mech.label, "skeleton": mech.skeleton}
+        idea = Idea(
+            idea_id=store.next_idea_id(settings.id_prefix),
+            concept_note=concept_note,
+            content_category=content_category,
+            target_viewer=target_viewer,
+            pain_point=pain_point,
+            core_tension=core_tension,
+            route_json=json.dumps(route) if route else None,
+            scheduled_for=scheduled_for,
+        )
+        return store.add_idea(idea)
+
+    @app.post("/api/create/start")
+    def api_create_start(
+        request: Request,
+        mode: str = Form(...),  # 'idea' | 'facts' | 'blank'
+        text: str = Form(""),
+        mechanic: str = Form(""),
+        style: str = Form(""),
+        scheduled_for: str = Form(""),
+        manual: bool = Form(False),
+        _: str = Depends(require_user),
+    ):
+        """Open one of the three doors into the create journey."""
+        when = _parse_when(scheduled_for)
+        with _store(settings) as store:
+            if mode == "facts":
+                if not text.strip():
+                    raise HTTPException(400, "paste some facts first")
+                job_id = enqueue_angles(store, facts=text)
+                return {"mode": mode, "job_id": job_id}
+
+            if mode == "idea":
+                if not text.strip():
+                    raise HTTPException(400, "give the idea a line of text")
+                idea = _new_seed(
+                    store, concept_note=text.strip(), style=style,
+                    scheduled_for=when,
+                )
+                job_id = enqueue_build_one(store, idea.idea_id)
+                return {"mode": mode, "idea_id": idea.idea_id, "job_id": job_id}
+
+            if mode == "blank":
+                idea = _new_seed(
+                    store,
+                    concept_note=text.strip() or "blank canvas",
+                    style=style,
+                    mechanic_key=mechanic,
+                    scheduled_for=when,
+                )
+                if manual:
+                    # Fully manual: five empty slides straight into the editor,
+                    # flagged review so nothing ships without an explicit approve.
+                    empty = [
+                        {"headline": "", "supporting": "", "image_prompt": "",
+                         "visual_intent": ""}
+                        for _i in range(5)
+                    ]
+                    store.mark_review(
+                        idea.idea_id,
+                        {
+                            "post_type": PostType.carousel.value,
+                            "hook": "",
+                            "slides_json": json.dumps(empty),
+                        },
+                    )
+                    return {"mode": mode, "idea_id": idea.idea_id, "manual": True}
+                job_id = enqueue_build_one(store, idea.idea_id)
+                return {"mode": mode, "idea_id": idea.idea_id, "job_id": job_id}
+
+        raise HTTPException(400, f"unknown mode '{mode}'")
+
+    @app.post("/api/create/angle/{job_id}")
+    def api_create_angle(
+        job_id: int,
+        index: int = Form(...),
+        style: str = Form(""),
+        scheduled_for: str = Form(""),
+        _: str = Depends(require_user),
+    ):
+        """Pick one of a completed angles job's takes and build it."""
+        when = _parse_when(scheduled_for)
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+            if job is None or job["kind"] != "angles":
+                raise HTTPException(404, "no such angles job")
+            angles = json.loads(job["result_json"] or "{}").get("angles", [])
+            if not 0 <= index < len(angles):
+                raise HTTPException(400, "angle index out of range")
+            a = angles[index]
+            idea = _new_seed(
+                store,
+                concept_note=a.get("concept_note", a.get("title", "")),
+                content_category="fact",
+                target_viewer=a.get("target_viewer", ""),
+                pain_point=a.get("pain_point", ""),
+                core_tension=a.get("core_tension", ""),
+                style=style,
+                scheduled_for=when,
+            )
+            build_job = enqueue_build_one(store, idea.idea_id)
+        return {"idea_id": idea.idea_id, "job_id": build_job}
+
+    @app.get("/api/ideas/{idea_id}/detail")
+    def api_idea_detail(idea_id: str, _: str = Depends(require_user)):
+        """Everything the create journey UI needs to draw one post."""
+        from .brand import load_brand
+        from .images import list_variants
+
+        brand = load_brand()
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+            jobs = {
+                kind: store.active_job_for(idea_id, kind)
+                for kind in ("build_one", "render", "render_slide", "revise")
+            }
+            err_row = store.conn.execute(
+                "SELECT kind, error FROM jobs WHERE idea_id = ? AND status = 'ERROR' "
+                "ORDER BY job_id DESC LIMIT 1",
+                (idea_id,),
+            ).fetchone()
+        route = json.loads(idea.route_json) if idea.route_json else {}
+        slides = json.loads(idea.slides_json) if idea.slides_json else []
+        paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []
+        assets = []
+        for p in paths:
+            f = Path(p)
+            assets.append(
+                {"name": f.name, "mtime": int(f.stat().st_mtime) if f.exists() else 0}
+            )
+        return {
+            "idea_id": idea.idea_id,
+            "status": idea.status.value,
+            "concept_note": idea.concept_note,
+            "hook": idea.hook,
+            "hook_options": route.get("hook_options", []),
+            "caption": idea.caption,
+            "comment_trigger": idea.comment_trigger,
+            "hashtags": json.loads(idea.hashtags) if idea.hashtags else [],
+            "slides": slides,
+            "qa": route.get("qa", {}),
+            "style": route.get("style", ""),
+            "mechanic": (route.get("mechanic_lock") or {}).get("name")
+            or route.get("mechanic", ""),
+            "assets": assets,
+            "variants": {
+                str(k): v for k, v in list_variants(idea, settings, brand=brand).items()
+            },
+            "scheduled_for": (
+                idea.scheduled_for.isoformat() if idea.scheduled_for else None
+            ),
+            "exported": bool(idea.exported_at),
+            "active_jobs": {
+                k: {"job_id": j["job_id"], "status": j["status"], "progress": j["progress"]}
+                for k, j in jobs.items()
+                if j
+            },
+            "last_error": (
+                {"kind": err_row["kind"], "error": err_row["error"]} if err_row else None
+            ),
+        }
+
+    @app.post("/api/ideas/{idea_id}/hook")
+    def api_pick_hook(
+        idea_id: str, hook: str = Form(...), _: str = Depends(require_user)
+    ):
+        """Set the winning hook (from hook_options or hand-written)."""
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+            prev = idea.status
+            store.save_build(idea_id, {"hook": hook.strip()})
+            if prev != Status.done:
+                store.set_status(idea_id, prev)  # save_build stamps done
+        return {"idea_id": idea_id, "hook": hook.strip()}
+
+    @app.post("/api/ideas/{idea_id}/build")
+    def api_build_idea(idea_id: str, _: str = Depends(require_user)):
+        """(Re)run the engine for this one idea, as a background job."""
+        with _store(settings) as store:
+            _idea_or_404(store, idea_id)
+            job_id = enqueue_build_one(store, idea_id)
+        return {"job_id": job_id, "kind": "build_one", "idea_id": idea_id}
+
+    @app.post("/api/ideas/{idea_id}/revise")
+    def api_revise_idea(
+        idea_id: str, focus: str = Form(...), _: str = Depends(require_user)
+    ):
+        """Punch it up: one focused rewrite targeting a weak QA metric."""
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+            if not idea.slides_json:
+                raise HTTPException(400, "nothing built yet — build first")
+            job_id = enqueue_revise(store, idea_id, focus=focus.strip() or "overall")
+        return {"job_id": job_id, "kind": "revise", "idea_id": idea_id}
+
+    @app.post("/api/ideas/{idea_id}/slides/{n}/regenerate")
+    def api_regen_slide(
+        idea_id: str,
+        n: int,
+        dry_run: bool = False,
+        variants: int | None = None,
+        _: str = Depends(require_user),
+    ):
+        """New paid background(s) for one slide (0-based index)."""
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+            if not idea.slides_json:
+                raise HTTPException(400, "nothing built yet — build first")
+            job_id = enqueue_render_slide(
+                store, idea_id, slide=n, dry_run=dry_run, variants=variants
+            )
+        return {"job_id": job_id, "kind": "render_slide", "idea_id": idea_id, "slide": n}
+
+    @app.post("/api/ideas/{idea_id}/slides/{n}/recompose")
+    def api_recompose_slide(idea_id: str, n: int, _: str = Depends(require_user)):
+        """Re-overlay current copy on the saved background — free, synchronous."""
+        from .images import ImageError, recompose_slide
+
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+        try:
+            result = recompose_slide(idea, n, settings)
+        except ImageError as exc:
+            raise HTTPException(400, str(exc))
+        return {"idea_id": idea_id, "slide": n, "path": result.path}
+
+    @app.post("/api/ideas/{idea_id}/slides/{n}/variant")
+    def api_pick_variant(
+        idea_id: str, n: int, variant: str = Form(...), _: str = Depends(require_user)
+    ):
+        """Promote a slide-background option to the canonical slide."""
+        from .images import ImageError, pick_variant
+
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+        try:
+            path = pick_variant(idea, n, variant.strip(), settings)
+        except ImageError as exc:
+            raise HTTPException(400, str(exc))
+        return {"idea_id": idea_id, "slide": n, "path": path}
+
+    # --- scheduling + calendar ------------------------------------------------
+
+    @app.post("/api/ideas/{idea_id}/schedule")
+    def api_schedule(
+        idea_id: str, when: str = Form(""), _: str = Depends(require_user)
+    ):
+        """Set (ISO datetime) or clear (empty) the user-chosen posting slot."""
+        parsed = _parse_when(when)
+        with _store(settings) as store:
+            _idea_or_404(store, idea_id)
+            store.set_schedule(idea_id, parsed)
+        return {
+            "idea_id": idea_id,
+            "scheduled_for": parsed.isoformat() if parsed else None,
+        }
+
+    def _card(idea: Idea) -> dict:
+        """Compact calendar-card payload for one idea."""
+        paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []
+        thumb = Path(paths[0]).name if paths else None
+        stale = False
+        if idea.decay_speed and not idea.exported_at:
+            shelf = _DECAY_SHELF_DAYS.get(idea.decay_speed.value)
+            if shelf is not None:
+                created = idea.created_at
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                stale = datetime.now(timezone.utc) - created > timedelta(days=shelf)
+        return {
+            "idea_id": idea.idea_id,
+            "label": idea.hook or idea.concept_note,
+            "status": idea.status.value,
+            "built": bool(idea.slides_json),
+            "rendered": bool(paths),
+            "exported": bool(idea.exported_at),
+            "thumb": thumb,
+            "stale": stale,
+            "decay": idea.decay_speed.value if idea.decay_speed else None,
+            "scheduled_for": (
+                idea.scheduled_for.isoformat() if idea.scheduled_for else None
+            ),
+        }
+
+    @app.get("/api/calendar")
+    def api_calendar(
+        request: Request,
+        date_from: str = "",
+        date_to: str = "",
+        _: str = Depends(require_user),
+    ):
+        """Scheduled posts grouped by day, plus the unscheduled tray."""
+        try:
+            start = (
+                datetime.fromisoformat(date_from)
+                if date_from
+                else datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            )
+            end = (
+                datetime.fromisoformat(date_to)
+                if date_to
+                else start + timedelta(days=42)
+            )
+        except ValueError:
+            raise HTTPException(400, "bad date range")
+
+        days: dict[str, list[dict]] = {}
+        tray: list[dict] = []
+        with _store(settings) as store:
+            for idea in store.ideas_scheduled_between(start, end):
+                key = idea.scheduled_for.date().isoformat()
+                days.setdefault(key, []).append(_card(idea))
+            # Tray: built posts with no date yet — visible ammunition.
+            for idea in store.list_ideas():
+                if idea.scheduled_for or idea.exported_at:
+                    continue
+                if idea.status in (Status.done, Status.review) and idea.slides_json:
+                    tray.append(_card(idea))
+        return {
+            "from": start.date().isoformat(),
+            "to": end.date().isoformat(),
+            "days": days,
+            "tray": tray,
+        }
+
+    @app.post("/api/export/range")
+    def api_export_range(
+        date_from: str = Form(...), date_to: str = Form(...), _: str = Depends(require_user)
+    ):
+        """Calendar 'export week': Metricool CSV for posts scheduled in-range."""
+        from .publisher import get_publisher
+
+        try:
+            start = datetime.fromisoformat(date_from)
+            end = datetime.fromisoformat(date_to) + timedelta(days=1)  # inclusive
+        except ValueError:
+            raise HTTPException(400, "bad date range")
+        publisher = get_publisher("metricool_csv")
+        with _store(settings) as store:
+            result = publisher.export(store, settings, date_from=start, date_to=end)
+        return {
+            "exported": result.exported_ids,
+            "skipped": result.skipped,
+            "csv_path": result.csv_path,
         }
 
     @app.get("/api/jobs")

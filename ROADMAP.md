@@ -81,6 +81,20 @@ priority (days→P1). States the limit (no live TikTok in-app sounds). Shipped:
 `chrgd trends [--seed]`, a `trends` background job kind, and a Trends screen
 (run scout, view ranked hooks, one-click "seed all").
 
+### B3 — Create & Schedule journeys · **DONE ✅**
+The `UPGRADE_PROPOSAL.md` build: `/create` (facts / idea / blank-canvas doors,
+mechanic gallery, 3 hook options, QA scorecard + targeted "punch it up"
+revisions, in-journey image generation with slide-1 variants, free text
+re-lay from saved backgrounds, phone preview) and `/calendar` (month view,
+drag-drop rescheduling, unscheduled tray, decay staleness flags, "+ create
+for this day", export-week). Nav collapsed to Create · Calendar · Library.
+New job kinds: `build_one`, `angles`, `revise`, `render_slide`. Style presets
++ prompt composition (style · slide brief · consistency · no-text) in
+`brand.toml`; mechanics in `config/mechanics.toml`.
+**Still needs you: the live paid image test** — one real `render` with your
+OpenAI key to confirm the exact image model id and real per-image cost
+(`_IMAGE_COST` in `chrgd/images.py` is an estimate).
+
 ### B2 — M7 Orchestration & cost-guard polish · **DONE ✅**
 - `chrgd run --count N [--scout] [--dry-run] [--no-export]`: chains
   [scout] → build → render → export; also a `run` background job kind + a

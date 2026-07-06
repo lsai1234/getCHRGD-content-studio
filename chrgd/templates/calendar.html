@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Calendar — CHRGD{% endblock %}
+{% block body %}
+<style>
+  .cal-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .cal-head h1 { margin:0; }
+  .cal-head .stats { color:var(--muted); font-size:13px; margin-left:auto; text-align:right; }
+  .cal-wrap { display:grid; grid-template-columns: 1fr 240px; gap:16px; }
+  @media(max-width:900px){ .cal-wrap { grid-template-columns:1fr; } }
+  /* minmax(0,1fr): nowrap card labels must not inflate their column */
+  .cal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+  .cal-dow { color:var(--muted); font-size:12px; text-align:center; padding:4px 0; }
+  .cal-day { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+             min-height:96px; padding:6px; position:relative; display:flex;
+             flex-direction:column; gap:4px; }
+  .cal-day.other { opacity:.35; }
+  .cal-day.today { border-color:var(--accent); }
+  .cal-day.dragover { border-color:var(--accent2); background:#1c1c22; }
+  .cal-day .d { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; }
+  .cal-day .d a { color:var(--muted); text-decoration:none; font-weight:700; opacity:0;
+                  transition:opacity .15s; }
+  .cal-day:hover .d a { opacity:1; color:var(--accent); }
+  .cal-card { background:#0d0d10; border:1px solid var(--line); border-radius:8px;
+              padding:4px 6px; font-size:11.5px; line-height:1.3; cursor:grab;
+              display:flex; gap:6px; align-items:center; overflow:hidden; }
+  .cal-card img { width:26px; height:32px; object-fit:cover; border-radius:4px; flex:none; }
+  .cal-card .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cal-card .time { color:var(--muted); font-size:10.5px; }
+  .cal-card.exported { border-color:#2e6b34; }
+  .cal-card.st-review { border-color:#8a6d00; }
+  .cal-card .x { margin-left:auto; color:var(--muted); cursor:pointer; padding:0 2px; }
+  .cal-card .x:hover { color:var(--accent); }
+  .stale { color:var(--accent2); }
+  .tray { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+          padding:12px; align-self:start; }
+  .tray h2 { font-size:14px; margin:0 0 10px; }
+  .tray .cal-card { margin-bottom:6px; }
+  .tray.dragover { border-color:var(--accent2); }
+  .wk-export { grid-column: 1 / -1; text-align:right; margin:-2px 0 2px; }
+  .wk-export button { margin:0; padding:2px 10px; font-size:11px; }
+  .legend { color:var(--muted); font-size:12px; margin-top:10px; }
+  .legend span { margin-right:12px; }
+</style>
+
+<div class="cal-head">
+  <h1>Calendar</h1>
+  <button class="ghost" style="margin:0;padding:6px 10px" onclick="shiftMonth(-1)">‹</button>
+  <strong id="cal-title"></strong>
+  <button class="ghost" style="margin:0;padding:6px 10px" onclick="shiftMonth(1)">›</button>
+  <button class="ghost" style="margin:0;padding:6px 10px" onclick="goToday()">Today</button>
+  <div class="stats">
+    <span id="gap-line"></span><br>
+    {{ counts.done }} ready · {{ counts.queued }} queued · ${{ '%.2f'|format(spend) }} spent
+  </div>
+</div>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<div class="cal-wrap">
+  <div>
+    <div class="cal-grid" id="cal-dows">
+      <div class="cal-dow">Mon</div><div class="cal-dow">Tue</div><div class="cal-dow">Wed</div>
+      <div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div>
+      <div class="cal-dow">Sun</div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <p class="legend">
+      <span>🟩 exported</span><span>🟨 needs review</span>
+      <span class="stale">⚠ going stale — ship or void</span>
+      <span>drag cards between days · drag to the tray to unschedule</span>
+    </p>
+  </div>
+
+  <div class="tray" id="tray" ondragover="trayOver(event)" ondragleave="trayLeave(event)" ondrop="trayDrop(event)">
+    <h2>Ready to schedule</h2>
+    <div id="tray-cards"></div>
+    <p class="muted" id="tray-empty" style="font-size:12px">Nothing waiting.
+      <a href="/create">Create something →</a></p>
+  </div>
+</div>
+
+<script>
+const DEFAULT_TIME = "{{ default_time }}";
+const PER_DAY = {{ per_day }};
+let view = new Date(); view.setDate(1);
+let cal = {days:{}, tray:[]};
+
+// Local-date ISO (toISOString is UTC and can shift the day near midnight).
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function monthRange(){
+  const first = new Date(view.getFullYear(), view.getMonth(), 1);
+  const start = new Date(first); start.setDate(1 - ((first.getDay()+6)%7)); // back to Monday
+  const end = new Date(start); end.setDate(start.getDate() + 42);
+  return {start, end};
+}
+
+async function load(){
+  const {start, end} = monthRange();
+  const r = await fetch(`/api/calendar?date_from=${iso(start)}T00:00:00&date_to=${iso(end)}T00:00:00`);
+  cal = await r.json();
+  draw();
+}
+
+function cardEl(c, inTray){
+  const el = document.createElement('div');
+  el.className = 'cal-card' + (c.exported ? ' exported' : '') + (c.status==='review' ? ' st-review' : '');
+  el.draggable = !c.exported;
+  el.dataset.id = c.idea_id;
+  el.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', c.idea_id));
+  if (c.thumb) {
+    const img = document.createElement('img');
+    img.src = `/media/${c.idea_id}/${c.thumb}`;
+    el.appendChild(img);
+  }
+  const t = document.createElement('span'); t.className = 't';
+  t.textContent = (c.stale ? '⚠ ' : '') + (c.label || c.idea_id);
+  t.title = `${c.idea_id} · ${c.status}` + (c.stale ? ' · going stale' : '');
+  el.appendChild(t);
+  if (!inTray && c.scheduled_for) {
+    const tm = document.createElement('span'); tm.className='time';
+    tm.textContent = c.scheduled_for.slice(11,16);
+    el.appendChild(tm);
+  }
+  if (!inTray && !c.exported) {
+    const x = document.createElement('span'); x.className='x'; x.textContent='×';
+    x.title = 'unschedule (back to tray)';
+    x.onclick = ev => { ev.stopPropagation(); schedule(c.idea_id, ''); };
+    el.appendChild(x);
+  }
+  el.onclick = () => location.href = `/create?idea=${c.idea_id}`;
+  return el;
+}
+
+function draw(){
+  const grid = document.getElementById('cal-grid');
+  grid.innerHTML = '';
+  const {start} = monthRange();
+  const todayIso = iso(new Date());
+  document.getElementById('cal-title').textContent =
+    view.toLocaleDateString('en-GB', {month:'long', year:'numeric'});
+
+  let next7 = 0;
+  const now = new Date(), week = new Date(); week.setDate(now.getDate()+7);
+  for (const [day, cards] of Object.entries(cal.days)) {
+    const d = new Date(day);
+    if (d >= now && d < week) next7 += cards.length;
+  }
+  const slots = PER_DAY * 7;
+  document.getElementById('gap-line').textContent =
+    `${next7} post${next7===1?'':'s'} in the next 7 days · ${Math.max(0, slots - next7)} of ${slots} slots empty`;
+
+  for (let w = 0; w < 6; w++) {
+    const mon = new Date(start); mon.setDate(start.getDate() + w*7);
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    let weekHasCards = false;
+
+    const cells = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(mon); d.setDate(mon.getDate() + i);
+      const key = iso(d);
+      const cell = document.createElement('div');
+      cell.className = 'cal-day' + (d.getMonth() !== view.getMonth() ? ' other' : '')
+                       + (key === todayIso ? ' today' : '');
+      cell.dataset.day = key;
+      cell.ondragover = e => { e.preventDefault(); cell.classList.add('dragover'); };
+      cell.ondragleave = () => cell.classList.remove('dragover');
+      cell.ondrop = e => {
+        e.preventDefault(); cell.classList.remove('dragover');
+        dropOnDay(e.dataTransfer.getData('text/plain'), key);
+      };
+      const head = document.createElement('div'); head.className = 'd';
+      head.innerHTML = `<span>${d.getDate()}</span><a href="/create?day=${key}" title="create for this day">＋</a>`;
+      cell.appendChild(head);
+      for (const c of (cal.days[key] || [])) { cell.appendChild(cardEl(c, false)); weekHasCards = true; }
+      cells.push(cell);
+    }
+
+    if (weekHasCards) {
+      const bar = document.createElement('div'); bar.className = 'wk-export';
+      const btn = document.createElement('button'); btn.className = 'ghost';
+      btn.textContent = `Export ${mon.getDate()}–${sun.getDate()} ⬇`;
+      btn.onclick = () => exportRange(iso(mon), iso(sun));
+      bar.appendChild(btn);
+      grid.appendChild(bar);
+    }
+    cells.forEach(c => grid.appendChild(c));
+  }
+
+  const tray = document.getElementById('tray-cards');
+  tray.innerHTML = '';
+  for (const c of cal.tray) tray.appendChild(cardEl(c, true));
+  document.getElementById('tray-empty').style.display = cal.tray.length ? 'none' : '';
+}
+
+async function schedule(id, when){
+  await fetch(`/api/ideas/${id}/schedule`, {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({when}),
+  });
+  load();
+}
+
+function dropOnDay(id, day){
+  if (!id) return;
+  const t = prompt(`Post time on ${day}?`, DEFAULT_TIME);
+  if (t === null) return;
+  schedule(id, `${day}T${(t || DEFAULT_TIME).trim()}`);
+}
+
+function trayOver(e){ e.preventDefault(); document.getElementById('tray').classList.add('dragover'); }
+function trayLeave(){ document.getElementById('tray').classList.remove('dragover'); }
+function trayDrop(e){
+  e.preventDefault(); trayLeave();
+  const id = e.dataTransfer.getData('text/plain');
+  if (id) schedule(id, '');
+}
+
+async function exportRange(from, to){
+  if (!confirm(`Export everything scheduled ${from} → ${to} to a Metricool CSV?`)) return;
+  const r = await fetch('/api/export/range', {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({date_from: from, date_to: to}),
+  });
+  const data = await r.json();
+  alert(data.exported.length
+    ? `Exported ${data.exported.length} post(s). Download the CSV from the Export screen.`
+    : 'Nothing exportable in that range (posts must be approved + have images).');
+  load();
+}
+
+function shiftMonth(n){ view.setMonth(view.getMonth()+n); load(); }
+function goToday(){ view = new Date(); view.setDate(1); load(); }
+load();
+</script>
+{% endblock %}

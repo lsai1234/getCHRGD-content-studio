@@ -117,8 +117,110 @@ def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
     idea = store.get_idea(job["idea_id"])
     if idea is None:
         raise ValueError(f"no such idea {job['idea_id']}")
-    result = render_idea(store, settings, idea, dry_run=dry_run)
-    return {"paths": result.paths, "spend_usd": result.spend_usd}
+
+    def on_slide(done: int, total: int) -> None:
+        store.update_job(job["job_id"], progress=int(done * 100 / total))
+
+    result = render_idea(store, settings, idea, dry_run=dry_run, on_slide=on_slide)
+    return {
+        "paths": result.paths,
+        "variants": result.variants,
+        "spend_usd": result.spend_usd,
+    }
+
+
+def _handle_build_one(store: Store, settings: Settings, job: dict) -> dict:
+    """Build one specific idea (the create journey's writing step)."""
+    from .pipeline import build_single_idea
+
+    result = build_single_idea(store, settings, job["idea_id"])
+    return {
+        "idea_id": result.idea_id,
+        "status": result.status.value,
+        "qa_failures": result.qa_failures,
+        "error": result.error,
+        "spend_usd": result.spend_usd,
+    }
+
+
+def _handle_angles(store: Store, settings: Settings, job: dict) -> dict:
+    """Facts → pickable carousel angles (create journey 'facts' door)."""
+    from .pipeline import generate_angles
+
+    params = json.loads(job["params_json"] or "{}")
+    result = generate_angles(
+        str(params.get("facts", "")), settings, per_fact=int(params.get("per_fact", 3))
+    )
+    run_id = store.start_run("angles")
+    store.finish_run(run_id, spend_usd=round(result.spend_usd, 4))
+    return {
+        "angles": [a.model_dump(mode="json") for a in result.angles],
+        "spend_usd": result.spend_usd,
+    }
+
+
+def _handle_revise(store: Store, settings: Settings, job: dict) -> dict:
+    """Targeted 'punch it up' revision on one QA metric."""
+    from .pipeline import build_fields_from_post, creation_prefs, revise_post
+    from .models import Status as St
+
+    params = json.loads(job["params_json"] or "{}")
+    focus = str(params.get("focus", "overall"))
+    idea = store.get_idea(job["idea_id"])
+    if idea is None:
+        raise ValueError(f"no such idea {job['idea_id']}")
+
+    post, spend = revise_post(idea, focus, settings)
+    fields = build_fields_from_post(post, creation_prefs(idea))
+    if post.passes_qa():
+        store.save_build(idea.idea_id, fields)
+        status = St.done
+    else:
+        store.mark_review(idea.idea_id, fields)
+        status = St.review
+
+    run_id = store.start_run("revise")
+    store.finish_run(run_id, spend_usd=round(spend, 4), notes=f"{idea.idea_id} {focus}")
+    return {
+        "idea_id": idea.idea_id,
+        "status": status.value,
+        "focus": focus,
+        "qa_failures": post.qa_failures(),
+        "spend_usd": spend,
+    }
+
+
+def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
+    """(Re)generate the background(s) for a single slide."""
+    from .images import list_variants, render_slide
+
+    params = json.loads(job["params_json"] or "{}")
+    idea = store.get_idea(job["idea_id"])
+    if idea is None:
+        raise ValueError(f"no such idea {job['idea_id']}")
+    result = render_slide(
+        idea,
+        int(params.get("slide", 0)),
+        settings,
+        dry_run=bool(params.get("dry_run", False)),
+        variants=params.get("variants"),
+    )
+    # Keep asset_paths_json in step for posts rendered slide-by-slide.
+    paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []
+    if len(paths) > result.slide_index:
+        paths[result.slide_index] = result.path
+        store.save_asset_paths(idea.idea_id, paths)
+    if result.generated:
+        run_id = store.start_run("render")
+        store.finish_run(
+            run_id, spend_usd=round(result.spend_usd, 4), notes=idea.idea_id
+        )
+    return {
+        "path": result.path,
+        "variant_paths": result.variant_paths,
+        "all_variants": list_variants(store.get_idea(idea.idea_id), settings),
+        "spend_usd": result.spend_usd,
+    }
 
 
 def _handle_video(store: Store, settings: Settings, job: dict) -> dict:
@@ -162,7 +264,11 @@ def _handle_run(store: Store, settings: Settings, job: dict) -> dict:
 
 _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "build": _handle_build,
+    "build_one": _handle_build_one,
     "render": _handle_render,
+    "render_slide": _handle_render_slide,
+    "angles": _handle_angles,
+    "revise": _handle_revise,
     "video": _handle_video,
     "trends": _handle_trends,
     "run": _handle_run,
@@ -191,3 +297,35 @@ def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:
     return store.create_job(
         "run", params={"count": count, "scout": scout, "dry_run": dry_run}
     )
+
+
+def enqueue_build_one(store: Store, idea_id: str) -> int:
+    existing = store.active_job_for(idea_id, "build_one")
+    if existing:
+        return existing["job_id"]
+    return store.create_job("build_one", idea_id=idea_id)
+
+
+def enqueue_angles(store: Store, *, facts: str, per_fact: int = 3) -> int:
+    return store.create_job("angles", params={"facts": facts, "per_fact": per_fact})
+
+
+def enqueue_revise(store: Store, idea_id: str, *, focus: str) -> int:
+    existing = store.active_job_for(idea_id, "revise")
+    if existing:
+        return existing["job_id"]
+    return store.create_job("revise", idea_id=idea_id, params={"focus": focus})
+
+
+def enqueue_render_slide(
+    store: Store,
+    idea_id: str,
+    *,
+    slide: int,
+    dry_run: bool = False,
+    variants: int | None = None,
+) -> int:
+    params: dict = {"slide": slide, "dry_run": dry_run}
+    if variants is not None:
+        params["variants"] = variants
+    return store.create_job("render_slide", idea_id=idea_id, params=params)

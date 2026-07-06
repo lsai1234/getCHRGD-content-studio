@@ -1,0 +1,70 @@
+# Carousel mechanics — the "blank canvas" door's template gallery.
+# Each is a proven TikTok carousel format: the engine is constrained to the
+# skeleton (one line per slide) instead of choosing a format freely.
+# Add your own: any [mechanics.<key>] with a label, description and 5-line skeleton.
+
+[mechanics.myth_fact]
+label = "Myth vs fact"
+description = "Bust a belief your audience secretly suspects is wrong. Comment bait built in."
+skeleton = [
+    "The myth, stated confidently — the thing everyone believes",
+    "Why it feels true / who spreads it",
+    "The receipts — what's actually going on",
+    "What to do instead (actionable)",
+    "Punchline + comment trigger (who do you know who still believes this?)",
+]
+
+[mechanics.five_mistakes]
+label = "5 mistakes"
+description = "Listicle of errors the viewer is probably making. High saveability."
+skeleton = [
+    "Hook: 'X mistakes killing your <goal>' — make it personal",
+    "Mistake 1 + the fix in one line",
+    "Mistake 2 + the fix in one line",
+    "Mistake 3 + the fix in one line",
+    "The mistake NOBODY talks about + fix, then save-this prompt",
+]
+
+[mechanics.before_after]
+label = "Before / after"
+description = "Transformation arc — what changed and the one thing that drove it."
+skeleton = [
+    "The 'before' — raw, relatable, a bit uncomfortable",
+    "The turning point — what they stopped believing",
+    "The single change that mattered",
+    "The 'after' — concrete, measurable, no fairy tale",
+    "The takeaway the viewer can start today",
+]
+
+[mechanics.unpopular_opinion]
+label = "Unpopular opinion"
+description = "A hot take you can defend. Engineered for comment fights."
+skeleton = [
+    "The take, no hedging — make half the audience bristle",
+    "The strongest objection, stated fairly",
+    "Why the objection misses the point",
+    "The evidence / experience that backs the take",
+    "Double down + ask who disagrees",
+]
+
+[mechanics.read_before]
+label = "Read this before…"
+description = "Gatekeeper format — essential context before a common decision. Peak saveability."
+skeleton = [
+    "'Read this before you <common action>' — urgency without clickbait",
+    "The thing nobody tells you upfront",
+    "The trap most people fall into",
+    "What the smart minority does differently",
+    "Checklist recap + save-this-for-later prompt",
+]
+
+[mechanics.nobody_tells_you]
+label = "Nobody tells you this"
+description = "Insider knowledge framing — makes the viewer feel let in on a secret."
+skeleton = [
+    "'Nobody tells you this about <topic>' — conspiratorial hook",
+    "The surface story everyone gets told",
+    "The real mechanism underneath",
+    "How to use it to your advantage",
+    "The one-line version to remember + share prompt",
+]

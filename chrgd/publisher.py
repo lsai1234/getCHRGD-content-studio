@@ -132,7 +132,15 @@ class ExportResult:
 
 
 class Publisher(Protocol):
-    def export(self, store: Store, settings: Settings, *, limit: int | None) -> ExportResult: ...
+    def export(
+        self,
+        store: Store,
+        settings: Settings,
+        *,
+        limit: int | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> ExportResult: ...
 
 
 class MetricoolCSVPublisher:
@@ -189,7 +197,14 @@ class MetricoolCSVPublisher:
                 row[c.media.image_columns[i]] = self._media_ref(fname)
         return row
 
-    def _selectable(self, store: Store, limit: int | None) -> list[Idea]:
+    def _selectable(
+        self,
+        store: Store,
+        limit: int | None,
+        *,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[Idea]:
         import json
 
         out: list[Idea] = []
@@ -198,13 +213,29 @@ class MetricoolCSVPublisher:
                 continue
             if not idea.asset_paths_json or not json.loads(idea.asset_paths_json):
                 continue
+            # Calendar "export week": only posts scheduled inside the window.
+            if date_from or date_to:
+                when = idea.scheduled_for
+                if when is None:
+                    continue
+                naive = when.replace(tzinfo=None)
+                if date_from and naive < date_from.replace(tzinfo=None):
+                    continue
+                if date_to and naive >= date_to.replace(tzinfo=None):
+                    continue
             out.append(idea)
             if limit and len(out) >= limit:
                 break
         return out
 
     def export(
-        self, store: Store, settings: Settings, *, limit: int | None = None
+        self,
+        store: Store,
+        settings: Settings,
+        *,
+        limit: int | None = None,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
     ) -> ExportResult:
         result = ExportResult()
 
@@ -217,7 +248,7 @@ class MetricoolCSVPublisher:
             ):
                 result.skipped.append((idea.idea_id, "not rendered — run `chrgd render`"))
 
-        ideas = self._selectable(store, limit)
+        ideas = self._selectable(store, limit, date_from=date_from, date_to=date_to)
         if not ideas:
             return result
 
