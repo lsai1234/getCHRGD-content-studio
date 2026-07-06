@@ -15,6 +15,7 @@ jobs:
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            git config --global --add safe.directory /opt/chrgd/app
             cd /opt/chrgd/app
             git pull
             .venv/bin/pip install -e ".[web,llm,media]" -q
