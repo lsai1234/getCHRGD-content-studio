@@ -69,7 +69,7 @@
       <a href="/backlog" class="{{ 'on' if active=='backlog' }}">Backlog</a>
       <a href="/build" class="{{ 'on' if active=='build' }}">Build</a>
       <a href="/trends" class="{{ 'on' if active=='trends' }}">Trends</a>
-      <a href="/review" class="{{ 'on' if active=='review' }}">Review{% if review_count %} ({{ review_count }}){% endif %}</a>
+      <a href="/review" class="{{ 'on' if active=='review' }}">Review queue{% if review_count %} ({{ review_count }}){% endif %}</a>
       <a href="/export" class="{{ 'on' if active=='export' }}">Export</a>
       <form method="post" action="/logout" style="display:inline">
         <button class="ghost" style="margin:0;padding:6px 12px">Log out</button>
