@@ -24,7 +24,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import Settings, get_settings
 from .db import Store
-from .models import Idea, PostType, Status
+from .models import MAX_SLIDES, MIN_SLIDES, Idea, PostType, Status
 from .webauth import auth_configured, verify_credentials
 from .worker import (
     Worker,
@@ -402,6 +402,26 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 raise HTTPException(404, "no such idea")
 
             slides = json.loads(idea.slides_json) if idea.slides_json else []
+
+            # The editor can add/remove slides: `slide_count` resizes the list
+            # (within the platform bounds) before per-slide fields apply. New
+            # slides start empty; requests without it leave the count alone.
+            if "slide_count" in form:
+                try:
+                    n = int(str(form["slide_count"]))
+                except ValueError:
+                    raise HTTPException(400, "slide_count must be a number")
+                if not MIN_SLIDES <= n <= MAX_SLIDES:
+                    raise HTTPException(
+                        400, f"slide_count must be {MIN_SLIDES}-{MAX_SLIDES}"
+                    )
+                while len(slides) < n:
+                    slides.append(
+                        {"headline": "", "supporting": "", "image_prompt": "",
+                         "visual_intent": ""}
+                    )
+                slides = slides[:n]
+
             for i, slide in enumerate(slides):
                 if f"slide_headline_{i}" in form:
                     slide["headline"] = form[f"slide_headline_{i}"]
@@ -571,6 +591,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         style: str = "",
         mechanic_key: str = "",
         render_mode: str = "",
+        length: str = "",
         scheduled_for: datetime | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
@@ -583,6 +604,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             if render_mode not in ("ai_design", "overlay"):
                 raise HTTPException(400, f"unknown render mode '{render_mode}'")
             route["render_mode"] = render_mode
+        if length:
+            if length not in ("quick", "standard", "deep"):
+                raise HTTPException(400, f"unknown length preference '{length}'")
+            route["length_pref"] = length
         if mechanic_key:
             mech = get_mechanic(mechanic_key)
             if mech is None:
@@ -608,6 +633,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         mechanic: str = Form(""),
         style: str = Form(""),
         render_mode: str = Form(""),
+        length: str = Form(""),
         scheduled_for: str = Form(""),
         manual: bool = Form(False),
         develop: bool = Form(False),
@@ -637,7 +663,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     raise HTTPException(400, "give the idea a line of text")
                 idea = _new_seed(
                     store, concept_note=text.strip(), style=style,
-                    render_mode=render_mode, scheduled_for=when,
+                    render_mode=render_mode, length=length, scheduled_for=when,
                 )
                 job_id = _first_job(store, idea.idea_id)
                 return {
@@ -652,15 +678,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     style=style,
                     mechanic_key=mechanic,
                     render_mode=render_mode,
+                    length=length,
                     scheduled_for=when,
                 )
                 if manual:
-                    # Fully manual: five empty slides straight into the editor,
-                    # flagged review so nothing ships without an explicit approve.
+                    # Fully manual: empty slides straight into the editor
+                    # (count follows the length nudge; the editor can add or
+                    # remove slides freely), flagged review so nothing ships
+                    # without an explicit approve.
+                    n = {"quick": 2, "deep": 8}.get(length, 5)
                     empty = [
                         {"headline": "", "supporting": "", "image_prompt": "",
                          "visual_intent": ""}
-                        for _i in range(5)
+                        for _i in range(n)
                     ]
                     store.mark_review(
                         idea.idea_id,
@@ -685,6 +715,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         index: int = Form(...),
         style: str = Form(""),
         render_mode: str = Form(""),
+        length: str = Form(""),
         scheduled_for: str = Form(""),
         develop: bool = Form(False),
         _: str = Depends(require_user),
@@ -708,6 +739,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 core_tension=a.get("core_tension", ""),
                 style=style,
                 render_mode=render_mode,
+                length=length,
                 scheduled_for=when,
             )
             if develop:
@@ -928,6 +960,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         angle: int = Form(...),
         style: str = Form(""),
         render_mode: str = Form(""),
+        length: str = Form(""),
         scheduled_for: str = Form(""),
         develop: bool = Form(False),
         _: str = Depends(require_user),
@@ -955,6 +988,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 content_category="moment",
                 style=style,
                 render_mode=render_mode,
+                length=length,
                 scheduled_for=when,
             )
             # Moments decay fast — stamp it so the calendar can nag.
@@ -1003,7 +1037,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 if key in form:
                     brief[key] = str(form[key])
             outline = [
-                str(form[f"outline_{i}"]) for i in range(8) if f"outline_{i}" in form
+                str(form[f"outline_{i}"])
+                for i in range(MAX_SLIDES)
+                if f"outline_{i}" in form
             ]
             if outline:
                 brief["outline"] = outline

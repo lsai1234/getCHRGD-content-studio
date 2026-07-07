@@ -1,7 +1,9 @@
 # Carousel mechanics — the "blank canvas" door's template gallery.
 # Each is a proven TikTok carousel format: the engine is constrained to the
 # skeleton (one line per slide) instead of choosing a format freely.
-# Add your own: any [mechanics.<key>] with a label, description and 5-line skeleton.
+# Add your own: any [mechanics.<key>] with a label, description and skeleton
+# (one line per slide — skeletons can be any length; the engine may flex the
+# count if the idea genuinely wants fewer or more).
 
 [mechanics.myth_fact]
 label = "Myth vs fact"

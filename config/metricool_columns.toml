@@ -33,7 +33,10 @@ instagram = "Instagram"
 
 [media]
 # Carousel slides map to these numbered columns, in order.
-image_columns = ["Picture 1", "Picture 2", "Picture 3", "Picture 4", "Picture 5"]
+image_columns = [
+    "Picture 1", "Picture 2", "Picture 3", "Picture 4", "Picture 5",
+    "Picture 6", "Picture 7", "Picture 8", "Picture 9", "Picture 10",
+]
 video_column = "Video"
 
 [schedule]

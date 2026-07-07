@@ -75,7 +75,7 @@ def test_columns_load_from_repo_config():
     cols = load_columns()  # the real config/metricool_columns.toml
     assert cols.header.text
     assert "tiktok" in cols.networks
-    assert len(cols.media.image_columns) == 5
+    assert len(cols.media.image_columns) == 10  # room for deep-dive carousels
 
 
 # --- export -----------------------------------------------------------------
@@ -99,11 +99,16 @@ def test_export_writes_csv_and_copies_assets(store, settings):
     assert "#gym" in row[text_col]
     # network markers set
     assert row[pub.cols.networks["tiktok"]] == pub.cols.format.network_on_value
-    # five picture columns filled with lined-up filenames in ready/
+    # picture columns filled with lined-up filenames in ready/ for each
+    # rendered slide; unused trailing columns stay empty
     ready = Path(result.ready_dir)
     for i, col in enumerate(pub.cols.media.image_columns, 1):
-        assert row[col] == f"G-0001_slide_{i}.jpg"
-        assert (ready / f"G-0001_slide_{i}.jpg").exists()
+        if i <= 5:
+            assert row[col] == f"G-0001_slide_{i}.jpg"
+            assert (ready / f"G-0001_slide_{i}.jpg").exists()
+        else:
+            assert row[col] == ""
+
 
 
 def test_export_marks_exported_and_is_idempotent(store, settings):

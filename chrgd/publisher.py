@@ -54,7 +54,7 @@ class HeaderCfg(BaseModel):
 
 class MediaCfg(BaseModel):
     image_columns: list[str] = Field(
-        default_factory=lambda: [f"Picture {i}" for i in range(1, 6)]
+        default_factory=lambda: [f"Picture {i}" for i in range(1, 11)]
     )
     video_column: str = "Video"
 

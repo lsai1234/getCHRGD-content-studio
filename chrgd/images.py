@@ -7,7 +7,7 @@ Beats the old system by never asking the image model to render text:
   2. Overlay the approved headline + supporting text in code with Pillow,
      inside the TikTok-safe zones, with a contrast panel on busy backgrounds.
 
-Output is JPEG/WebP (never PNG — TikTok rejects it), vertical, <=1080p, five
+Output is JPEG/WebP (never PNG — TikTok rejects it), vertical, <=1080p, all
 images per carousel, saved to `output/<idea_id>/slide_1..5.<ext>`.
 
 `--dry-run` skips the paid image API and paints a branded placeholder
@@ -26,7 +26,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .brand import Brand, load_brand
 from .config import Settings
-from .models import Idea, Slide
+from .models import MAX_SLIDES, Idea, Slide
 
 # Rough USD cost per generated image, by gpt-image-1 quality. Estimate only,
 # for the spend log / cost guard.
@@ -95,7 +95,7 @@ def _placeholder_background(brand: Brand, seed: int) -> Image.Image:
     img = Image.new("RGB", (w, h), base)
     px = img.load()
     # Vertical gradient darkening toward the bottom, with a faint accent tint
-    # drifting across slides so the five aren't identical.
+    # drifting across slides so they aren't identical.
     for y in range(h):
         t = y / h
         for x in range(0, w, 4):  # step for speed; fill 4px blocks
@@ -539,7 +539,7 @@ def list_variants(idea: Idea, settings: Settings, *, brand: Brand | None = None)
     found: dict[int, list[str]] = {}
     if not out_dir.exists():
         return found
-    for i in range(5):
+    for i in range(MAX_SLIDES):
         names = [
             _slide_path(out_dir, i, ext, key).name
             for key in _VARIANT_KEYS
@@ -558,7 +558,7 @@ def render_carousel(
     dry_run: bool = False,
     on_slide=None,
 ) -> RenderResult:
-    """Render all five slides for one idea to disk. Returns paths + spend.
+    """Render every slide for one idea to disk. Returns paths + spend.
 
     Slide 1 renders `generation.variants_first` background options; the rest
     one each. `on_slide(done, total)` fires after each slide for job progress.

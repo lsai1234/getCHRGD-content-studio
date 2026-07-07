@@ -257,11 +257,23 @@
     <h2>Pick the visual style</h2>
     <p class="hint">Sets the mood for every slide — tap one to continue.</p>
 
-    <div class="chip-row" style="margin-bottom:16px">
+    <div class="chip-row" style="margin-bottom:12px">
       <button type="button" class="chip sel" data-mode="ai_design" onclick="pickMode('ai_design', this)"
               title="the engine designs whole slides — text is part of the artwork">✦ AI-designed slides</button>
       <button type="button" class="chip" data-mode="overlay" onclick="pickMode('overlay', this)"
               title="a photo background with your text overlaid in code">📷 Photo + overlay text</button>
+    </div>
+
+    <div class="chip-row" style="margin-bottom:16px">
+      <span class="muted" style="font-size:12px; align-self:center">Length</span>
+      <button type="button" class="chip sel" data-len="" onclick="pickLength('', this)"
+              title="the engine picks the slide count the idea deserves — a meme might be 1 slide, a deep-dive 10">Engine's call</button>
+      <button type="button" class="chip" data-len="quick" onclick="pickLength('quick', this)"
+              title="a single punch built for sharing — roughly 1–2 slides">Quick hit</button>
+      <button type="button" class="chip" data-len="standard" onclick="pickLength('standard', this)"
+              title="a classic carousel with a proper arc — roughly 4–6 slides">Classic</button>
+      <button type="button" class="chip" data-len="deep" onclick="pickLength('deep', this)"
+              title="a fuller story, roughly 7–10 slides — only as long as it stays good">Deep dive</button>
     </div>
 
     <div class="optgrid">
@@ -375,8 +387,10 @@
         </div>
         <label>Visual direction</label>
         <input id="b-visual">
-        <label>Slide-by-slide outline</label>
+        <label>Slide-by-slide outline <small class="k">— as many slides as the idea deserves (1–10)</small></label>
         <div id="b-outline"></div>
+        <button type="button" class="chip" id="b-outline-add" style="margin-top:4px"
+                onclick="addOutlineRow()">＋ Add a slide</button>
       </form>
 
       <div class="job-panel" style="margin:14px 0">
@@ -409,9 +423,12 @@
       <p class="sec-hint">Tap to set. The chosen line leads the carousel.</p>
       <div id="hook-options"></div>
 
-      <h3 class="sec-h">The copy <small>— tap a slide to amend it</small></h3>
+      <h3 class="sec-h">The copy <small>— tap a slide to amend it · <span id="slide-count-note"></span></small></h3>
       <form id="copy-form" onsubmit="return false">
         <div id="slide-acc"></div>
+        <button type="button" class="chip" id="add-slide-btn" style="margin:2px 0 10px"
+                onclick="addSlide()"
+                title="a carousel can be 1–10 slides — as short as a meme, as long as a deep-dive">＋ Add a slide</button>
         <div class="acc-item" id="caption-acc">
           <button type="button" class="acc-head" onclick="toggleAcc(this)">
             <span class="acc-n">＋</span>
@@ -526,7 +543,8 @@ const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
 let state = { ideaId: null, source: null, style: null, mode: 'ai_design',
-              mech: null, detail: null, slideIdx: 0, anglesJob: null };
+              length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null };
+const MAX_SLIDES = 10, MIN_SLIDES = 1;
 
 /* ---------- screen plumbing: one focused screen at a time ---------- */
 // stage number (of 5), label, and rail % per screen
@@ -583,6 +601,11 @@ function pickMode(mode, el){
   document.querySelectorAll('[data-mode]').forEach(c =>
     c.classList.toggle('sel', c.dataset.mode === mode));
 }
+function pickLength(len, el){
+  state.length = len;
+  document.querySelectorAll('[data-len]').forEach(c =>
+    c.classList.toggle('sel', c.dataset.len === len));
+}
 function pickStyle(key, el){
   state.style = key;
   tapThen(el, '#scr-look .optgrid .opt', afterLook);
@@ -600,6 +623,7 @@ function afterLook(){
 function baseParams(develop){
   return new URLSearchParams({
     style: state.style || '', render_mode: state.mode,
+    length: state.length || '',
     scheduled_for: PRESET_DAY ? `${PRESET_DAY}T18:00` : '',
     develop: develop ? 'true' : '',
   });
@@ -884,15 +908,39 @@ function drawBrief(d){
   const box = document.getElementById('b-outline');
   box.innerHTML = '';
   const outline = (b.outline && b.outline.length) ? b.outline : ['', '', '', '', ''];
-  outline.forEach((line, i) => {
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.style.marginBottom = '6px';
-    row.innerHTML = `<span class="muted" style="width:56px; font-size:12px">slide ${i+1}</span>
-      <input id="b-outline-${i}" style="flex:1" value="${esc(line)}">`;
-    box.appendChild(row);
-  });
+  outline.forEach(line => box.appendChild(outlineRow(line)));
+  renumberOutline();
   document.getElementById('b-feedback').value = '';
+}
+
+/* The outline is as long as the idea deserves — add and remove lines freely. */
+function outlineRow(line){
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.style.marginBottom = '6px';
+  row.innerHTML = `<span class="muted b-outline-n" style="width:56px; font-size:12px"></span>
+    <input style="flex:1" value="${esc(line)}">
+    <button type="button" class="chip b-outline-rm" title="remove this slide from the outline"
+            onclick="this.parentElement.remove(); renumberOutline()">✕</button>`;
+  return row;
+}
+
+function renumberOutline(){
+  const box = document.getElementById('b-outline');
+  [...box.querySelectorAll('.b-outline-n')].forEach((n, i) => n.textContent = `slide ${i+1}`);
+  const count = box.childElementCount;
+  box.querySelectorAll('.b-outline-rm').forEach(b =>
+    b.style.display = count <= MIN_SLIDES ? 'none' : '');
+  document.getElementById('b-outline-add').style.display =
+    count >= MAX_SLIDES ? 'none' : '';
+}
+
+function addOutlineRow(){
+  const box = document.getElementById('b-outline');
+  if (box.childElementCount >= MAX_SLIDES) return;
+  box.appendChild(outlineRow(''));
+  renumberOutline();
+  box.lastElementChild.querySelector('input').focus();
 }
 
 async function saveBrief(){
@@ -997,6 +1045,72 @@ function slidePreview(s, i){
   return h ? esc(h) : `<span class="dim">slide ${i+1} — tap to write it</span>`;
 }
 
+/* The slide list is flexible — 1 to 10 slides, add and remove freely. The
+   DOM is the source of truth; indexes renumber on every change and saveCopy
+   sends slide_count so the server resizes to match. */
+function slideAccItem(s, i){
+  const item = document.createElement('div');
+  item.className = 'acc-item' + (!(s.headline || '').trim() ? ' open' : '');
+  item.innerHTML = `
+    <button type="button" class="acc-head" onclick="toggleAcc(this)">
+      <span class="acc-n">${i+1}</span>
+      <span class="acc-p">${slidePreview(s, i)}</span>
+      <span class="acc-c">▾</span>
+    </button>
+    <div class="acc-body">
+      <label>Headline</label>
+      <input name="slide_headline_${i}" value="${esc(s.headline || '')}">
+      <label>Supporting</label>
+      <input name="slide_supporting_${i}" value="${esc(s.supporting || '')}">
+      <label>Image brief <small class="k">(what the background should show — no text in it)</small></label>
+      <input name="slide_image_prompt_${i}" value="${esc(s.image_prompt || '')}">
+      <button type="button" class="chip slide-rm" style="margin-top:10px"
+              onclick="removeSlide(this)">✕ Remove this slide</button>
+    </div>`;
+  // live preview in the accordion head while typing
+  item.querySelector('input[name^=slide_headline_]').addEventListener('input', e => {
+    const n = [...item.parentElement.children].indexOf(item);
+    item.querySelector('.acc-p').innerHTML = slidePreview({headline: e.target.value}, n);
+  });
+  return item;
+}
+
+function renumberSlides(){
+  const sf = document.getElementById('slide-acc');
+  [...sf.children].forEach((item, i) => {
+    item.querySelector('.acc-n').textContent = i + 1;
+    for (const f of ['headline', 'supporting', 'image_prompt'])
+      item.querySelector(`input[name^=slide_${f}_]`).name = `slide_${f}_${i}`;
+    const head = item.querySelector('input[name^=slide_headline_]');
+    item.querySelector('.acc-p').innerHTML = slidePreview({headline: head.value}, i);
+  });
+  syncSlideControls();
+}
+
+function syncSlideControls(){
+  const n = document.getElementById('slide-acc').childElementCount;
+  document.getElementById('add-slide-btn').style.display = n >= MAX_SLIDES ? 'none' : '';
+  document.querySelectorAll('#slide-acc .slide-rm').forEach(b =>
+    b.style.display = n <= MIN_SLIDES ? 'none' : '');
+  const note = document.getElementById('slide-count-note');
+  note.textContent = `${n} slide${n === 1 ? '' : 's'}`;
+}
+
+function addSlide(){
+  const sf = document.getElementById('slide-acc');
+  if (sf.childElementCount >= MAX_SLIDES) return;
+  sf.appendChild(slideAccItem({}, sf.childElementCount));
+  renumberSlides();
+  sf.lastElementChild.querySelector('input').focus();
+}
+
+function removeSlide(btn){
+  const sf = document.getElementById('slide-acc');
+  if (sf.childElementCount <= MIN_SLIDES) return;
+  btn.closest('.acc-item').remove();
+  renumberSlides();
+}
+
 // autoJump: on resume/build-completion, skip ahead to images if they already
 // exist. The "Amend the copy" button passes false so it actually stays here.
 async function openWriteStep(autoJump = true){
@@ -1048,29 +1162,8 @@ async function openWriteStep(autoJump = true){
   // slide copy — accordion per slide, closed unless it's empty (manual)
   const sf = document.getElementById('slide-acc');
   sf.innerHTML = '';
-  (d.slides || []).forEach((s, i) => {
-    const item = document.createElement('div');
-    item.className = 'acc-item' + (!(s.headline || '').trim() ? ' open' : '');
-    item.innerHTML = `
-      <button type="button" class="acc-head" onclick="toggleAcc(this)">
-        <span class="acc-n">${i+1}</span>
-        <span class="acc-p">${slidePreview(s, i)}</span>
-        <span class="acc-c">▾</span>
-      </button>
-      <div class="acc-body">
-        <label>Headline</label>
-        <input name="slide_headline_${i}" value="${esc(s.headline)}">
-        <label>Supporting</label>
-        <input name="slide_supporting_${i}" value="${esc(s.supporting)}">
-        <label>Image brief <small class="k">(what the background should show — no text in it)</small></label>
-        <input name="slide_image_prompt_${i}" value="${esc(s.image_prompt)}">
-      </div>`;
-    // live preview in the accordion head while typing
-    item.querySelector(`[name=slide_headline_${i}]`).addEventListener('input', e => {
-      item.querySelector('.acc-p').innerHTML = slidePreview({headline: e.target.value}, i);
-    });
-    sf.appendChild(item);
-  });
+  (d.slides || []).forEach((s, i) => sf.appendChild(slideAccItem(s, i)));
+  syncSlideControls();
   document.getElementById('f-caption').value = d.caption || '';
   document.getElementById('f-trigger').value = d.comment_trigger || '';
   document.getElementById('f-hashtags').value = (d.hashtags || []).join(' ');
@@ -1104,6 +1197,8 @@ async function sendFeedback(){
 async function saveCopy(){
   const form = document.getElementById('copy-form');
   const body = new URLSearchParams(new FormData(form));
+  const n = document.getElementById('slide-acc').childElementCount;
+  if (n) body.set('slide_count', n);  // resizes server-side after add/remove
   await post(`/api/ideas/${state.ideaId}/edit`, body);
 }
 

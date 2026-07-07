@@ -49,7 +49,8 @@ in exactly this shape:
       "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art: the visual concept (subject, setting, action, mood), the composition and layout, the art direction (photographic/illustrated/graphic style, colour, lighting), and how the typography should be treated as part of the design (placement, scale, energy). Think agency-level concept art for TikTok, not a stock photo description. Do NOT invent text beyond the approved slide copy.",
       "visual_intent": "string: subject, setting, action, prop, double-take"
     }
-    // EXACTLY 5 slide objects, in order
+    // One object per slide, in order — 1 to 10 slides, however many the
+    // Architect stage decided this idea deserves
   ],
   "caption": "string",
   "comment_trigger": "string",
@@ -178,6 +179,26 @@ def load_system_prompt() -> str:
     return base + "\n" + JSON_CONTRACT
 
 
+# The editor's optional up-front length nudge → the instruction the engine
+# sees. Deliberately loose ranges — a preference, not a category system.
+LENGTH_PREFS = {
+    "quick": (
+        "the editor wants a quick hit — roughly 1–2 slides, a single punch "
+        "built for sharing. Only run longer if the idea truly can't land in "
+        "that space."
+    ),
+    "standard": (
+        "the editor wants a classic carousel — roughly 4–6 slides with a "
+        "proper arc."
+    ),
+    "deep": (
+        "the editor wants a fuller deep-dive — roughly 7–10 slides. Every "
+        "extra slide must still earn its swipe; if the idea runs out of "
+        "genuine material sooner, stop sooner."
+    ),
+}
+
+
 def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> str:
     """Render a seed row into the instruction the engine builds from."""
     lines = ["Build one finished post from this backlog row. Preserve the core idea."]
@@ -222,9 +243,19 @@ def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> st
         )
         skeleton = lock.get("skeleton") or []
         if skeleton:
-            lines.append("Follow this 5-slide skeleton (one line per slide):")
+            lines.append(
+                "Follow this skeleton (one line per slide; adapt the slide "
+                "count only if the idea genuinely wants fewer or more):"
+            )
             for i, step in enumerate(skeleton, 1):
                 lines.append(f"  {i}. {step}")
+
+    # An up-front length nudge from the editor. Soft by design: the Architect
+    # stage still owns the final count, this just tells it where to aim.
+    length = LENGTH_PREFS.get(prefs.get("length_pref", ""))
+    if length:
+        lines.append("")
+        lines.append(f"LENGTH: {length}")
 
     if retry_reasons:
         lines.append("")
@@ -252,7 +283,10 @@ def creation_prefs(idea: Idea) -> dict:
         return {}
     return {
         k: route[k]
-        for k in ("style", "mechanic_lock", "render_mode", "concept_brief")
+        for k in (
+            "style", "mechanic_lock", "render_mode", "concept_brief",
+            "length_pref",
+        )
         if k in route
     }
 
@@ -513,7 +547,7 @@ with a human editor. Return a SINGLE JSON object, nothing else:
 {
   "angle": "the take in one sharp line",
   "hook_direction": "how slide 1 should open (direction, not final copy)",
-  "outline": ["one line per slide describing what it does", "... exactly 5"],
+  "outline": ["one line per slide describing what it does — 1 to 10 lines, as many slides as the idea deserves"],
   "tone": "the voice/energy, one line",
   "visual_direction": "the overall look for the designed slides, one line"
 }

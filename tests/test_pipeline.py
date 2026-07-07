@@ -15,6 +15,7 @@ from chrgd.models import Idea, Post, Status
 from chrgd.pipeline import (
     LLMResult,
     build_ideas,
+    build_user_message,
     estimate_cost,
     run_pipeline_for_idea,
 )
@@ -111,9 +112,36 @@ def test_qa_fails_when_no_engagement_gate_hits_8():
     assert not post.passes_qa()
 
 
-def test_qa_fails_on_wrong_slide_count():
-    post = Post.model_validate(make_post_dict(slides=4))
-    assert any("slides" in r for r in post.qa_failures())
+def test_qa_accepts_flexible_slide_counts():
+    # Length is the engine's call: a 1-slide meme and a 10-slide deep-dive
+    # both pass; only out-of-bounds counts fail.
+    for n in (1, 2, 4, 7, 10):
+        post = Post.model_validate(make_post_dict(slides=n))
+        assert post.passes_qa(), f"{n} slides should pass QA"
+
+
+def test_qa_fails_on_out_of_bounds_slide_count():
+    for n in (0, 11):
+        post = Post.model_validate(make_post_dict(slides=n))
+        assert any("slides" in r for r in post.qa_failures()), (
+            f"{n} slides should fail QA"
+        )
+
+
+def test_length_pref_reaches_the_engine():
+    idea = Idea(
+        idea_id="G-0001",
+        concept_note="x",
+        route_json=json.dumps({"length_pref": "quick"}),
+    )
+    msg = build_user_message(idea)
+    assert "LENGTH:" in msg
+    assert "quick hit" in msg
+
+
+def test_no_length_pref_means_no_length_line():
+    idea = Idea(idea_id="G-0001", concept_note="x")
+    assert "LENGTH:" not in build_user_message(idea)
 
 
 # --- cost -------------------------------------------------------------------

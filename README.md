@@ -22,7 +22,7 @@ The build ships incrementally (see [Build order](#build-order)).
   **OpenAI API**, honouring the QA gate and logging spend.
 - **M3 — carousel image builder:** a background per slide from the image API,
   then approved text overlaid *in code* with Pillow inside the TikTok safe
-  zones; JPEG/WebP, ≤1080p, five slides to `output/<idea_id>/`.
+  zones; JPEG/WebP, ≤1080p, one image per slide to `output/<idea_id>/`.
 - **M4 — Metricool CSV export:** the primary deliverable — a bulk-import CSV +
   matching `output/ready/` asset folder, config-driven columns, idempotent.
 
@@ -32,7 +32,7 @@ Implemented now:
 - `chrgd backlog` — inspect the backlog.
 - `chrgd build` — run the 6-stage content engine over N queued ideas (OpenAI).
 - `chrgd review` — inspect posts the QA gate flagged.
-- `chrgd render` — generate the five carousel images for a built post.
+- `chrgd render` — generate the carousel images for a built post.
 - `chrgd export` — write the Metricool CSV + `ready/` folder for the week.
 
 - `chrgd trends` — scout current UK-gym topical hooks and (with `--seed`) queue them.
@@ -61,7 +61,10 @@ screens (see [`UPGRADE_PROPOSAL.md`](UPGRADE_PROPOSAL.md) for the thinking):
   discovery lanes (**Happening now** / **Worth knowing**), **My own idea**
   (a rough one-liner), **From research** (paste facts — the engine proposes
   2–3 angles per fact and you pick), **A proven format** (mechanics from
-  `config/mechanics.toml`), or **Fully manual**. The engine returns **3 hook
+  `config/mechanics.toml`), or **Fully manual**. Length is flexible and the
+  engine's call — a shareable meme might be 1–2 slides, a classic carousel
+  4–6, a deep-dive up to 10 — with an optional length nudge on the style
+  screen and add/remove-slide controls in the editor. The engine returns **3 hook
   options** as tap-to-set cards and a visible **QA scorecard** with a
   per-metric *punch it up* revision button; the slide copy sits behind
   tap-to-expand accordions so amending anything is one tap away without
@@ -150,7 +153,7 @@ chrgd build --count 3 --dry-run   # runs the LLM, skips paid image/video (M3+)
 chrgd review
 chrgd review --show G-0001        # full built JSON for one idea
 
-# Render the five carousel images for a built post:
+# Render the carousel images for a built post:
 chrgd render G-0001               # calls the image API (gpt-image-1)
 chrgd render G-0001 --dry-run     # branded placeholder backgrounds, no spend
 

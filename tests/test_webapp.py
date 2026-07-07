@@ -280,6 +280,77 @@ def test_edit_updates_copy_and_keeps_review_status(client, settings):
         assert json.loads(idea.hashtags) == ["#gym", "#uk"]
 
 
+def test_edit_can_add_and_remove_slides(client, settings):
+    with Store(settings.db_path) as store:
+        slides = [
+            {"headline": f"h{i}", "supporting": "s", "image_prompt": "p",
+             "visual_intent": "v"}
+            for i in range(3)
+        ]
+        store.add_idea(
+            Idea(idea_id="G-0001", concept_note="x", slides_json=json.dumps(slides))
+        )
+        store.mark_review("G-0001", {"hook": "h"})
+    _login(client)
+
+    # grow to 5: existing slides keep their copy, new ones arrive empty
+    r = client.post(
+        "/api/ideas/G-0001/edit",
+        data={"slide_count": "5", "slide_headline_3": "fresh"},
+    )
+    assert r.json()["saved"] is True
+    with Store(settings.db_path) as store:
+        slides = json.loads(store.get_idea("G-0001").slides_json)
+    assert len(slides) == 5
+    assert slides[0]["headline"] == "h0"
+    assert slides[3]["headline"] == "fresh"
+    assert slides[4]["headline"] == ""
+
+    # shrink to 1 (a meme) — trailing slides drop
+    client.post("/api/ideas/G-0001/edit", data={"slide_count": "1"})
+    with Store(settings.db_path) as store:
+        slides = json.loads(store.get_idea("G-0001").slides_json)
+    assert len(slides) == 1
+    assert slides[0]["headline"] == "h0"
+
+    # out-of-bounds counts are rejected
+    assert client.post("/api/ideas/G-0001/edit", data={"slide_count": "0"}).status_code == 400
+    assert client.post("/api/ideas/G-0001/edit", data={"slide_count": "11"}).status_code == 400
+    # requests without slide_count leave the count alone
+    client.post("/api/ideas/G-0001/edit", data={"caption": "c"})
+    with Store(settings.db_path) as store:
+        assert len(json.loads(store.get_idea("G-0001").slides_json)) == 1
+
+
+def test_create_start_stashes_length_pref(client, settings):
+    _login(client)
+    r = client.post(
+        "/api/create/start",
+        data={"mode": "idea", "text": "squat rack hogs", "length": "quick"},
+    )
+    idea_id = r.json()["idea_id"]
+    with Store(settings.db_path) as store:
+        route = json.loads(store.get_idea(idea_id).route_json)
+    assert route["length_pref"] == "quick"
+    # unknown values are rejected, absent means engine's call
+    assert client.post(
+        "/api/create/start", data={"mode": "idea", "text": "x", "length": "nope"}
+    ).status_code == 400
+
+
+def test_manual_slide_count_follows_length_pref(client, settings):
+    _login(client)
+    for length, expected in (("quick", 2), ("", 5), ("deep", 8)):
+        r = client.post(
+            "/api/create/start",
+            data={"mode": "blank", "manual": "true", "length": length},
+        )
+        idea_id = r.json()["idea_id"]
+        with Store(settings.db_path) as store:
+            slides = json.loads(store.get_idea(idea_id).slides_json)
+        assert len(slides) == expected, f"length={length!r}"
+
+
 def test_review_page_shows_slide_previews(client, settings):
     with Store(settings.db_path) as store:
         slides = [{"headline": f"h{i}", "supporting": "s", "image_prompt": "p", "visual_intent": "v"} for i in range(5)]

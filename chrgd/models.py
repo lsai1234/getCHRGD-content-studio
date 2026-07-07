@@ -54,6 +54,12 @@ class Slide(BaseModel):
     visual_intent: str = ""
 
 
+# Carousel length bounds. The engine picks the count per idea (a meme might
+# be 1 slide, a deep-dive 10); these are the platform sanity limits.
+MIN_SLIDES = 1
+MAX_SLIDES = 10
+
+
 # QA thresholds from the content engine prompt. A post ships only if it
 # clears all "hard" gates AND at least one "engagement" gate.
 QA_HARD_GATES = {"overall": 8, "hook": 8, "visual_originality": 8}
@@ -99,8 +105,12 @@ class Post(BaseModel):
         scores = self.qa_scores
         reasons: list[str] = []
 
-        if len(self.slides) != 5:
-            reasons.append(f"expected 5 slides, got {len(self.slides)}")
+        # Length is the engine's call, within sanity bounds — a meme can be
+        # one slide, a deep-dive can run to ten.
+        if not MIN_SLIDES <= len(self.slides) <= MAX_SLIDES:
+            reasons.append(
+                f"expected {MIN_SLIDES}-{MAX_SLIDES} slides, got {len(self.slides)}"
+            )
 
         for gate, minimum in QA_HARD_GATES.items():
             if gate not in scores:
