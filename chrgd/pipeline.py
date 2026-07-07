@@ -101,6 +101,20 @@ class LLMError(RuntimeError):
     """Raised when the LLM call itself fails (network/auth/etc.)."""
 
 
+def _describe_llm_error(exc: Exception) -> str:
+    """A failure message that keeps the underlying cause.
+
+    The OpenAI SDK's APIConnectionError stringifies to just 'Connection
+    error.', hiding whether it was DNS, TLS, a timeout or a refused route —
+    exactly what you need to know when it happens on a server.
+    """
+    msg = str(exc)
+    cause = exc.__cause__ or exc.__context__
+    if cause and str(cause) and str(cause) != msg:
+        msg = f"{msg} [{type(cause).__name__}: {cause}]"
+    return msg
+
+
 @dataclass
 class LLMResult:
     content: str
@@ -146,7 +160,7 @@ class OpenAIChatClient:
                 ],
             )
         except Exception as exc:  # noqa: BLE001 - surface any SDK failure uniformly
-            raise LLMError(str(exc)) from exc
+            raise LLMError(_describe_llm_error(exc)) from exc
 
         usage = getattr(resp, "usage", None)
         return LLMResult(

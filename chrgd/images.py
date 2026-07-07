@@ -142,7 +142,9 @@ def _generate_background(
         )
         b64 = resp.data[0].b64_json
     except Exception as exc:  # noqa: BLE001
-        raise ImageError(str(exc)) from exc
+        from .pipeline import _describe_llm_error
+
+        raise ImageError(_describe_llm_error(exc)) from exc
     return Image.open(BytesIO(base64.b64decode(b64)))
 
 

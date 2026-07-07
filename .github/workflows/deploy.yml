@@ -20,3 +20,12 @@ jobs:
             git pull
             .venv/bin/pip install -e ".[web,llm,media]" -q
             systemctl restart chrgd
+      - name: Post-deploy health check (OpenAI connectivity, redacted)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 46.101.91.218
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd /opt/chrgd/app
+            .venv/bin/python deploy/diagnose.py
