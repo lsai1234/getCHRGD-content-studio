@@ -1051,6 +1051,42 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             store.conn.commit()
         return {"idea_id": idea_id, "brief": brief}
 
+    # --- learning loop (real results → future builds) --------------------------
+
+    @app.post("/api/ideas/{idea_id}/metrics")
+    def api_log_metrics(
+        idea_id: str,
+        views: int = Form(0),
+        likes: int = Form(0),
+        comments: int = Form(0),
+        shares: int = Form(0),
+        saves: int = Form(0),
+        _: str = Depends(require_user),
+    ):
+        """Log a post's real TikTok numbers — the fuel for the learning loop."""
+        from .learning import METRIC_FIELDS
+
+        values = {"views": views, "likes": likes, "comments": comments,
+                  "shares": shares, "saves": saves}
+        if any(v < 0 for v in values.values()):
+            raise HTTPException(400, "metrics can't be negative")
+        metrics = {f: values[f] for f in METRIC_FIELDS}
+        metrics["logged_at"] = datetime.now(timezone.utc).isoformat()
+        with _store(settings) as store:
+            _idea_or_404(store, idea_id)
+            store.set_metrics(idea_id, metrics)
+        return {"idea_id": idea_id, "metrics": metrics}
+
+    @app.get("/api/insights")
+    def api_insights(_: str = Depends(require_user)):
+        """What's actually working for this account, from logged results."""
+        from .learning import MIN_POSTS_FOR_NOTES, insights
+
+        with _store(settings) as store:
+            digest = insights(store)
+        digest["feeding_engine"] = digest["posts_logged"] >= MIN_POSTS_FOR_NOTES
+        return digest
+
     # --- scheduling + calendar ------------------------------------------------
 
     @app.post("/api/ideas/{idea_id}/schedule")
@@ -1079,6 +1115,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 if created.tzinfo is None:
                     created = created.replace(tzinfo=timezone.utc)
                 stale = datetime.now(timezone.utc) - created > timedelta(days=shelf)
+        views = None
+        if idea.metrics_json:
+            try:
+                views = int(json.loads(idea.metrics_json).get("views") or 0)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                views = None
         return {
             "idea_id": idea.idea_id,
             "label": idea.hook or idea.concept_note,
@@ -1089,6 +1131,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "thumb": thumb,
             "stale": stale,
             "decay": idea.decay_speed.value if idea.decay_speed else None,
+            "views": views,
             "scheduled_for": (
                 idea.scheduled_for.isoformat() if idea.scheduled_for else None
             ),

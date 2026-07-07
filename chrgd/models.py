@@ -163,3 +163,5 @@ class Idea(BaseModel):
     processed_at: datetime | None = None
     exported_at: datetime | None = None
     platform_urls_json: str | None = None
+    # Learning loop: real results logged after posting (views/likes/…).
+    metrics_json: str | None = None

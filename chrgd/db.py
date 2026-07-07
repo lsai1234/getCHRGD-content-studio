@@ -43,6 +43,7 @@ _COLUMNS = [
     "processed_at",
     "exported_at",
     "platform_urls_json",
+    "metrics_json",
 ]
 
 _SCHEMA = f"""
@@ -69,7 +70,8 @@ CREATE TABLE IF NOT EXISTS ideas (
     scheduled_for     TEXT,
     processed_at      TEXT,
     exported_at       TEXT,
-    platform_urls_json TEXT
+    platform_urls_json TEXT,
+    metrics_json      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status);
@@ -155,6 +157,14 @@ class Store:
         for name, decl in additions.items():
             if name not in cols:
                 self.conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {decl}")
+
+        # Learning loop: real TikTok results logged per post.
+        idea_cols = {
+            r["name"]
+            for r in self.conn.execute("PRAGMA table_info(ideas)").fetchall()
+        }
+        if "metrics_json" not in idea_cols:
+            self.conn.execute("ALTER TABLE ideas ADD COLUMN metrics_json TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -271,6 +281,22 @@ class Store:
         idea = self.save_build(idea_id, fields)
         self.set_status(idea_id, Status.review)
         return self.get_idea(idea_id)
+
+    def set_metrics(self, idea_id: str, metrics: dict) -> None:
+        """Log real post results (views/likes/…). Overwrites. Idempotent."""
+        self.conn.execute(
+            "UPDATE ideas SET metrics_json = ? WHERE idea_id = ?",
+            (json.dumps(metrics), idea_id),
+        )
+        self.conn.commit()
+
+    def ideas_with_metrics(self) -> list[Idea]:
+        """Posts with logged results, newest first — the learning corpus."""
+        rows = self.conn.execute(
+            "SELECT * FROM ideas WHERE metrics_json IS NOT NULL "
+            "ORDER BY created_at DESC"
+        ).fetchall()
+        return [self._row_to_idea(r) for r in rows]
 
     def set_schedule(self, idea_id: str, when: datetime | None) -> None:
         """Set or clear the user-chosen posting datetime. Idempotent."""

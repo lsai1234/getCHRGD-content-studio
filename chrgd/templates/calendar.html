@@ -70,11 +70,44 @@
     </p>
   </div>
 
-  <div class="tray" id="tray" ondragover="trayOver(event)" ondragleave="trayLeave(event)" ondrop="trayDrop(event)">
-    <h2>Ready to schedule</h2>
-    <div id="tray-cards"></div>
-    <p class="muted" id="tray-empty" style="font-size:12px">Nothing waiting.
-      <a href="/create">Create something →</a></p>
+  <div>
+    <div class="tray" id="tray" ondragover="trayOver(event)" ondragleave="trayLeave(event)" ondrop="trayDrop(event)">
+      <h2>Ready to schedule</h2>
+      <div id="tray-cards"></div>
+      <p class="muted" id="tray-empty" style="font-size:12px">Nothing waiting.
+        <a href="/create">Create something →</a></p>
+    </div>
+
+    <div class="tray" id="insights" style="margin-top:14px">
+      <h2>📈 What's working</h2>
+      <div id="insights-body" class="muted" style="font-size:12.5px">
+        Tap 📈 on a posted card to log its numbers — from 3 logged posts the
+        engine starts writing towards what actually performs for you.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- log-results modal -->
+<div id="metrics-modal" style="display:none; position:fixed; inset:0; z-index:50;
+     background:rgba(0,0,0,.65); align-items:center; justify-content:center">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:14px;
+              padding:20px 22px; width:min(420px, 92vw)">
+    <h2 style="font-size:16px; margin:0 0 2px">How did it do?</h2>
+    <p class="muted" id="metrics-label" style="font-size:12.5px; margin:4px 0 0"></p>
+    <div class="row">
+      <div style="flex:1"><label>Views</label><input id="mx-views" type="number" min="0" inputmode="numeric"></div>
+      <div style="flex:1"><label>Likes</label><input id="mx-likes" type="number" min="0" inputmode="numeric"></div>
+    </div>
+    <div class="row">
+      <div style="flex:1"><label>Comments</label><input id="mx-comments" type="number" min="0" inputmode="numeric"></div>
+      <div style="flex:1"><label>Shares</label><input id="mx-shares" type="number" min="0" inputmode="numeric"></div>
+      <div style="flex:1"><label>Saves</label><input id="mx-saves" type="number" min="0" inputmode="numeric"></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button style="margin:0" onclick="saveMetrics()">Save results</button>
+      <button class="ghost" style="margin:0" onclick="closeMetrics()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -125,6 +158,20 @@ function cardEl(c, inTray){
     x.title = 'unschedule (back to tray)';
     x.onclick = ev => { ev.stopPropagation(); schedule(c.idea_id, ''); };
     el.appendChild(x);
+  }
+  if (c.exported) {
+    // Learning loop: exported posts either show their logged views or ask.
+    const m = document.createElement('span'); m.className = 'x';
+    if (c.views !== null && c.views !== undefined) {
+      m.textContent = '▶' + fmtViews(c.views);
+      m.title = 'update results';
+      m.style.color = 'var(--accent2)';
+    } else {
+      m.textContent = '📈';
+      m.title = 'log how it performed';
+    }
+    m.onclick = ev => { ev.stopPropagation(); openMetrics(c); };
+    el.appendChild(m);
   }
   el.onclick = () => location.href = `/create?idea=${c.idea_id}`;
   return el;
@@ -231,6 +278,67 @@ async function exportRange(from, to){
 
 function shiftMonth(n){ view.setMonth(view.getMonth()+n); load(); }
 function goToday(){ view = new Date(); view.setDate(1); load(); }
+
+/* ---------- learning loop ---------- */
+const fmtViews = v => v >= 1000000 ? (v/1000000).toFixed(1)+'m'
+                    : v >= 1000 ? (v/1000).toFixed(v >= 10000 ? 0 : 1)+'k' : String(v);
+let metricsFor = null;
+
+function openMetrics(c){
+  metricsFor = c.idea_id;
+  document.getElementById('metrics-label').textContent = c.label || c.idea_id;
+  for (const f of ['views','likes','comments','shares','saves'])
+    document.getElementById('mx-'+f).value = '';
+  document.getElementById('metrics-modal').style.display = 'flex';
+  document.getElementById('mx-views').focus();
+}
+function closeMetrics(){ document.getElementById('metrics-modal').style.display = 'none'; }
+
+async function saveMetrics(){
+  const body = new URLSearchParams();
+  for (const f of ['views','likes','comments','shares','saves'])
+    body.set(f, document.getElementById('mx-'+f).value || '0');
+  await fetch(`/api/ideas/${metricsFor}/metrics`, {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body,
+  });
+  closeMetrics();
+  load();
+  loadInsights();
+}
+
+async function loadInsights(){
+  const r = await fetch('/api/insights');
+  if (!r.ok) return;
+  const d = await r.json();
+  if (!d.posts_logged) return;  // keep the how-to hint
+  const box = document.getElementById('insights-body');
+  let html = `<b>${d.posts_logged}</b> posts logged · baseline
+    <b>${fmtViews(d.baseline_views)}</b> views · `;
+  html += d.feeding_engine
+    ? `<span style="color:#5dd177">feeding the engine ✓</span>`
+    : `logs ${3 - d.posts_logged} more and the engine starts learning`;
+  for (const p of d.top.slice(0, 3)) {
+    html += `<div style="margin-top:8px; color:var(--fg)">
+      ▶${fmtViews(p.views)} <span class="muted">(${p.multiple}x)</span>
+      ${p.hook ? '“' + esc2(p.hook).slice(0, 60) + '”' : p.idea_id}</div>`;
+  }
+  const strong = (d.traits || []).filter(t => t.vs_baseline >= 1.5).slice(0, 2);
+  for (const t of strong) {
+    html += `<div style="margin-top:6px">↑ ${esc2(t.trait)} <b>${esc2(t.value)}</b>
+      runs ${t.vs_baseline}x baseline (${t.posts} posts)</div>`;
+  }
+  box.innerHTML = html;
+}
+const esc2 = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+document.getElementById('metrics-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('metrics-modal')) closeMetrics();
+});
+
 load();
+loadInsights();
 </script>
 {% endblock %}

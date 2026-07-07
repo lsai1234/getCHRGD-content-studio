@@ -199,10 +199,17 @@ LENGTH_PREFS = {
 }
 
 
-def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> str:
+def build_user_message(
+    idea: Idea,
+    retry_reasons: list[str] | None = None,
+    performance_notes: str = "",
+) -> str:
     """Render a seed row into the instruction the engine builds from."""
     lines = ["Build one finished post from this backlog row. Preserve the core idea."]
     lines.append("")
+    if performance_notes:
+        lines.append(performance_notes)
+        lines.append("")
     fields = {
         "idea_id": idea.idea_id,
         "content_category": idea.content_category,
@@ -309,12 +316,17 @@ class BuildResult:
 
 
 def run_pipeline_for_idea(
-    idea: Idea, client: ChatClient, model: str, on_attempt=None
+    idea: Idea,
+    client: ChatClient,
+    model: str,
+    on_attempt=None,
+    performance_notes: str = "",
 ) -> BuildResult:
     """Run the pipeline for one idea: call, validate, QA-gate, re-request once.
 
     `on_attempt(n)` fires before each engine call so callers can surface
     progress (attempt 1 = first write, attempt 2 = post-QA rewrite).
+    `performance_notes` steers the write with the account's real results.
     """
     system = load_system_prompt()
     spend = 0.0
@@ -325,7 +337,7 @@ def run_pipeline_for_idea(
     for attempt in range(1, 3):  # first try + one re-request
         if on_attempt:
             on_attempt(attempt)
-        user = build_user_message(idea, retry_reasons)
+        user = build_user_message(idea, retry_reasons, performance_notes)
         result = client.complete(system, user)
         spend += estimate_cost(model, result.prompt_tokens, result.completion_tokens)
 
@@ -413,6 +425,10 @@ def build_ideas(
     results: list[BuildResult] = []
     total_spend = 0.0
 
+    from .learning import performance_notes as _perf_notes
+
+    notes = _perf_notes(store)
+
     try:
         for idea in ideas:
             if total_spend >= settings.max_spend_per_run:
@@ -431,7 +447,7 @@ def build_ideas(
             store.mark_processing(idea.idea_id)
             try:
                 result = run_pipeline_for_idea(
-                    idea, client, settings.openai_model
+                    idea, client, settings.openai_model, performance_notes=notes
                 )
             except LLMError as exc:
                 store.set_status(idea.idea_id, Status.queued)  # release for retry
@@ -497,12 +513,15 @@ def build_single_idea(
         1: (15, "engine writing — running all six stages"),
         2: (60, "QA gate missed — asking for a stronger rewrite"),
     }
+    from .learning import performance_notes
+
     try:
         result = run_pipeline_for_idea(
             idea,
             client,
             settings.openai_model,
             on_attempt=lambda n: _prog(*_attempt_notes.get(n, (80, f"attempt {n}"))),
+            performance_notes=performance_notes(store),
         )
     except LLMError as exc:
         store.set_status(idea_id, Status.queued)
