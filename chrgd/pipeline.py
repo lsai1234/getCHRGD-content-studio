@@ -141,10 +141,12 @@ class OpenAIChatClient:
                 "openai package not installed. Run: pip install -e '.[llm]'"
             ) from exc
 
-        kwargs = {"api_key": settings.openai_api_key}
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
-        self._client = OpenAI(**kwargs)
+        # base_url is ALWAYS passed explicitly so a stray empty
+        # OPENAI_BASE_URL env var can never reach the SDK.
+        self._client = OpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.get_openai_base_url(),
+        )
         self._model = settings.openai_model
         self._temperature = temperature
 

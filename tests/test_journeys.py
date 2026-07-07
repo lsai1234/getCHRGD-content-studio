@@ -180,6 +180,24 @@ def test_revise_post_sends_current_copy(settings):
     assert "saveability" in user and "old hook" in user
 
 
+def test_blank_base_url_env_var_never_reaches_sdk(settings, monkeypatch):
+    """Regression: systemd EnvironmentFile exports a blank OPENAI_BASE_URL=
+    line as a real empty env var; the SDK then used '' as the URL and every
+    engine call failed with 'missing http:// protocol'. The client must
+    always receive an explicit, valid base_url."""
+    from chrgd.pipeline import OpenAIChatClient
+
+    monkeypatch.setenv("OPENAI_BASE_URL", "")
+    empty = Settings(OPENAI_API_KEY="sk-test", OPENAI_BASE_URL="")
+    assert empty.get_openai_base_url() == "https://api.openai.com/v1"
+    client = OpenAIChatClient(empty)
+    assert str(client._client.base_url).startswith("https://api.openai.com")
+
+    # A real override still wins.
+    routed = Settings(OPENAI_API_KEY="sk-test", OPENAI_BASE_URL="https://gw.example/v1")
+    assert routed.get_openai_base_url() == "https://gw.example/v1"
+
+
 # --- worker job kinds ---------------------------------------------------------
 
 

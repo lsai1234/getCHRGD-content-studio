@@ -19,6 +19,9 @@ jobs:
             cd /opt/chrgd/app
             git pull
             .venv/bin/pip install -e ".[web,llm,media]" -q
+            # A blank OPENAI_BASE_URL= line becomes a real empty env var under
+            # systemd EnvironmentFile and breaks the OpenAI SDK. Idempotent.
+            sed -i 's/^OPENAI_BASE_URL=[[:space:]]*$/#OPENAI_BASE_URL=/' .env
             systemctl restart chrgd
       - name: Post-deploy health check (OpenAI connectivity, redacted)
         uses: appleboy/ssh-action@v1.0.3

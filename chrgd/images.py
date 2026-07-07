@@ -128,10 +128,8 @@ def _generate_background(
     except ImportError as exc:  # pragma: no cover
         raise ImageError("openai not installed. Run: pip install -e '.[llm]'") from exc
 
-    kwargs = {"api_key": key}
-    if settings.openai_base_url:
-        kwargs["base_url"] = settings.openai_base_url
-    client = OpenAI(**kwargs)
+    # Explicit base_url: see Settings.get_openai_base_url.
+    client = OpenAI(api_key=key, base_url=settings.get_openai_base_url())
     try:
         resp = client.images.generate(
             model=settings.image_model,

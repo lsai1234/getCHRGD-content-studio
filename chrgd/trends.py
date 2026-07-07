@@ -114,10 +114,11 @@ class OpenAITrendClient:
             from openai import OpenAI
         except ImportError as exc:  # pragma: no cover
             raise TrendError("openai not installed. Run: pip install -e '.[llm]'") from exc
-        kwargs = {"api_key": settings.openai_api_key}
-        if settings.openai_base_url:
-            kwargs["base_url"] = settings.openai_base_url
-        self._client = OpenAI(**kwargs)
+        # Explicit base_url: see Settings.get_openai_base_url.
+        self._client = OpenAI(
+            api_key=settings.openai_api_key,
+            base_url=settings.get_openai_base_url(),
+        )
         self._model = settings.openai_model
 
     def search(self, system: str, user: str) -> str:

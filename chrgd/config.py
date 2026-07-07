@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import ClassVar
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,6 +34,14 @@ class Settings(BaseSettings):
     openai_model: str = Field(default="gpt-4o", alias="CHRGD_OPENAI_MODEL")
     # Optional base-URL override (aggregators / Azure / compatible gateways).
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
+    # The official endpoint, used whenever no override is set. Passed to the
+    # SDK explicitly: a BLANK OPENAI_BASE_URL= line in .env becomes a real,
+    # empty env var under systemd's EnvironmentFile, and the SDK would treat
+    # that as the URL itself ("Request URL is missing an 'http://'...").
+    OPENAI_DEFAULT_BASE_URL: ClassVar[str] = "https://api.openai.com/v1"
+
+    def get_openai_base_url(self) -> str:
+        return self.openai_base_url or self.OPENAI_DEFAULT_BASE_URL
 
     # --- Image generation (milestone 3+) ---
     # Defaults to OpenAI images so one key covers text + images.
