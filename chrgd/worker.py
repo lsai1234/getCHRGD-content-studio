@@ -274,6 +274,18 @@ def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_moments(store: Store, settings: Settings, job: dict) -> dict:
+    """Scan shared UK moments (sport/weather/telly/viral) with ready angles."""
+    from .trends import scout_moments
+
+    params = json.loads(job["params_json"] or "{}")
+    result = scout_moments(settings, int(params.get("count", 6)))
+    return {
+        "limitation": result.limitation,
+        "moments": [m.model_dump(mode="json") for m in result.moments],
+    }
+
+
 def _handle_run(store: Store, settings: Settings, job: dict) -> dict:
     from .orchestrate import run_chain
 
@@ -304,6 +316,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "revise": _handle_revise,
     "video": _handle_video,
     "trends": _handle_trends,
+    "moments": _handle_moments,
     "run": _handle_run,
 }
 
@@ -324,6 +337,17 @@ def enqueue_render(store: Store, idea_id: str, *, dry_run: bool) -> int:
 
 def enqueue_trends(store: Store, *, count: int) -> int:
     return store.create_job("trends", params={"count": count})
+
+
+def enqueue_moments(store: Store, *, count: int = 6) -> int:
+    """One radar scan at a time — reuse an in-flight scan instead of stacking."""
+    row = store.conn.execute(
+        "SELECT job_id FROM jobs WHERE kind = 'moments' "
+        "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1"
+    ).fetchone()
+    if row:
+        return int(row["job_id"])
+    return store.create_job("moments", params={"count": count})
 
 
 def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:

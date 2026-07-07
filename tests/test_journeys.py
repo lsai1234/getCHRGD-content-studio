@@ -611,6 +611,121 @@ def test_slide_endpoints_roundtrip(client, settings):
     assert r.json()["kind"] == "render_slide"
 
 
+# --- UK moments radar -----------------------------------------------------------
+
+MOMENTS_PAYLOAD = {
+    "moments": [
+        {
+            "title": "Heatwave hitting Sat-Sun, 32C",
+            "emoji": "🥵",
+            "category": "weather",
+            "when": "this weekend",
+            "why": "whole country melting, everyone talking about it",
+            "decay_speed": "days",
+            "angles": [
+                {"type": "advice", "title": "Training in the heat without dying",
+                 "hook": "32C and leg day. here's how.", "concept_note": "practical heat tips"},
+                {"type": "funny", "title": "Gym in a heatwave starter pack",
+                 "hook": "the fan queue", "concept_note": "heatwave gym chaos"},
+                {"type": "tiein", "title": "Hydration + electrolytes 101",
+                 "hook": "", "concept_note": "electrolytes explainer, observational"},
+            ],
+        },
+        {
+            "title": "England v Mexico, 2am kick-off Thu",
+            "emoji": "⚽",
+            "category": "sport",
+            "when": "Thu",
+            "why": "half the UK staying up for it",
+            "decay_speed": "days",
+            "angles": [
+                {"type": "advice", "title": "Surviving the 2am kick-off",
+                 "hook": "staying up for the game? read this", "concept_note": "sleep/caffeine timing tips"}
+            ],
+        },
+    ]
+}
+
+
+class FakeSearch:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def search(self, system, user):
+        self.system = system
+        return json.dumps(self.payload)
+
+
+def test_scout_moments_parses_and_ranks(settings):
+    from chrgd.trends import scout_moments
+
+    fake = FakeSearch(MOMENTS_PAYLOAD)
+    result = scout_moments(settings, client=fake)
+    assert [m.category for m in result.moments] == ["weather", "sport"]
+    assert result.moments[0].angles[0].type == "advice"
+    assert "COLLECTIVELY" in fake.system  # the radar brief, not the gym scout
+
+
+def test_worker_moments_job_and_dedupe(settings, store, monkeypatch):
+    import chrgd.trends as trends_mod
+    from chrgd.trends import MomentsResult
+    from chrgd.worker import Worker, enqueue_moments
+
+    monkeypatch.setattr(
+        trends_mod, "scout_moments",
+        lambda s, count=6, client=None: MomentsResult.model_validate(MOMENTS_PAYLOAD),
+    )
+    a = enqueue_moments(store)
+    b = enqueue_moments(store)
+    assert a == b  # one scan at a time
+    Worker(settings).run_once()
+    job = store.get_job(a)
+    assert job["status"] == "COMPLETED"
+    assert len(json.loads(job["result_json"])["moments"]) == 2
+
+
+def test_moments_api_and_use_flow(client, settings):
+    # No scan yet.
+    empty = client.get("/api/moments").json()
+    assert empty["moments"] == [] and empty["scanning"] is False
+
+    # Enqueue → reported as scanning.
+    job_id = client.post("/api/jobs/moments").json()["job_id"]
+    assert client.get("/api/moments").json()["scanning"] is True
+
+    # Simulate the worker completing the scan.
+    with Store(settings.db_path) as store:
+        store.update_job(
+            job_id, status="COMPLETED", result_json=json.dumps(MOMENTS_PAYLOAD)
+        )
+    data = client.get("/api/moments").json()
+    assert data["job_id"] == job_id
+    assert [m["title"] for m in data["moments"]][1].startswith("England v Mexico")
+    assert data["age_hours"] is not None and data["age_hours"] < 1
+
+    # One tap on an angle → seeded idea + build job.
+    r = client.post(
+        f"/api/moments/{job_id}/use",
+        data={"moment": 1, "angle": 0, "style": "gritty", "render_mode": "ai_design"},
+    )
+    body = r.json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(body["idea_id"])
+        assert "England v Mexico" in idea.concept_note
+        assert "staying up for the game" in idea.concept_note  # hook carried in
+        assert idea.content_category == "moment"
+        assert idea.decay_speed is not None and idea.decay_speed.value == "days"
+        assert idea.learning_tag == "moment:sport"
+        route = json.loads(idea.route_json)
+        assert route["style"] == "gritty" and route["render_mode"] == "ai_design"
+        job = store.get_job(body["job_id"])
+        assert job["kind"] == "build_one" and job["idea_id"] == idea.idea_id
+
+    # Bad indices → 400, unknown job → 404.
+    assert client.post(f"/api/moments/{job_id}/use", data={"moment": 9, "angle": 0}).status_code == 400
+    assert client.post("/api/moments/99999/use", data={"moment": 0, "angle": 0}).status_code == 404
+
+
 # --- scheduling + calendar -------------------------------------------------------
 
 

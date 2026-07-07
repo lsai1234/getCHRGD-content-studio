@@ -172,6 +172,106 @@ def scout_trends(
     return result
 
 
+# --- UK moments radar ---------------------------------------------------------
+#
+# Broader than the gym-trend scout: what is the UK *collectively* experiencing
+# right now / in the next week (sport, weather, telly, viral, seasonal)?
+# Content that meets people inside a shared national moment massively
+# outperforms generic niche content — the brand's England-game "staying up"
+# post did ~20k views against a ~300-view baseline.
+
+MOMENTS_PROMPT = """You are the Cultural Radar for CHRGD, a premium UK gym/supplement brand.
+
+Use web search to find what the UK is COLLECTIVELY experiencing right now and
+over the next 7-10 days. You are NOT looking for gym content — you are looking
+for shared national moments the brand can show up inside:
+
+- Sport: big fixtures, kick-off times, results everyone will be talking about
+  (football, boxing, F1, tennis, the lot) — note late/awkward UK kick-off times.
+- Weather: heatwaves, storms, cold snaps, the first hot/cold weekend.
+- Telly & culture: reality shows, finales, big releases everyone's watching.
+- Viral: memes/formats/conversations currently everywhere in the UK.
+- Seasonal rituals: bank holidays, payday, exam season, January, clock changes.
+
+For EACH moment, propose 2-3 ready-to-build content angles for a gym/supplement
+audience: usually one practical/advice angle (genuinely useful, e.g. "how to
+survive the 3am kick-off"), one funny/relatable angle, and one natural product
+tie-in ONLY where it isn't forced (observational/educational, never medical or
+guaranteed-outcome claims; humour is social commentary, never a named person).
+
+Limitation you MUST respect: {limitation}
+
+Return a SINGLE JSON object, no markdown, no commentary:
+{{
+  "moments": [
+    {{
+      "title": "the moment in one line (e.g. Heatwave hitting Sat-Sun, 32C)",
+      "emoji": "one emoji",
+      "category": "sport | weather | tv | viral | seasonal | news",
+      "when": "tonight | this weekend | Thu 10 Jul | now",
+      "peak": "when UK attention peaks",
+      "why": "why the whole UK cares, one line",
+      "decay_speed": "days | weeks",
+      "angles": [
+        {{
+          "type": "advice | funny | tiein",
+          "title": "short label",
+          "hook": "the slide-1 hook this would open with",
+          "concept_note": "1-2 sentence buildable brief"
+        }}
+      ]
+    }}
+  ]
+}}
+Rank by expected reach for this brand THIS week. Prefer moments still ahead or
+live over ones already fading. Only claim-safe, brand-safe angles.
+""".format(limitation=LIMITATION)
+
+
+class MomentAngle(BaseModel):
+    type: str = "advice"  # advice | funny | tiein
+    title: str
+    hook: str = ""
+    concept_note: str
+
+
+class Moment(BaseModel):
+    title: str
+    emoji: str = "📌"
+    category: str = "news"
+    when: str = ""
+    peak: str = ""
+    why: str = ""
+    decay_speed: DecaySpeed = DecaySpeed.days
+    angles: list[MomentAngle] = Field(default_factory=list)
+
+
+class MomentsResult(BaseModel):
+    limitation: str = LIMITATION
+    moments: list[Moment] = Field(default_factory=list)
+
+
+def parse_moments(text: str) -> MomentsResult:
+    try:
+        return MomentsResult.model_validate(json.loads(_extract_json(text)))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise TrendError(f"could not parse moments: {exc}") from exc
+
+
+def scout_moments(
+    settings: Settings, count: int = 6, *, client: TrendSearchClient | None = None
+) -> MomentsResult:
+    """Scan what the UK is living through right now → pickable moments."""
+    client = client or OpenAITrendClient(settings)
+    user = (
+        f"Find up to {count} shared UK moments for the coming week, each with "
+        "2-3 ready angles. Rank by expected reach and return the JSON object."
+    )
+    result = parse_moments(client.search(MOMENTS_PROMPT, user))
+    result.moments = result.moments[:count]
+    return result
+
+
 # --- seeding ----------------------------------------------------------------
 
 # Faster-decaying trends jump the queue.

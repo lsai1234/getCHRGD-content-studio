@@ -842,6 +842,98 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             raise HTTPException(400, str(exc))
         return {"idea_id": idea_id, "slide": n, "path": path}
 
+    # --- UK moments radar -----------------------------------------------------
+
+    @app.get("/api/moments")
+    def api_moments(_: str = Depends(require_user)):
+        """Latest completed radar scan + whether one is running."""
+        with _store(settings) as store:
+            done = store.conn.execute(
+                "SELECT job_id, result_json, updated_at FROM jobs "
+                "WHERE kind = 'moments' AND status = 'COMPLETED' "
+                "ORDER BY job_id DESC LIMIT 1"
+            ).fetchone()
+            active = store.conn.execute(
+                "SELECT job_id FROM jobs WHERE kind = 'moments' "
+                "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1"
+            ).fetchone()
+        payload = {
+            "job_id": None,
+            "moments": [],
+            "updated_at": None,
+            "age_hours": None,
+            "scanning": bool(active),
+        }
+        if done:
+            data = json.loads(done["result_json"] or "{}")
+            payload["job_id"] = done["job_id"]
+            payload["moments"] = data.get("moments", [])
+            payload["updated_at"] = done["updated_at"]
+            try:
+                age = datetime.now().astimezone() - datetime.fromisoformat(
+                    done["updated_at"]
+                )
+                payload["age_hours"] = round(age.total_seconds() / 3600, 1)
+            except (TypeError, ValueError):
+                pass
+        return payload
+
+    @app.post("/api/jobs/moments")
+    def api_job_moments(count: int = Form(6), _: str = Depends(require_user)):
+        from .worker import enqueue_moments
+
+        with _store(settings) as store:
+            job_id = enqueue_moments(store, count=count)
+        return {"job_id": job_id, "kind": "moments"}
+
+    @app.post("/api/moments/{job_id}/use")
+    def api_moments_use(
+        job_id: int,
+        moment: int = Form(...),
+        angle: int = Form(...),
+        style: str = Form(""),
+        render_mode: str = Form(""),
+        scheduled_for: str = Form(""),
+        _: str = Depends(require_user),
+    ):
+        """Turn one angle of one moment into a building post — one tap."""
+        when = _parse_when(scheduled_for)
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+            if job is None or job["kind"] != "moments":
+                raise HTTPException(404, "no such moments scan")
+            moments = json.loads(job["result_json"] or "{}").get("moments", [])
+            if not 0 <= moment < len(moments):
+                raise HTTPException(400, "moment index out of range")
+            m = moments[moment]
+            angles = m.get("angles", [])
+            if not 0 <= angle < len(angles):
+                raise HTTPException(400, "angle index out of range")
+            a = angles[angle]
+            note = a.get("concept_note", a.get("title", ""))
+            if a.get("hook"):
+                note += f" — open with: {a['hook']}"
+            idea = _new_seed(
+                store,
+                concept_note=f"[{m.get('title', 'UK moment')}] {note}",
+                content_category="moment",
+                style=style,
+                render_mode=render_mode,
+                scheduled_for=when,
+            )
+            # Moments decay fast — stamp it so the calendar can nag.
+            store.conn.execute(
+                "UPDATE ideas SET decay_speed = ?, learning_tag = ? WHERE idea_id = ?",
+                (
+                    m.get("decay_speed", "days"),
+                    f"moment:{m.get('category', 'news')}",
+                    idea.idea_id,
+                ),
+            )
+            store.conn.commit()
+            build_job = enqueue_build_one(store, idea.idea_id)
+        return {"idea_id": idea.idea_id, "job_id": build_job}
+
     # --- scheduling + calendar ------------------------------------------------
 
     @app.post("/api/ideas/{idea_id}/schedule")

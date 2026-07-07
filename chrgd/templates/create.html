@@ -62,7 +62,48 @@
   .mini-cal .h { color:var(--muted); font-size:11px; border:0; background:none; cursor:default; }
   .spin { display:inline-block; animation:spin 1s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .stage { display:none; } .stage.on { display:block; }
+  .stage { display:none; } .stage.on { display:block; animation:fadein .25s ease; }
+  @keyframes fadein { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+</style>
+
+<style>
+  /* --- start-step polish + moments radar --- */
+  .settings-strip { display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+                    margin-bottom:18px; }
+  .settings-strip label { margin:0; font-size:12px; }
+  .settings-strip select { width:auto; max-width:46vw; padding:8px 10px; font-size:13px; }
+  .radar { background:linear-gradient(160deg, #17120e 0%, var(--panel) 55%);
+           border:1px solid #3a2413; border-radius:14px; padding:16px 18px;
+           margin-bottom:22px; }
+  .radar-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .radar-head h2 { font-size:17px; margin:0; }
+  .radar-head .age { color:var(--muted); font-size:12px; margin-left:auto; }
+  .moment { background:#0d0d10; border:1px solid var(--line); border-radius:12px;
+            padding:12px 14px; margin-top:10px; cursor:pointer;
+            transition:border-color .15s, transform .15s; }
+  .moment:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .moment .m-top { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .moment .m-title { font-weight:600; }
+  .moment .m-when { font-size:11.5px; color:var(--accent2); border:1px solid #4a3a10;
+                    border-radius:20px; padding:1px 9px; white-space:nowrap; }
+  .moment .m-why { color:var(--muted); font-size:13px; margin-top:3px; }
+  .moment .m-angles { display:none; margin-top:10px; gap:8px; flex-direction:column; }
+  .moment.open .m-angles { display:flex; }
+  .angle-chip { text-align:left; background:#141418; border:1px solid var(--line);
+                border-radius:10px; color:var(--fg); padding:10px 12px; margin:0;
+                font-weight:400; transition:border-color .15s; width:100%; }
+  .angle-chip:hover { border-color:var(--accent2); }
+  .angle-chip .a-type { font-size:11px; color:var(--accent2); margin-right:8px; }
+  .angle-chip .a-hook { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+  .skel { height:64px; border-radius:12px; margin-top:10px;
+          background:linear-gradient(90deg, #101014 25%, #1a1a20 50%, #101014 75%);
+          background-size:200% 100%; animation:shimmer 1.4s infinite; }
+  @keyframes shimmer { to { background-position:-200% 0; } }
+  .doors-title { color:var(--muted); font-size:13px; margin:0 0 10px;
+                 text-transform:uppercase; letter-spacing:.8px; }
+  .door { transition:border-color .15s, transform .15s; }
+  .door:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .door h3 { font-size:15px; }
 </style>
 
 <h1>Create</h1>
@@ -77,6 +118,32 @@
 
 <!-- ===================== STEP 1 · START ===================== -->
 <div class="stage" id="stage-start">
+  <div class="settings-strip">
+    <label>Style</label>
+    <select id="style-select">
+      {% for s in styles %}<option value="{{ s.key }}">{{ s.label }}</option>{% endfor %}
+      <option value="">No preset</option>
+    </select>
+    <label>Design</label>
+    <select id="mode-select">
+      <option value="ai_design">AI-designed slides (recommended)</option>
+      <option value="overlay">Photo + overlay text</option>
+    </select>
+    <span class="pill" id="preset-day-note" style="display:none">📅 <b id="preset-day-label"></b></span>
+  </div>
+
+  <div class="radar">
+    <div class="radar-head">
+      <h2>🇬🇧 Happening in the UK</h2>
+      <span class="muted" style="font-size:12.5px">tap a moment → pick your angle → it builds</span>
+      <span class="age" id="radar-age"></span>
+      <button class="ghost" id="radar-refresh" style="margin:0;padding:4px 12px;font-size:12px"
+              onclick="refreshMoments()">↻ Rescan</button>
+    </div>
+    <div id="radar-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </div>
+
+  <p class="doors-title">Or start from scratch</p>
   <div class="doors">
     <div class="door" data-door="idea" onclick="pickDoor('idea')">
       <h3>💡 Idea</h3><p>You've got a rough one-liner. The engine turns it into a full carousel.</p>
@@ -89,7 +156,7 @@
     </div>
   </div>
 
-  <form class="inline" id="start-form" style="margin-top:16px" onsubmit="return startCreate(event)">
+  <form class="inline" id="start-form" style="margin-top:16px; display:none" onsubmit="return startCreate(event)">
     <div id="door-idea-fields" style="display:none">
       <label>Your idea</label>
       <textarea name="text" id="idea-text" placeholder="gym bros who hog the squat rack for 40 mins"></textarea>
@@ -116,23 +183,7 @@
         <input type="checkbox" id="manual-mode" style="width:auto"> Fully manual — skip the engine, I'll write all five slides
       </label>
     </div>
-
-    <div id="style-picker" style="display:none">
-      <label>Visual style (applied to every slide's design)</label>
-      <select id="style-select">
-        {% for s in styles %}<option value="{{ s.key }}">{{ s.label }}</option>{% endfor %}
-        <option value="">No preset</option>
-      </select>
-      <label>Slide design</label>
-      <select id="mode-select">
-        <option value="ai_design">AI-designed slides — full concept art, text in the artwork (recommended)</option>
-        <option value="overlay">Photo background + clean overlay text (free text edits)</option>
-      </select>
-      <div class="row" id="preset-day-note" style="display:none; margin-top:8px">
-        <span class="pill">📅 will be scheduled for <b id="preset-day-label"></b></span>
-      </div>
-      <button type="submit" id="start-btn" style="margin-top:16px">Start →</button>
-    </div>
+    <button type="submit" id="start-btn" style="margin-top:16px">Start →</button>
   </form>
 
   <div id="angles-wait" style="display:none">
@@ -260,20 +311,99 @@ function go(step){
   });
 }
 
-/* ---------- step 1: start ---------- */
+/* ---------- step 1: the UK moments radar ---------- */
+const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in'};
+let momentsJob = null;
+
+async function loadMoments(){
+  const r = await fetch('/api/moments');
+  if (!r.ok) return;
+  const data = await r.json();
+  momentsJob = data.job_id;
+  if (data.moments.length) drawMoments(data);
+  // Fresh enough (<12h) and nothing running → done. Otherwise (re)scan.
+  if (data.scanning) return pollMoments();
+  if (!data.moments.length || data.age_hours === null || data.age_hours > 12)
+    refreshMoments(!data.moments.length);
+}
+
+async function refreshMoments(showSkeleton = true){
+  if (showSkeleton)
+    document.getElementById('radar-body').innerHTML =
+      '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  document.getElementById('radar-age').textContent = 'scanning what the UK is talking about…';
+  await post('/api/jobs/moments', new URLSearchParams());
+  pollMoments();
+}
+
+async function pollMoments(){
+  const r = await fetch('/api/moments');
+  const data = await r.json();
+  if (data.scanning) return setTimeout(pollMoments, 2500);
+  momentsJob = data.job_id;
+  if (data.moments.length) drawMoments(data);
+  else document.getElementById('radar-age').textContent = 'scan came back empty — try rescan';
+}
+
+function drawMoments(data){
+  const body = document.getElementById('radar-body');
+  body.innerHTML = '';
+  document.getElementById('radar-age').textContent =
+    data.age_hours === null ? '' :
+    data.age_hours < 1 ? 'updated just now' : `updated ${Math.round(data.age_hours)}h ago`;
+  data.moments.forEach((m, mi) => {
+    const el = document.createElement('div');
+    el.className = 'moment';
+    el.innerHTML = `
+      <div class="m-top">
+        <span>${esc(m.emoji || '📌')}</span>
+        <span class="m-title">${esc(m.title)}</span>
+        <span class="m-when">${esc(m.when || m.category || '')}</span>
+      </div>
+      <div class="m-why">${esc(m.why || '')}</div>
+      <div class="m-angles"></div>`;
+    const anglesBox = el.querySelector('.m-angles');
+    (m.angles || []).forEach((a, ai) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'angle-chip';
+      b.innerHTML = `<span class="a-type">${TYPE_LABEL[a.type] || esc(a.type || '')}</span>
+        <b>${esc(a.title)}</b>
+        <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>`;
+      b.onclick = (ev) => { ev.stopPropagation(); useMoment(mi, ai); };
+      anglesBox.appendChild(b);
+    });
+    el.onclick = () => {
+      const was = el.classList.contains('open');
+      body.querySelectorAll('.moment').forEach(x => x.classList.remove('open'));
+      if (!was) el.classList.add('open');
+    };
+    body.appendChild(el);
+  });
+}
+
+async function useMoment(mi, ai){
+  const style = document.getElementById('style-select').value;
+  const render_mode = document.getElementById('mode-select').value;
+  const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
+  const r = await post(`/api/moments/${momentsJob}/use`,
+    new URLSearchParams({moment: mi, angle: ai, style, render_mode, scheduled_for: sched}));
+  if (!r) return;
+  state.ideaId = r.idea_id;
+  history.replaceState(null, '', `/create?idea=${r.idea_id}`);
+  go('write'); pollBuild();
+}
+
+/* ---------- step 1: the three doors ---------- */
 function pickDoor(d){
   state.door = d;
   document.querySelectorAll('.door').forEach(el =>
     el.classList.toggle('on', el.dataset.door === d));
+  document.getElementById('start-form').style.display = '';
   for (const k of ['idea','facts','blank'])
     document.getElementById(`door-${k}-fields`).style.display = (k===d) ? '' : 'none';
-  document.getElementById('style-picker').style.display = '';
   document.getElementById('start-btn').textContent =
     d === 'facts' ? 'Find angles →' : 'Start →';
-  if (PRESET_DAY) {
-    document.getElementById('preset-day-note').style.display = '';
-    document.getElementById('preset-day-label').textContent = PRESET_DAY;
-  }
 }
 function pickMech(key, el){
   state.mech = (state.mech === key) ? null : key;
@@ -729,6 +859,11 @@ if (RESUME_IDEA) {
   })();
 } else {
   go('start');
+  if (PRESET_DAY) {
+    document.getElementById('preset-day-note').style.display = '';
+    document.getElementById('preset-day-label').textContent = PRESET_DAY;
+  }
+  loadMoments();
 }
 </script>
 {% endblock %}
