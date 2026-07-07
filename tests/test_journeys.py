@@ -237,6 +237,76 @@ def test_worker_revise_job_saves_post(settings, store, monkeypatch):
     assert json.loads(idea.route_json)["style"] == "gritty"  # prefs survive
 
 
+def test_worker_build_one_llm_failure_fails_job(settings, store, monkeypatch):
+    """Regression: a swallowed LLM error must FAIL the job, not complete it.
+
+    Before this fix the job completed with the error tucked inside its result,
+    and the create journey spinner span forever with nothing to show.
+    """
+    import chrgd.pipeline as pipeline_mod
+    from chrgd.pipeline import LLMError
+    from chrgd.worker import Worker, enqueue_build_one
+
+    settings.openai_api_key = "sk-test"
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    monkeypatch.setattr(
+        pipeline_mod, "OpenAIChatClient", lambda s: FakeChat([])
+    )
+    monkeypatch.setattr(
+        pipeline_mod,
+        "run_pipeline_for_idea",
+        lambda *a, **k: (_ for _ in ()).throw(LLMError("quota exceeded")),
+    )
+    job_id = enqueue_build_one(store, "G-0001")
+    Worker(settings).run_once()
+    job = store.get_job(job_id)
+    assert job["status"] == "ERROR"
+    assert "quota exceeded" in job["error"]
+    # The idea is released for a retry, not stuck in processing.
+    assert store.get_idea("G-0001").status is Status.queued
+
+
+def test_build_single_idea_reports_progress(settings, store):
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    bad = good_post()
+    bad["route"]["qa"]["overall"] = 5
+    seen = []
+    build_single_idea(
+        store, settings, "G-0001",
+        client=FakeChat([bad, good_post()]),
+        on_progress=lambda pct, note: seen.append((pct, note)),
+    )
+    assert seen[0][0] == 15 and "six stages" in seen[0][1]
+    assert seen[1][0] == 60 and "rewrite" in seen[1][1]
+
+
+def test_detail_surfaces_note_and_only_latest_error(client, settings):
+    with Store(settings.db_path) as store:
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+        # An old failure followed by a newer successful job → no error shown.
+        old = store.create_job("build_one", idea_id="G-0001")
+        store.update_job(old, status="ERROR", error="boom")
+        newer = store.create_job("build_one", idea_id="G-0001")
+        store.update_job(newer, status="COMPLETED")
+    d = client.get("/api/ideas/G-0001/detail").json()
+    assert d["last_error"] is None
+
+    with Store(settings.db_path) as store:
+        running = store.create_job("render", idea_id="G-0001")
+        store.update_job(
+            running, status="PROCESSING", progress=40,
+            result_json=json.dumps({"note": "slide 2 of 5 done"}),
+        )
+    d = client.get("/api/ideas/G-0001/detail").json()
+    assert d["active_jobs"]["render"]["note"] == "slide 2 of 5 done"
+    assert d["active_jobs"]["render"]["progress"] == 40
+
+    with Store(settings.db_path) as store:
+        store.update_job(running, status="ERROR", error="image api down")
+    d = client.get("/api/ideas/G-0001/detail").json()
+    assert d["last_error"]["error"] == "image api down"
+
+
 # --- images: variants, recompose, style prompts --------------------------------
 
 

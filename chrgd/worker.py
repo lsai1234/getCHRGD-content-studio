@@ -119,8 +119,24 @@ def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
         raise ValueError(f"no such idea {job['idea_id']}")
 
     def on_slide(done: int, total: int) -> None:
-        store.update_job(job["job_id"], progress=int(done * 100 / total))
+        note = (
+            f"slide {done} of {total} done — generating slide {done + 1}"
+            if done < total
+            else "finishing up"
+        )
+        store.update_job(
+            job["job_id"],
+            progress=int(done * 100 / total),
+            result_json=json.dumps({"note": note}),
+        )
 
+    store.update_job(
+        job["job_id"],
+        progress=2,
+        result_json=json.dumps(
+            {"note": "generating slide 1 — this one gets multiple options"}
+        ),
+    )
     result = render_idea(store, settings, idea, dry_run=dry_run, on_slide=on_slide)
     return {
         "paths": result.paths,
@@ -133,12 +149,22 @@ def _handle_build_one(store: Store, settings: Settings, job: dict) -> dict:
     """Build one specific idea (the create journey's writing step)."""
     from .pipeline import build_single_idea
 
-    result = build_single_idea(store, settings, job["idea_id"])
+    def on_progress(pct: int, note: str) -> None:
+        store.update_job(
+            job["job_id"], progress=pct, result_json=json.dumps({"note": note})
+        )
+
+    result = build_single_idea(
+        store, settings, job["idea_id"], on_progress=on_progress
+    )
+    if result.error:
+        # Fail the job loudly — a swallowed LLM error must never leave the UI
+        # spinning on a "completed" job. The idea is already back in `queued`.
+        raise RuntimeError(result.error)
     return {
         "idea_id": result.idea_id,
         "status": result.status.value,
         "qa_failures": result.qa_failures,
-        "error": result.error,
         "spend_usd": result.spend_usd,
     }
 
@@ -170,6 +196,13 @@ def _handle_revise(store: Store, settings: Settings, job: dict) -> dict:
     if idea is None:
         raise ValueError(f"no such idea {job['idea_id']}")
 
+    store.update_job(
+        job["job_id"],
+        progress=20,
+        result_json=json.dumps(
+            {"note": f"rewriting to maximise {focus.replace('_', ' ')}"}
+        ),
+    )
     post, spend = revise_post(idea, focus, settings)
     fields = build_fields_from_post(post, creation_prefs(idea))
     if post.passes_qa():

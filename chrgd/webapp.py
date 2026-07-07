@@ -545,6 +545,15 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         except ValueError:
             raise HTTPException(400, f"bad datetime: {raw!r}")
 
+    def _job_note(job: dict) -> str | None:
+        """The live status note a running job last wrote into result_json."""
+        if not job.get("result_json"):
+            return None
+        try:
+            return json.loads(job["result_json"]).get("note")
+        except (json.JSONDecodeError, AttributeError):
+            return None
+
     def _idea_or_404(store: Store, idea_id: str) -> Idea:
         idea = store.get_idea(idea_id)
         if idea is None:
@@ -690,11 +699,14 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 kind: store.active_job_for(idea_id, kind)
                 for kind in ("build_one", "render", "render_slide", "revise")
             }
-            err_row = store.conn.execute(
-                "SELECT kind, error FROM jobs WHERE idea_id = ? AND status = 'ERROR' "
+            # Only report an error if the LATEST attempt failed — an old
+            # failure that was retried successfully is not news.
+            last_job = store.conn.execute(
+                "SELECT kind, status, error FROM jobs WHERE idea_id = ? "
                 "ORDER BY job_id DESC LIMIT 1",
                 (idea_id,),
             ).fetchone()
+            err_row = last_job if last_job and last_job["status"] == "ERROR" else None
         route = json.loads(idea.route_json) if idea.route_json else {}
         slides = json.loads(idea.slides_json) if idea.slides_json else []
         paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []
@@ -727,7 +739,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             ),
             "exported": bool(idea.exported_at),
             "active_jobs": {
-                k: {"job_id": j["job_id"], "status": j["status"], "progress": j["progress"]}
+                k: {
+                    "job_id": j["job_id"],
+                    "status": j["status"],
+                    "progress": j["progress"],
+                    "note": _job_note(j),
+                }
                 for k, j in jobs.items()
                 if j
             },

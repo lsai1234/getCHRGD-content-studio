@@ -139,11 +139,20 @@
   </div>
 </div>
 
+<style>
+  .job-panel { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+               padding:16px 18px; max-width:560px; }
+  .job-panel .bar { height:6px; background:#0d0d10; border-radius:3px; margin:12px 0 8px;
+                    overflow:hidden; }
+  .job-panel .bar > div { height:100%; width:5%; background:var(--accent);
+                          border-radius:3px; transition:width .6s; }
+  .job-panel .note { font-size:14px; }
+  .job-panel .elapsed { color:var(--muted); font-size:12.5px; }
+</style>
+
 <!-- ===================== STEP 2 · WRITE ===================== -->
 <div class="stage" id="stage-write">
-  <div id="write-wait">
-    <p><span class="spin">⚙️</span> The engine is writing your carousel — running all six stages…</p>
-  </div>
+  <div id="write-wait"></div>
   <div id="write-done" style="display:none">
     <div class="row" style="justify-content:space-between">
       <h2 style="font-size:17px; margin:0">Scorecard</h2>
@@ -175,8 +184,13 @@
 <!-- ===================== STEP 3 · IMAGES ===================== -->
 <div class="stage" id="stage-images">
   <div id="img-wait" style="display:none">
-    <p><span class="spin">🎨</span> Generating backgrounds — slides appear as they finish
-       (<span id="img-progress">0%</span>)…</p>
+    <div class="job-panel" style="margin-bottom:16px">
+      <p style="margin:0"><span class="spin">🎨</span> <b>Generating backgrounds</b>
+        — slides appear below as they finish</p>
+      <div class="bar"><div id="img-bar"></div></div>
+      <div class="note" id="img-note">starting…</div>
+      <div class="elapsed" id="img-elapsed"></div>
+    </div>
   </div>
   <div class="imgs">
     <div>
@@ -315,25 +329,68 @@ async function pickAngle(i){
 }
 
 /* ---------- step 2: write ---------- */
+let buildStart = null;
+
+function showWriteWait(title){
+  buildStart = Date.now();
+  document.getElementById('write-wait').style.display = '';
+  document.getElementById('write-wait').innerHTML = `
+    <div class="job-panel">
+      <p style="margin:0"><span class="spin">⚙️</span> <b>${esc(title)}</b></p>
+      <div class="bar"><div id="write-bar"></div></div>
+      <div class="note" id="write-note">warming up…</div>
+      <div class="elapsed" id="write-elapsed"></div>
+    </div>`;
+  document.getElementById('write-done').style.display = 'none';
+}
+
+function showBuildError(msg){
+  document.getElementById('write-wait').style.display = '';
+  document.getElementById('write-wait').innerHTML = `
+    <div class="job-panel" style="border-color:#7a2c2c">
+      <p style="margin:0">❌ <b>The engine hit a problem</b></p>
+      <p class="note" style="margin:8px 0">${esc(msg)}</p>
+      <button onclick="retryBuild()" style="margin:4px 0 0">Try again</button>
+    </div>`;
+}
+
 async function pollBuild(){
+  if (!buildStart) showWriteWait('The engine is writing your carousel');
   const d = await detail();
   const j = d.active_jobs.build_one || d.active_jobs.revise;
   if (!j) {
+    buildStart = null;
     if (d.slides && d.slides.length) return openWriteStep();
-    if (d.last_error) {
-      document.getElementById('write-wait').innerHTML =
-        `<p>❌ The engine hit a problem: <b>${esc(d.last_error.error)}</b></p>
-         <button onclick="retryBuild()">Try again</button>`;
-      return;
-    }
+    if (d.last_error) return showBuildError(d.last_error.error);
+    if (d.status === 'review')
+      return showBuildError(
+        "The engine couldn't produce a valid post this time — that's usually "
+        + "a one-off. Hit try again.");
+    // No job, no slides, no recorded error — most likely the worker isn't
+    // running on the server. Tell the user instead of spinning silently.
+    return showBuildError(
+      'Nothing is processing this post and no error was recorded. If retrying '
+      + "does the same, the background worker on the server probably isn't "
+      + 'running — restart the app service.');
+  }
+  const secs = Math.round((Date.now() - buildStart) / 1000);
+  const note = j.status === 'QUEUED'
+    ? 'waiting in the job queue…'
+    : (j.note || 'engine running…');
+  const bar = document.getElementById('write-bar');
+  if (bar) {
+    bar.style.width = Math.max(5, j.progress || 0) + '%';
+    document.getElementById('write-note').textContent = note;
+    document.getElementById('write-elapsed').textContent =
+      `${secs}s elapsed — a full write usually takes 30–90s`
+      + (secs > 180 ? ' · this is unusually long; it may be worth a retry' : '');
   }
   setTimeout(pollBuild, 2000);
 }
 
 async function retryBuild(){
   await post(`/api/ideas/${state.ideaId}/build`, new URLSearchParams());
-  document.getElementById('write-wait').innerHTML =
-    '<p><span class="spin">⚙️</span> The engine is writing your carousel — running all six stages…</p>';
+  showWriteWait('The engine is writing your carousel');
   pollBuild();
 }
 
@@ -411,8 +468,7 @@ async function openWriteStep(){
 async function punchUp(metric){
   if (!confirm(`Re-run the engine focused on "${metric.replaceAll('_',' ')}"? (small LLM spend)`)) return;
   await post(`/api/ideas/${state.ideaId}/revise`, new URLSearchParams({focus: metric}));
-  document.getElementById('write-done').style.display = 'none';
-  document.getElementById('write-wait').style.display = '';
+  showWriteWait(`Punching up ${metric.replaceAll('_',' ')}`);
   pollBuild();
 }
 
@@ -437,15 +493,26 @@ async function makeImages(){
 }
 
 /* ---------- step 3: images ---------- */
+let renderStart = null;
 async function pollRender(){
+  if (!renderStart) renderStart = Date.now();
   const d = await detail();
   const j = d.active_jobs.render || d.active_jobs.render_slide;
   if (j) {
-    document.getElementById('img-progress').textContent = (j.progress || 0) + '%';
+    const secs = Math.round((Date.now() - renderStart) / 1000);
+    document.getElementById('img-bar').style.width = Math.max(4, j.progress || 0) + '%';
+    document.getElementById('img-note').textContent =
+      j.status === 'QUEUED' ? 'waiting in the job queue…' : (j.note || 'generating…');
+    document.getElementById('img-elapsed').textContent =
+      `${secs}s elapsed — roughly 15–30s per slide on real generations`;
     drawImages(d);
     return setTimeout(pollRender, 2000);
   }
+  renderStart = null;
   document.getElementById('img-wait').style.display = 'none';
+  if (d.last_error && !(d.assets || []).length) {
+    alert('Image generation failed: ' + d.last_error.error);
+  }
   drawImages(d);
 }
 

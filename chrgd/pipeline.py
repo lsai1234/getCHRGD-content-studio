@@ -238,8 +238,14 @@ class BuildResult:
     error: str | None = None
 
 
-def run_pipeline_for_idea(idea: Idea, client: ChatClient, model: str) -> BuildResult:
-    """Run the pipeline for one idea: call, validate, QA-gate, re-request once."""
+def run_pipeline_for_idea(
+    idea: Idea, client: ChatClient, model: str, on_attempt=None
+) -> BuildResult:
+    """Run the pipeline for one idea: call, validate, QA-gate, re-request once.
+
+    `on_attempt(n)` fires before each engine call so callers can surface
+    progress (attempt 1 = first write, attempt 2 = post-QA rewrite).
+    """
     system = load_system_prompt()
     spend = 0.0
     retry_reasons: list[str] | None = None
@@ -247,6 +253,8 @@ def run_pipeline_for_idea(idea: Idea, client: ChatClient, model: str) -> BuildRe
     last_post: Post | None = None
 
     for attempt in range(1, 3):  # first try + one re-request
+        if on_attempt:
+            on_attempt(attempt)
         user = build_user_message(idea, retry_reasons)
         result = client.complete(system, user)
         spend += estimate_cost(model, result.prompt_tokens, result.completion_tokens)
@@ -394,12 +402,19 @@ def build_single_idea(
     *,
     client: ChatClient | None = None,
     record_run: bool = True,
+    on_progress=None,
 ) -> BuildResult:
     """Build one specific idea (the create journey), regardless of queue order.
 
     Same persistence rules as `build_ideas`: pass → done, QA miss → review,
-    LLM failure → released back to queued.
+    LLM failure → released back to queued. `on_progress(pct, note)` surfaces
+    live status to the job poller.
     """
+
+    def _prog(pct: int, note: str) -> None:
+        if on_progress:
+            on_progress(pct, note)
+
     idea = store.get_idea(idea_id)
     if idea is None:
         raise ValueError(f"no such idea {idea_id}")
@@ -408,8 +423,17 @@ def build_single_idea(
 
     run_id = store.start_run("build") if record_run else None
     store.mark_processing(idea_id)
+    _attempt_notes = {
+        1: (15, "engine writing — running all six stages"),
+        2: (60, "QA gate missed — asking for a stronger rewrite"),
+    }
     try:
-        result = run_pipeline_for_idea(idea, client, settings.openai_model)
+        result = run_pipeline_for_idea(
+            idea,
+            client,
+            settings.openai_model,
+            on_attempt=lambda n: _prog(*_attempt_notes.get(n, (80, f"attempt {n}"))),
+        )
     except LLMError as exc:
         store.set_status(idea_id, Status.queued)
         if run_id is not None:
