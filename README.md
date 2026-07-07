@@ -54,17 +54,23 @@ bulk-import one CSV into Metricool. That's the daily grind gone.
 The web app is organised around two linked journeys rather than a hub of
 screens (see [`UPGRADE_PROPOSAL.md`](UPGRADE_PROPOSAL.md) for the thinking):
 
-- **Create** (`/create`) — one flow from nothing to a finished carousel.
-  Three doors in: **Idea** (a rough one-liner), **Facts** (paste research —
-  the engine proposes 2–3 angles per fact and you pick), or **Blank canvas**
-  (choose a proven mechanic from `config/mechanics.toml`, or write all five
-  slides manually). The engine returns **3 hook options** and a visible **QA
-  scorecard** with a per-metric *punch it up* revision button. Approving the
-  copy generates the images in-journey: slide 1 gets multiple background
-  **variants** to pick from, every slide has *Regenerate* (paid) and *Re-lay
-  text* (free — backgrounds are kept on disk so copy edits never re-bill),
-  and a phone-frame preview shows the TikTok safe zones. The final step is a
-  mini-calendar: schedule it or bank it in the tray.
+- **Create** (`/create`) — one flow from nothing to a finished carousel,
+  built like a quiz: one focused screen at a time with a progress rail, a
+  back button, and big tappable option cards that auto-advance — you flick
+  through the choices instead of filling in forms. Six ways in: the two
+  discovery lanes (**Happening now** / **Worth knowing**), **My own idea**
+  (a rough one-liner), **From research** (paste facts — the engine proposes
+  2–3 angles per fact and you pick), **A proven format** (mechanics from
+  `config/mechanics.toml`), or **Fully manual**. The engine returns **3 hook
+  options** as tap-to-set cards and a visible **QA scorecard** with a
+  per-metric *punch it up* revision button; the slide copy sits behind
+  tap-to-expand accordions so amending anything is one tap away without
+  slowing the happy path. Approving the copy generates the images
+  in-journey: slide 1 gets multiple background **variants** to pick from,
+  every slide has *Regenerate* (paid) and *Re-lay text* (free — backgrounds
+  are kept on disk so copy edits never re-bill), and a phone-frame preview
+  shows the TikTok safe zones. The final step is a mini-calendar plus
+  quick-pick time chips: schedule it or bank it in the tray.
 - **Calendar** (`/calendar`) — month view of everything scheduled. Drag cards
   between days to reschedule, drag to the tray to unschedule, **“＋ create
   for this day”** starts the Create journey with the date pre-filled, topical

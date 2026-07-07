@@ -2,378 +2,622 @@
 {% block title %}Create — CHRGD{% endblock %}
 {% block body %}
 <style>
-  .steps { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
-  .step-pill { font-size:12.5px; padding:5px 12px; border-radius:20px;
-               border:1px solid var(--line); color:var(--muted); }
-  .step-pill.on { border-color:var(--accent); color:var(--fg); background:#1c1310; }
-  .step-pill.done { color:var(--accent2); }
-  .doors { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
-  @media(max-width:700px){ .doors { grid-template-columns:1fr; } }
-  .door { background:var(--panel); border:1px solid var(--line); border-radius:12px;
-          padding:16px; cursor:pointer; }
-  .door.on { border-color:var(--accent); }
-  .door h3 { margin:0 0 6px; font-size:16px; }
-  .door p { margin:0; color:var(--muted); font-size:13px; }
-  .mech { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:12px 0; }
-  @media(max-width:700px){ .mech { grid-template-columns:1fr; } }
-  .mech .m { background:#0d0d10; border:1px solid var(--line); border-radius:10px;
-             padding:10px 12px; cursor:pointer; font-size:13px; }
-  .mech .m.on { border-color:var(--accent); }
-  .mech .m b { display:block; margin-bottom:4px; }
-  .mech .m span { color:var(--muted); font-size:12px; }
-  .angle { background:var(--panel); border:1px solid var(--line); border-radius:10px;
-           padding:12px 14px; margin-bottom:10px; cursor:pointer; }
-  .angle:hover { border-color:var(--accent); }
-  .angle b { color:var(--accent2); }
-  .qa-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
-             gap:8px; margin:12px 0; }
-  .qa { background:#0d0d10; border:1px solid var(--line); border-radius:8px;
-        padding:8px 10px; font-size:12.5px; }
-  .qa .v { font-size:20px; font-weight:700; }
-  .qa.bad .v { color:#ff6a6a; } .qa.ok .v { color:var(--accent2); } .qa.good .v { color:#5dd177; }
-  .qa button { margin:4px 0 0; padding:2px 8px; font-size:11px; }
-  .hookopt { display:block; width:100%; text-align:left; background:#0d0d10;
-             border:1px solid var(--line); border-radius:8px; color:var(--fg);
-             padding:10px 12px; margin:6px 0; font-weight:400; }
-  .hookopt.on { border-color:var(--accent); background:#1c1310; }
-  .imgs { display:grid; grid-template-columns: 300px 1fr; gap:18px; }
-  @media(max-width:820px){ .imgs { grid-template-columns:1fr; } }
-  .phone { width:280px; aspect-ratio:1080/1350; border-radius:18px; border:2px solid var(--line);
-           position:relative; overflow:hidden; background:#0d0d10; margin:0 auto; }
-  .phone img { width:100%; height:100%; object-fit:cover; display:block; }
-  .phone .safe { position:absolute; inset:10% 18% 24% 8%; border:1px dashed rgba(255,196,0,.5);
-                 pointer-events:none; display:none; }
-  .phone.show-safe .safe { display:block; }
-  .thumbs { display:flex; gap:6px; justify-content:center; margin-top:10px; }
-  .thumbs img { width:42px; height:52px; object-fit:cover; border-radius:6px;
-                border:2px solid var(--line); cursor:pointer; }
-  .thumbs img.on { border-color:var(--accent); }
-  .variants { display:flex; gap:8px; margin:8px 0; }
-  .variants img { width:64px; height:80px; object-fit:cover; border-radius:8px;
-                  border:2px solid var(--line); cursor:pointer; }
-  .variants img.on { border-color:var(--accent2); }
-  .mini-cal { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; max-width:460px; }
-  .mini-cal .c { text-align:center; padding:8px 0; border-radius:8px; border:1px solid var(--line);
-                 cursor:pointer; font-size:13px; background:var(--panel); position:relative; }
-  .mini-cal .c.on { border-color:var(--accent); background:#1c1310; }
-  .mini-cal .c.past { opacity:.3; pointer-events:none; }
-  .mini-cal .c .dots { position:absolute; bottom:2px; left:0; right:0; font-size:8px;
-                       color:var(--accent2); line-height:1; }
-  .mini-cal .h { color:var(--muted); font-size:11px; border:0; background:none; cursor:default; }
-  .spin { display:inline-block; animation:spin 1s linear infinite; }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .stage { display:none; } .stage.on { display:block; animation:fadein .25s ease; }
-  @keyframes fadein { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  /* ══ The create journey — quiz-style: one focused screen at a time ══ */
+  .cj { max-width: 640px; margin: 0 auto; }
+  .cj button { margin: 0; }
+
+  /* progress rail + top bar */
+  .cj-rail { height: 3px; background: #1a1a1f; border-radius: 2px; overflow: hidden; }
+  .cj-rail > div { height: 100%; width: 0%; border-radius: 2px;
+                   background: linear-gradient(90deg, var(--accent), var(--accent2));
+                   box-shadow: 0 0 12px rgba(255,106,0,.55);
+                   transition: width .5s cubic-bezier(.22,1,.36,1); }
+  .cj-top { display: flex; align-items: center; gap: 8px; margin: 12px 0 20px; min-height: 30px; }
+  .cj-back { background: none; border: 0; color: var(--muted); padding: 2px 10px 4px;
+             font-size: 20px; line-height: 1; cursor: pointer; border-radius: 8px; }
+  .cj-back:hover { color: var(--fg); background: #1a1a1f; filter: none; }
+  .cj-back[hidden] { display: none; }
+  .cj-count { margin-left: auto; color: var(--muted); font-size: 11.5px;
+              letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
+
+  /* screens */
+  .scr { display: none; }
+  .scr.on { display: block; }
+  .scr.fwd { animation: cj-r .32s cubic-bezier(.22,1,.36,1) both; }
+  .scr.bwd { animation: cj-l .32s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes cj-r { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+  @keyframes cj-l { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .scr.fwd, .scr.bwd { animation: none; } }
+
+  .eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .24em;
+             text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+  .scr h2 { font-size: 26px; line-height: 1.15; letter-spacing: -.02em; margin: 0 0 8px; }
+  .scr .hint { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
+
+  /* tappable option cards */
+  .opt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+         background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+         color: var(--fg); padding: 15px 16px; margin: 0 0 10px; cursor: pointer;
+         font: inherit; font-weight: 400;
+         transition: border-color .15s, background .15s, transform .12s; }
+  .opt:hover { border-color: rgba(255,106,0,.55); background: #191316; filter: none; }
+  .opt:active { transform: scale(.985); }
+  .opt.sel { border-color: var(--accent); background: #1c1310; }
+  .opt .ic { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
+  .opt .tx { flex: 1; min-width: 0; }
+  .opt .t { display: block; font-size: 15px; font-weight: 600; }
+  .opt .s { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .opt .ck { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+             border: 1px solid #3a3a42; position: relative;
+             transition: border-color .15s, background .15s; }
+  .opt.sel .ck { border-color: var(--accent); background: var(--accent); }
+  .opt.sel .ck::after { content: '✓'; position: absolute; inset: 0; color: #111;
+                        font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+  .opt .chev { flex-shrink: 0; color: #4a4a52; font-size: 16px;
+               transition: transform .15s, color .15s; }
+  .opt:hover .chev { color: var(--accent); transform: translateX(2px); }
+  .optgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .optgrid .opt { margin: 0; padding: 13px 14px; border-radius: 12px; }
+  .optgrid .opt .t { font-size: 13.5px; }
+  @media (max-width: 560px) { .optgrid { grid-template-columns: 1fr; } }
+
+  /* small pill chips (quick picks / toggles) */
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { background: transparent; border: 1px solid var(--line); color: var(--muted);
+          border-radius: 20px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+          cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+  .chip:hover { border-color: var(--accent); color: var(--fg); filter: none; background: transparent; }
+  .chip.sel { border-color: var(--accent); color: var(--fg); background: #1c1310; }
+
+  /* primary / secondary CTA row pinned under each screen's content */
+  .cta-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 22px; }
+  .cta-row .note { font-size: 12px; color: var(--muted); }
+
+  /* radar (moments / evergreen) */
+  .lane-tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+  .lane-meta { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
+  .lane-meta .age { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .moment { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+            padding: 14px 16px; margin-top: 10px; cursor: pointer;
+            transition: border-color .15s, transform .15s; }
+  .moment:hover { border-color: rgba(255,106,0,.55); transform: translateY(-1px); }
+  .moment.open { border-color: var(--accent); }
+  .moment .m-top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .moment .m-title { font-weight: 600; }
+  .moment .m-when { font-size: 11.5px; color: var(--accent2); border: 1px solid #4a3a10;
+                    border-radius: 20px; padding: 1px 9px; white-space: nowrap; margin-left: auto; }
+  .moment .m-why { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .moment .m-angles { display: none; margin-top: 10px; flex-direction: column; gap: 8px; }
+  .moment.open .m-angles { display: flex; }
+  .angle-chip { text-align: left; background: #0d0d10; border: 1px solid var(--line);
+                border-radius: 12px; color: var(--fg); padding: 11px 13px;
+                transition: border-color .15s; }
+  .angle-chip:hover { border-color: var(--accent2); }
+  .angle-chip .a-type { font-size: 11px; color: var(--accent2); margin-right: 8px; }
+  .angle-chip .a-hook { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .angle-actions { display: flex; gap: 6px; margin-top: 9px; }
+  .angle-actions button { padding: 7px 13px; font-size: 12.5px; }
+  .skel { height: 64px; border-radius: 14px; margin-top: 10px;
+          background: linear-gradient(90deg, #101014 25%, #1a1a20 50%, #101014 75%);
+          background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* job wait panel */
+  .job-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+               padding: 16px 18px; }
+  .job-panel .bar { height: 6px; background: #0d0d10; border-radius: 3px; margin: 12px 0 8px; overflow: hidden; }
+  .job-panel .bar > div { height: 100%; width: 5%; background: var(--accent);
+                          border-radius: 3px; transition: width .6s; }
+  .job-panel .note { font-size: 14px; }
+  .job-panel .elapsed { color: var(--muted); font-size: 12.5px; }
+  .spin { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* scorecard chips */
+  .qa-strip { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; }
+  .qa-chip { display: inline-flex; align-items: center; gap: 7px; background: #0d0d10;
+             border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px 5px 7px;
+             font-size: 12.5px; color: var(--muted); }
+  .qa-chip .qv { font-weight: 700; font-size: 13px; width: 24px; height: 24px; border-radius: 50%;
+                 display: inline-flex; align-items: center; justify-content: center; background: #17171c; }
+  .qa-chip.good .qv { color: #5dd177; } .qa-chip.ok .qv { color: var(--accent2); }
+  .qa-chip.bad .qv { color: #ff6a6a; }
+  .qa-chip button { padding: 2px 9px; font-size: 11px; }
+
+  /* accordions — tap to amend, closed by default so the flow stays fast */
+  .acc-item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+              margin-bottom: 8px; overflow: hidden; }
+  .acc-head { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+              background: none; border: 0; color: var(--fg); padding: 12px 14px;
+              font: inherit; cursor: pointer; }
+  .acc-head:hover { background: #191316; filter: none; }
+  .acc-head .acc-n { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+                     background: #17171c; color: var(--accent2); font-size: 11.5px; font-weight: 700;
+                     display: inline-flex; align-items: center; justify-content: center; }
+  .acc-head .acc-p { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap;
+                     overflow: hidden; text-overflow: ellipsis; }
+  .acc-head .acc-p .dim { color: var(--muted); }
+  .acc-head .acc-c { flex-shrink: 0; color: var(--muted); font-size: 11px;
+                     transition: transform .2s; }
+  .acc-item.open .acc-head .acc-c { transform: rotate(180deg); }
+  .acc-body { display: none; padding: 2px 14px 14px; border-top: 1px solid var(--line); }
+  .acc-item.open .acc-body { display: block; }
+
+  /* hook option cards */
+  .hookopt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+             background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+             color: var(--fg); padding: 12px 14px; margin: 0 0 8px; font-weight: 400;
+             transition: border-color .15s, background .15s; }
+  .hookopt:hover { border-color: rgba(255,106,0,.55); filter: none; background: #191316; }
+  .hookopt.on { border-color: var(--accent); background: #1c1310; }
+  .hookopt .ck { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+                 border: 1px solid #3a3a42; position: relative; }
+  .hookopt.on .ck { border-color: var(--accent); background: var(--accent); }
+  .hookopt.on .ck::after { content: '✓'; position: absolute; inset: 0; color: #111;
+                           font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+
+  .sec-h { font-size: 15px; margin: 24px 0 4px; }
+  .sec-h small { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .sec-hint { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+  .meta-line { color: var(--muted); font-size: 12px; margin: 0 0 16px; }
+
+  /* images step */
+  .imgs { display: grid; grid-template-columns: 300px 1fr; gap: 18px; }
+  @media (max-width: 820px) { .imgs { grid-template-columns: 1fr; } }
+  .phone { width: 280px; aspect-ratio: 1080/1350; border-radius: 18px; border: 2px solid var(--line);
+           position: relative; overflow: hidden; background: #0d0d10; margin: 0 auto; }
+  .phone img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .phone .safe { position: absolute; inset: 10% 18% 24% 8%; border: 1px dashed rgba(255,196,0,.5);
+                 pointer-events: none; display: none; }
+  .phone.show-safe .safe { display: block; }
+  .thumbs { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+  .thumbs img { width: 42px; height: 52px; object-fit: cover; border-radius: 6px;
+                border: 2px solid var(--line); cursor: pointer; }
+  .thumbs img.on { border-color: var(--accent); }
+  .variants { display: flex; gap: 8px; margin: 8px 0; }
+  .variants img { width: 64px; height: 80px; object-fit: cover; border-radius: 8px;
+                  border: 2px solid var(--line); cursor: pointer; }
+  .variants img.on { border-color: var(--accent2); }
+
+  /* schedule mini-calendar */
+  .mini-cal { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; max-width: 460px; }
+  .mini-cal .c { text-align: center; padding: 9px 0; border-radius: 10px; border: 1px solid var(--line);
+                 cursor: pointer; font-size: 13px; background: var(--panel); position: relative;
+                 transition: border-color .15s, background .15s; }
+  .mini-cal .c:hover { border-color: rgba(255,106,0,.55); }
+  .mini-cal .c.on { border-color: var(--accent); background: #1c1310; }
+  .mini-cal .c.past { opacity: .3; pointer-events: none; }
+  .mini-cal .c .dots { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 8px;
+                       color: var(--accent2); line-height: 1; }
+  .mini-cal .h { color: var(--muted); font-size: 11px; border: 0; background: none; cursor: default; }
+
+  /* done screen */
+  .done-hero { text-align: center; padding: 34px 0 10px; }
+  .done-hero .big { font-size: 44px; }
+  .done-hero h2 { margin: 14px 0 6px; }
 </style>
 
-<style>
-  /* --- start-step polish + moments radar --- */
-  .settings-strip { display:flex; gap:10px; flex-wrap:wrap; align-items:center;
-                    margin-bottom:18px; }
-  .settings-strip label { margin:0; font-size:12px; }
-  .settings-strip select { width:auto; max-width:46vw; padding:8px 10px; font-size:13px; }
-  .radar { background:linear-gradient(160deg, #17120e 0%, var(--panel) 55%);
-           border:1px solid #3a2413; border-radius:14px; padding:16px 18px;
-           margin-bottom:22px; }
-  .radar-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
-  .radar-head h2 { font-size:17px; margin:0; }
-  .radar-head .age { color:var(--muted); font-size:12px; margin-left:auto; }
-  .moment { background:#0d0d10; border:1px solid var(--line); border-radius:12px;
-            padding:12px 14px; margin-top:10px; cursor:pointer;
-            transition:border-color .15s, transform .15s; }
-  .moment:hover { border-color:var(--accent); transform:translateY(-1px); }
-  .moment .m-top { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
-  .moment .m-title { font-weight:600; }
-  .moment .m-when { font-size:11.5px; color:var(--accent2); border:1px solid #4a3a10;
-                    border-radius:20px; padding:1px 9px; white-space:nowrap; }
-  .moment .m-why { color:var(--muted); font-size:13px; margin-top:3px; }
-  .moment .m-angles { display:none; margin-top:10px; gap:8px; flex-direction:column; }
-  .moment.open .m-angles { display:flex; }
-  .angle-chip { text-align:left; background:#141418; border:1px solid var(--line);
-                border-radius:10px; color:var(--fg); padding:10px 12px; margin:0;
-                font-weight:400; transition:border-color .15s; width:100%; }
-  .angle-chip:hover { border-color:var(--accent2); }
-  .angle-chip .a-type { font-size:11px; color:var(--accent2); margin-right:8px; }
-  .angle-chip .a-hook { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
-  .lane-tabs { display:flex; gap:6px; }
-  .lane-tab { background:transparent; border:1px solid var(--line); color:var(--muted);
-              border-radius:20px; padding:6px 14px; margin:0; font-size:13.5px;
-              font-weight:600; }
-  .lane-tab.on { border-color:var(--accent); color:var(--fg); background:#1c1310; }
-  .angle-actions { display:flex; gap:6px; margin-top:8px; }
-  .angle-actions button { margin:0; padding:6px 12px; font-size:12px; }
-  .skel { height:64px; border-radius:12px; margin-top:10px;
-          background:linear-gradient(90deg, #101014 25%, #1a1a20 50%, #101014 75%);
-          background-size:200% 100%; animation:shimmer 1.4s infinite; }
-  @keyframes shimmer { to { background-position:-200% 0; } }
-  .doors-title { color:var(--muted); font-size:13px; margin:0 0 10px;
-                 text-transform:uppercase; letter-spacing:.8px; }
-  .door { transition:border-color .15s, transform .15s; }
-  .door:hover { border-color:var(--accent); transform:translateY(-2px); }
-  .door h3 { font-size:15px; }
-</style>
-
-<h1>Create</h1>
 {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
 
-<div class="steps">
-  <span class="step-pill" data-step="start">1 · Start</span>
-  <span class="step-pill" data-step="develop">2 · Develop</span>
-  <span class="step-pill" data-step="write">3 · Write &amp; score</span>
-  <span class="step-pill" data-step="images">4 · Images</span>
-  <span class="step-pill" data-step="finish">5 · Schedule</span>
-</div>
-
-<!-- ===================== STEP 1 · START ===================== -->
-<div class="stage" id="stage-start">
-  <div class="settings-strip">
-    <label>Style</label>
-    <select id="style-select">
-      {% for s in styles %}<option value="{{ s.key }}">{{ s.label }}</option>{% endfor %}
-      <option value="">No preset</option>
-    </select>
-    <label>Design</label>
-    <select id="mode-select">
-      <option value="ai_design">AI-designed slides (recommended)</option>
-      <option value="overlay">Photo + overlay text</option>
-    </select>
+<div class="cj">
+  <div class="cj-rail"><div id="rail-fill"></div></div>
+  <div class="cj-top">
+    <button type="button" class="cj-back" id="back-btn" onclick="goBack()" aria-label="Back" hidden>‹</button>
     <span class="pill" id="preset-day-note" style="display:none">📅 <b id="preset-day-label"></b></span>
+    <span class="cj-count" id="stage-label"></span>
   </div>
 
-  <div class="radar">
-    <div class="radar-head">
+  <!-- ═════════ 1 · SOURCE — what are we making? ═════════ -->
+  <section class="scr" id="scr-source">
+    <p class="eyebrow">Create</p>
+    <h2>What are we making today?</h2>
+    <p class="hint">Tap a starting point — you can amend everything later.</p>
+
+    <button type="button" class="opt" onclick="pickSource('moments', this)">
+      <span class="ic">🇬🇧</span>
+      <span class="tx"><span class="t">What the UK is talking about</span>
+        <span class="s">Fresh topical moments scanned this week — tap a story, pick an angle</span></span>
+      <span class="chev">›</span>
+    </button>
+    <button type="button" class="opt" onclick="pickSource('evergreen', this)">
+      <span class="ic">🤯</span>
+      <span class="tx"><span class="t">A fact worth sharing</span>
+        <span class="s">Fascinating, shareable angles that work any week of the year</span></span>
+      <span class="chev">›</span>
+    </button>
+    <button type="button" class="opt" onclick="pickSource('idea', this)">
+      <span class="ic">💡</span>
+      <span class="tx"><span class="t">My own idea</span>
+        <span class="s">You've got a one-liner — the engine turns it into a full carousel</span></span>
+      <span class="chev">›</span>
+    </button>
+    <button type="button" class="opt" onclick="pickSource('facts', this)">
+      <span class="ic">📚</span>
+      <span class="tx"><span class="t">From research</span>
+        <span class="s">Paste facts, stats or myths — get angles back and pick the winner</span></span>
+      <span class="chev">›</span>
+    </button>
+    <button type="button" class="opt" onclick="pickSource('format', this)">
+      <span class="ic">🧱</span>
+      <span class="tx"><span class="t">A proven format</span>
+        <span class="s">Start from a TikTok skeleton that already works</span></span>
+      <span class="chev">›</span>
+    </button>
+    <button type="button" class="opt" onclick="pickSource('manual', this)">
+      <span class="ic">✍️</span>
+      <span class="tx"><span class="t">Fully manual</span>
+        <span class="s">Skip the engine — write all five slides yourself</span></span>
+      <span class="chev">›</span>
+    </button>
+  </section>
+
+  <!-- ═════════ 2 · LOOK — style preset + design mode ═════════ -->
+  <section class="scr" id="scr-look">
+    <p class="eyebrow">The look</p>
+    <h2>Pick the visual style</h2>
+    <p class="hint">Sets the mood for every slide — tap one to continue.</p>
+
+    <div class="chip-row" style="margin-bottom:16px">
+      <button type="button" class="chip sel" data-mode="ai_design" onclick="pickMode('ai_design', this)"
+              title="the engine designs whole slides — text is part of the artwork">✦ AI-designed slides</button>
+      <button type="button" class="chip" data-mode="overlay" onclick="pickMode('overlay', this)"
+              title="a photo background with your text overlaid in code">📷 Photo + overlay text</button>
+    </div>
+
+    <div class="optgrid">
+      {% for s in styles %}
+      <button type="button" class="opt" data-style="{{ s.key }}" onclick="pickStyle('{{ s.key }}', this)">
+        <span class="tx"><span class="t">{{ s.label }}</span></span>
+        <span class="ck"></span>
+      </button>
+      {% endfor %}
+      <button type="button" class="opt" data-style="" onclick="pickStyle('', this)">
+        <span class="tx"><span class="t">No preset</span>
+          <span class="s">Let each slide brief speak for itself</span></span>
+        <span class="ck"></span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ═════════ 3a · RADAR — moments / evergreen ═════════ -->
+  <section class="scr" id="scr-radar">
+    <p class="eyebrow" id="radar-eyebrow">Happening now</p>
+    <h2>Tap a story, pick your angle</h2>
+    <p class="hint" id="lane-hint">What the UK is living through this week.</p>
+
+    <div class="lane-meta">
       <div class="lane-tabs">
-        <button type="button" class="lane-tab on" data-lane="moments" onclick="switchLane('moments')">🇬🇧 Happening now</button>
-        <button type="button" class="lane-tab" data-lane="evergreen" onclick="switchLane('evergreen')">🤯 Worth knowing</button>
+        <button type="button" class="chip sel" data-lane="moments" onclick="switchLane('moments')">🇬🇧 Happening now</button>
+        <button type="button" class="chip" data-lane="evergreen" onclick="switchLane('evergreen')">🤯 Worth knowing</button>
       </div>
       <span class="age" id="radar-age"></span>
-      <button class="ghost" id="radar-refresh" style="margin:0;padding:4px 12px;font-size:12px"
-              onclick="refreshLane(true)">↻ Rescan</button>
+      <button type="button" class="chip" id="radar-refresh" onclick="refreshLane(true)">↻ Rescan</button>
     </div>
-    <p class="muted" id="lane-hint" style="font-size:12.5px; margin:8px 0 0">
-      What the UK is living through this week — tap a story, pick your angle.</p>
     <div id="radar-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
-  </div>
+  </section>
 
-  <p class="doors-title">Or start from scratch</p>
-  <div class="doors">
-    <div class="door" data-door="idea" onclick="pickDoor('idea')">
-      <h3>💡 Idea</h3><p>You've got a rough one-liner. The engine turns it into a full carousel.</p>
+  <!-- ═════════ 3b · IDEA ═════════ -->
+  <section class="scr" id="scr-idea">
+    <p class="eyebrow">Your idea</p>
+    <h2>What's the idea?</h2>
+    <p class="hint">One rough line is plenty — press <b>Enter</b> to build it straight away.</p>
+    <textarea id="idea-text" style="min-height:96px"
+      placeholder="gym bros who hog the squat rack for 40 mins"></textarea>
+    <div class="cta-row">
+      <button type="button" onclick="startIdea(false)">⚡ Build it now</button>
+      <button type="button" class="ghost" onclick="startIdea(true)"
+              title="the engine sketches a concept brief you can edit and evolve before the full write">🧭 Shape it with me first</button>
     </div>
-    <div class="door" data-door="facts" onclick="pickDoor('facts')">
-      <h3>📚 Facts</h3><p>Paste research, stats or myths — get 2–3 angles per fact and pick the winner.</p>
-    </div>
-    <div class="door" data-door="blank" onclick="pickDoor('blank')">
-      <h3>⬜ Blank canvas</h3><p>Start from a proven TikTok format, or write every slide yourself.</p>
-    </div>
-  </div>
+  </section>
 
-  <form class="inline" id="start-form" style="margin-top:16px; display:none" onsubmit="return startCreate(event)">
-    <div id="door-idea-fields" style="display:none">
-      <label>Your idea</label>
-      <textarea name="text" id="idea-text" placeholder="gym bros who hog the squat rack for 40 mins"></textarea>
+  <!-- ═════════ 3c · FACTS ═════════ -->
+  <section class="scr" id="scr-facts">
+    <p class="eyebrow">Your research</p>
+    <h2>Paste your research</h2>
+    <p class="hint">Facts, stats or myths — one per line is fine. The engine proposes angles and you pick.</p>
+    <textarea id="facts-text" style="min-height:120px"
+      placeholder="Caffeine peaks in the blood ~45 min after ingestion&#10;Most 'toning' advice is just fat loss in disguise"></textarea>
+    <p class="muted" style="font-size:12.5px">Need topical material? Run the
+      <a href="/trends" target="_blank">Trend Scout</a> and paste the hooks here.</p>
+    <div class="cta-row">
+      <button type="button" onclick="startFacts()">Find angles →</button>
     </div>
-    <div id="door-facts-fields" style="display:none">
-      <label>Facts / research (one per line is fine)</label>
-      <textarea name="text" id="facts-text" placeholder="Caffeine peaks in the blood ~45 min after ingestion&#10;Most 'toning' advice is just fat loss in disguise"></textarea>
-      <p class="muted" style="font-size:12.5px">Need topical material? Run the
-        <a href="/trends" target="_blank">Trend Scout</a> and paste the hooks here.</p>
+  </section>
+
+  <!-- ═════════ 3d · FORMAT ═════════ -->
+  <section class="scr" id="scr-format">
+    <p class="eyebrow">The format</p>
+    <h2>Pick a proven format</h2>
+    <p class="hint">The engine writes into its skeleton — or skip the pick and it chooses for you.</p>
+    <div class="optgrid" id="mech-gallery">
+      {% for m in mechanics %}
+      <button type="button" class="opt" data-key="{{ m.key }}" title="{{ m.skeleton|join(' → ') }}"
+              onclick="pickMech('{{ m.key }}', this)">
+        <span class="tx"><span class="t">{{ m.label }}</span>
+          <span class="s">{{ m.description }}</span></span>
+        <span class="ck"></span>
+      </button>
+      {% endfor %}
     </div>
-    <div id="door-blank-fields" style="display:none">
-      <label>Pick a proven format (the engine writes into its skeleton)</label>
-      <div class="mech" id="mech-gallery">
-        {% for m in mechanics %}
-        <div class="m" data-key="{{ m.key }}" title="{{ m.skeleton|join(' → ') }}"
-             onclick="pickMech('{{ m.key }}', this)">
-          <b>{{ m.label }}</b><span>{{ m.description }}</span>
+    <label style="margin-top:16px">Optional: a note on the topic</label>
+    <input id="blank-text" placeholder="leave empty and the engine picks a topic that fits the format">
+    <div class="cta-row">
+      <button type="button" onclick="startBlank(false)">⚡ Build it now</button>
+      <button type="button" class="ghost" onclick="startBlank(true)"
+              title="the engine sketches a concept brief you can edit and evolve before the full write">🧭 Shape it with me first</button>
+    </div>
+  </section>
+
+  <!-- ═════════ 3e · ANGLES (from facts) ═════════ -->
+  <section class="scr" id="scr-angles">
+    <p class="eyebrow">Angles</p>
+    <h2>Pick your angle</h2>
+    <p class="hint">Two or three takes per fact — tap the one with legs.</p>
+    <div id="angles-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <!-- ═════════ 4 · DEVELOP (optional concept round) ═════════ -->
+  <section class="scr" id="scr-develop">
+    <p class="eyebrow">Shape it</p>
+    <div id="develop-wait"></div>
+    <div id="develop-done" style="display:none">
+      <h2>The concept — make it yours</h2>
+      <p class="hint">Edit anything directly, or tell the engine what to change and evolve
+        it another round. Nothing is written in full until you say so.
+        <span class="muted" id="develop-meta"></span></p>
+
+      <form class="inline" onsubmit="return false" style="padding:16px">
+        <label style="margin-top:0">The angle</label>
+        <input id="b-angle">
+        <div class="row">
+          <div style="flex:1"><label>Hook direction (how slide 1 opens)</label><input id="b-hook"></div>
+          <div style="flex:1"><label>Tone</label><input id="b-tone"></div>
         </div>
-        {% endfor %}
-      </div>
-      <label>Optional: a note on the topic</label>
-      <input id="blank-text" placeholder="leave empty and the engine picks a topic that fits the format">
-      <label class="row" style="margin-top:10px">
-        <input type="checkbox" id="manual-mode" style="width:auto"> Fully manual — skip the engine, I'll write all five slides
-      </label>
-    </div>
-    <div class="row" style="margin-top:16px">
-      <button type="submit" id="start-btn" style="margin:0">Start →</button>
-      <button type="button" class="ghost" id="develop-btn" style="margin:0; display:none"
-              onclick="startCreate(null, true)"
-              title="the engine sketches a concept brief you can edit and evolve before the full write">
-        🧭 Develop it with me first</button>
-    </div>
-  </form>
+        <label>Visual direction</label>
+        <input id="b-visual">
+        <label>Slide-by-slide outline</label>
+        <div id="b-outline"></div>
+      </form>
 
-  <div id="angles-wait" style="display:none">
-    <p><span class="spin">⚙️</span> Reading your facts and proposing angles…</p>
-  </div>
-  <div id="angles-list" style="display:none">
-    <h2 style="font-size:17px">Pick an angle</h2>
-    <div id="angles-cards"></div>
-  </div>
-</div>
-
-<style>
-  .job-panel { background:var(--panel); border:1px solid var(--line); border-radius:12px;
-               padding:16px 18px; max-width:560px; }
-  .job-panel .bar { height:6px; background:#0d0d10; border-radius:3px; margin:12px 0 8px;
-                    overflow:hidden; }
-  .job-panel .bar > div { height:100%; width:5%; background:var(--accent);
-                          border-radius:3px; transition:width .6s; }
-  .job-panel .note { font-size:14px; }
-  .job-panel .elapsed { color:var(--muted); font-size:12.5px; }
-</style>
-
-<!-- ===================== STEP 1.5 · DEVELOP ===================== -->
-<div class="stage" id="stage-develop">
-  <div id="develop-wait"></div>
-  <div id="develop-done" style="display:none">
-    <div class="row" style="justify-content:space-between">
-      <h2 style="font-size:17px; margin:0">The concept — make it yours</h2>
-      <small class="k" id="develop-meta"></small>
-    </div>
-    <p class="muted" style="font-size:13px">Edit anything directly, or tell the
-      engine what to change and evolve it another round. Nothing is written in
-      full until you say so.</p>
-
-    <form class="inline" onsubmit="return false">
-      <label>The angle</label>
-      <input id="b-angle">
-      <div class="row">
-        <div style="flex:1"><label>Hook direction (how slide 1 opens)</label><input id="b-hook"></div>
-        <div style="flex:1"><label>Tone</label><input id="b-tone"></div>
-      </div>
-      <label>Visual direction</label>
-      <input id="b-visual">
-      <label>Slide-by-slide outline</label>
-      <div id="b-outline"></div>
-
-      <div class="job-panel" style="max-width:none; margin:16px 0">
+      <div class="job-panel" style="margin:14px 0">
         <label style="margin-top:0">💬 Evolve it — what should change?</label>
         <textarea id="b-feedback" style="min-height:52px"
           placeholder="e.g. angle it at people who train before work · make slide 4 a plot twist · less salesy"></textarea>
-        <button type="button" class="ghost" style="margin-top:10px" onclick="evolveBrief()">🧭 Evolve another round</button>
+        <div class="cta-row" style="margin-top:10px">
+          <button type="button" class="ghost" onclick="evolveBrief()">🧭 Evolve another round</button>
+        </div>
       </div>
 
-      <div class="row">
+      <div class="cta-row">
         <button type="button" onclick="writeFromBrief()">✍️ Happy — write the full post</button>
-        <small class="k">the full write follows this brief exactly</small>
+        <span class="note">the full write follows this brief exactly</span>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- ===================== STEP 2 · WRITE ===================== -->
-<div class="stage" id="stage-write">
-  <div id="write-wait"></div>
-  <div id="write-done" style="display:none">
-    <div class="row" style="justify-content:space-between">
-      <h2 style="font-size:17px; margin:0">Scorecard</h2>
-      <small class="k" id="write-meta"></small>
     </div>
-    <div class="qa-grid" id="qa-grid"></div>
+  </section>
 
-    <div class="job-panel" style="max-width:none; margin:16px 0">
-      <label style="margin-top:0">💬 Suggest improvements <small class="k">— tell the engine what to change before any images are made</small></label>
-      <textarea id="feedback-text" style="min-height:56px"
-        placeholder="e.g. make it about women's gym anxiety · slide 3 is weak, replace it · funnier, less preachy · make the designs feel more premium"></textarea>
-      <button type="button" class="ghost" style="margin-top:10px" onclick="sendFeedback()">⚡ Rework it with this feedback</button>
-    </div>
+  <!-- ═════════ 5 · WRITE & SCORE ═════════ -->
+  <section class="scr" id="scr-write">
+    <p class="eyebrow">Words</p>
+    <div id="write-wait"></div>
+    <div id="write-done" style="display:none">
+      <h2>How does it read?</h2>
+      <p class="meta-line" id="write-meta"></p>
 
-    <h2 style="font-size:17px">Pick the hook <small class="k">(slide 1 decides everything)</small></h2>
-    <div id="hook-options"></div>
+      <div class="qa-strip" id="qa-grid"></div>
 
-    <form class="inline" id="copy-form" onsubmit="return saveCopy(event)">
-      <div id="slide-fields"></div>
-      <label>Caption</label>
-      <textarea name="caption" id="f-caption"></textarea>
-      <div class="row">
-        <div style="flex:1"><label>Comment trigger</label><input id="f-trigger"></div>
-        <div style="flex:1"><label>Hashtags</label><input id="f-hashtags"></div>
+      <h3 class="sec-h">Pick the hook <small>— slide 1 decides everything</small></h3>
+      <p class="sec-hint">Tap to set. The chosen line leads the carousel.</p>
+      <div id="hook-options"></div>
+
+      <h3 class="sec-h">The copy <small>— tap a slide to amend it</small></h3>
+      <form id="copy-form" onsubmit="return false">
+        <div id="slide-acc"></div>
+        <div class="acc-item" id="caption-acc">
+          <button type="button" class="acc-head" onclick="toggleAcc(this)">
+            <span class="acc-n">＋</span>
+            <span class="acc-p">Caption, comment trigger &amp; hashtags</span>
+            <span class="acc-c">▾</span>
+          </button>
+          <div class="acc-body">
+            <label>Caption</label>
+            <textarea name="caption" id="f-caption"></textarea>
+            <div class="row">
+              <div style="flex:1"><label>Comment trigger</label><input name="comment_trigger" id="f-trigger"></div>
+              <div style="flex:1"><label>Hashtags</label><input name="hashtags" id="f-hashtags"></div>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <div class="job-panel" style="margin:18px 0">
+        <label style="margin-top:0">💬 Not quite right? Tap what's off — or say it in your own words</label>
+        <div class="chip-row" style="margin:8px 0 10px" id="fb-chips">
+          <button type="button" class="chip" onclick="this.classList.toggle('sel')">Funnier</button>
+          <button type="button" class="chip" onclick="this.classList.toggle('sel')">Punchier hook</button>
+          <button type="button" class="chip" onclick="this.classList.toggle('sel')">Less salesy</button>
+          <button type="button" class="chip" onclick="this.classList.toggle('sel')">More premium</button>
+          <button type="button" class="chip" onclick="this.classList.toggle('sel')">Simpler language</button>
+        </div>
+        <textarea id="feedback-text" style="min-height:48px"
+          placeholder="e.g. make it about women's gym anxiety · slide 3 is weak, replace it"></textarea>
+        <div class="cta-row" style="margin-top:10px">
+          <button type="button" class="ghost" onclick="sendFeedback()">⚡ Rework it</button>
+        </div>
       </div>
-      <div class="row" style="margin-top:14px">
-        <button type="submit" class="ghost">Save copy</button>
+
+      <div class="cta-row">
         <button type="button" onclick="makeImages()" id="make-images-btn">Looks good → make the images</button>
-        <label class="row" style="margin:0" title="placeholder backgrounds, no API spend — for testing">
-          <input type="checkbox" id="img-dry" style="width:auto"> test mode (free placeholders)</label>
+        <label class="chip" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer"
+               title="placeholder backgrounds, no API spend — for testing">
+          <input type="checkbox" id="img-dry" style="width:auto; margin:0"> test mode</label>
       </div>
-    </form>
-  </div>
-</div>
-
-<!-- ===================== STEP 3 · IMAGES ===================== -->
-<div class="stage" id="stage-images">
-  <div id="img-wait" style="display:none">
-    <div class="job-panel" style="margin-bottom:16px">
-      <p style="margin:0"><span class="spin">🎨</span> <b>Generating backgrounds</b>
-        — slides appear below as they finish</p>
-      <div class="bar"><div id="img-bar"></div></div>
-      <div class="note" id="img-note">starting…</div>
-      <div class="elapsed" id="img-elapsed"></div>
     </div>
-  </div>
-  <div class="imgs">
-    <div>
-      <div class="phone" id="phone">
-        <img id="phone-img" src="" alt="">
-        <div class="safe"></div>
+  </section>
+
+  <!-- ═════════ 6 · IMAGES ═════════ -->
+  <section class="scr" id="scr-images">
+    <p class="eyebrow">Images</p>
+    <h2>The carousel takes shape</h2>
+    <p class="hint">Tap a thumbnail to inspect a slide — amend and regenerate anything.</p>
+    <div id="img-wait" style="display:none">
+      <div class="job-panel" style="margin-bottom:16px">
+        <p style="margin:0"><span class="spin">🎨</span> <b>Generating backgrounds</b>
+          — slides appear below as they finish</p>
+        <div class="bar"><div id="img-bar"></div></div>
+        <div class="note" id="img-note">starting…</div>
+        <div class="elapsed" id="img-elapsed"></div>
       </div>
-      <div class="thumbs" id="thumbs"></div>
-      <p style="text-align:center; margin-top:8px">
-        <label style="display:inline"><input type="checkbox" style="width:auto"
-          onchange="document.getElementById('phone').classList.toggle('show-safe', this.checked)">
-          show TikTok safe zones</label>
-      </p>
     </div>
-    <div id="slide-tools"></div>
-  </div>
-  <div class="row" style="margin-top:16px">
-    <button class="ghost" onclick="go('write')">← Back to copy</button>
-    <button onclick="go('finish'); drawMiniCal()">Continue → schedule</button>
-  </div>
-</div>
+    <div class="imgs">
+      <div>
+        <div class="phone" id="phone">
+          <img id="phone-img" src="" alt="">
+          <div class="safe"></div>
+        </div>
+        <div class="thumbs" id="thumbs"></div>
+        <p style="text-align:center; margin-top:8px">
+          <label style="display:inline"><input type="checkbox" style="width:auto"
+            onchange="document.getElementById('phone').classList.toggle('show-safe', this.checked)">
+            show TikTok safe zones</label>
+        </p>
+      </div>
+      <div id="slide-tools"></div>
+    </div>
+    <div class="cta-row">
+      <button type="button" class="ghost" onclick="openWriteStep(false)">← Amend the copy</button>
+      <button type="button" onclick="show('finish'); drawMiniCal()">Continue → schedule</button>
+    </div>
+  </section>
 
-<!-- ===================== STEP 4 · FINISH ===================== -->
-<div class="stage" id="stage-finish">
-  <h2 style="font-size:17px">When should it go out?</h2>
-  <p class="muted">Pick a day, or bank it in the tray and drag it onto the calendar later.</p>
-  <div class="mini-cal" id="mini-cal"></div>
-  <div class="row" style="margin-top:14px">
-    <div style="width:130px"><label>Time</label><input id="finish-time" value="18:00"></div>
-  </div>
-  <div class="row" style="margin-top:16px">
-    <button id="schedule-btn" onclick="finishSchedule()" disabled>Approve &amp; schedule</button>
-    <button class="ghost" onclick="finishTray()">Save to tray (no date)</button>
-  </div>
-  <p class="muted" id="finish-note" style="margin-top:12px"></p>
+  <!-- ═════════ 7 · SCHEDULE ═════════ -->
+  <section class="scr" id="scr-finish">
+    <p class="eyebrow">Schedule</p>
+    <h2>When should it go out?</h2>
+    <p class="hint">Tap a day — or bank it in the tray and drag it onto the calendar later.</p>
+    <div class="mini-cal" id="mini-cal"></div>
+    <h3 class="sec-h">Time</h3>
+    <div class="chip-row" id="time-chips"></div>
+    <div class="row" style="margin-top:10px">
+      <div style="width:120px"><input id="finish-time" value="18:00"></div>
+    </div>
+    <div class="cta-row">
+      <button type="button" id="schedule-btn" onclick="finishSchedule()" disabled>✅ Approve &amp; schedule</button>
+      <button type="button" class="ghost" onclick="finishTray()">🗂 Bank it in the tray</button>
+    </div>
+  </section>
+
+  <!-- ═════════ 8 · DONE ═════════ -->
+  <section class="scr" id="scr-done">
+    <div class="done-hero">
+      <div class="big">⚡</div>
+      <h2 id="done-title">Done</h2>
+      <p class="muted" id="done-msg"></p>
+      <div class="cta-row" style="justify-content:center; margin-top:24px">
+        <button type="button" onclick="location.href='/calendar'">📅 View the calendar</button>
+        <button type="button" class="ghost" onclick="location.href='/create'">＋ Create another</button>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
 const RESUME_IDEA = "{{ resume_idea }}";
 const PRESET_DAY = "{{ preset_day }}";
-const QA_HARD = {overall:8, hook:8, visual_originality:8};
 const QA_MIN = 8;
 
-let state = { ideaId: null, door: null, mech: null, detail: null, slideIdx: 0, anglesJob: null };
+let state = { ideaId: null, source: null, style: null, mode: 'ai_design',
+              mech: null, detail: null, slideIdx: 0, anglesJob: null };
 
-/* ---------- step plumbing ---------- */
-function go(step){
-  document.querySelectorAll('.stage').forEach(s => s.classList.remove('on'));
-  document.getElementById('stage-'+step).classList.add('on');
-  const order = ['start','write','images','finish'];
-  document.querySelectorAll('.step-pill').forEach(p => {
-    const i = order.indexOf(p.dataset.step), cur = order.indexOf(step);
-    p.classList.toggle('on', i === cur);
-    p.classList.toggle('done', i < cur);
-  });
+/* ---------- screen plumbing: one focused screen at a time ---------- */
+// stage number (of 5), label, and rail % per screen
+const META = {
+  source:  [1, 'Start',     6],
+  look:    [1, 'The look', 16],
+  radar:   [1, 'Pick a story', 28],
+  idea:    [1, 'Your idea', 28],
+  facts:   [1, 'Your research', 28],
+  format:  [1, 'The format', 28],
+  angles:  [1, 'Pick an angle', 36],
+  develop: [2, 'Shape it',  48],
+  write:   [3, 'Words',     64],
+  images:  [4, 'Images',    82],
+  finish:  [5, 'Schedule',  94],
+  done:    [5, 'Done',     100],
+};
+let nav = [];
+
+function show(name, opts = {}){
+  const cur = document.querySelector('.scr.on');
+  if (cur) cur.classList.remove('on', 'fwd', 'bwd');
+  const el = document.getElementById('scr-' + name);
+  el.classList.add('on', opts.back ? 'bwd' : 'fwd');
+  if (!opts.back && nav[nav.length - 1] !== name) nav.push(name);
+  const [stage, label, pct] = META[name];
+  document.getElementById('rail-fill').style.width = pct + '%';
+  document.getElementById('stage-label').textContent =
+    name === 'done' ? 'Done ⚡' : `Step ${stage} of 5 · ${label}`;
+  document.getElementById('back-btn').hidden = nav.length < 2 || name === 'done';
+  window.scrollTo({top: 0});
+}
+function goBack(){
+  if (nav.length < 2) return;
+  nav.pop();
+  show(nav[nav.length - 1], {back: true});
+}
+// tap → show the selection beat → advance (the quiz feel)
+function tapThen(el, group, fn){
+  if (group) document.querySelectorAll(group).forEach(x => x.classList.remove('sel'));
+  el.classList.add('sel');
+  setTimeout(fn, 240);
 }
 
-/* ---------- step 1: the discovery radar (two lanes) ---------- */
+/* ---------- step 1: source ---------- */
+function pickSource(src, el){
+  state.source = src;
+  tapThen(el, '#scr-source .opt', () => show('look'));
+}
+
+/* ---------- step 2: the look ---------- */
+function pickMode(mode, el){
+  state.mode = mode;
+  document.querySelectorAll('[data-mode]').forEach(c =>
+    c.classList.toggle('sel', c.dataset.mode === mode));
+}
+function pickStyle(key, el){
+  state.style = key;
+  tapThen(el, '#scr-look .optgrid .opt', afterLook);
+}
+function afterLook(){
+  const src = state.source;
+  if (src === 'moments' || src === 'evergreen') { show('radar'); switchLane(src); }
+  else if (src === 'idea')   { show('idea'); setTimeout(() => document.getElementById('idea-text').focus(), 350); }
+  else if (src === 'facts')  { show('facts'); setTimeout(() => document.getElementById('facts-text').focus(), 350); }
+  else if (src === 'format') { show('format'); }
+  else if (src === 'manual') { startManual(); }
+}
+
+/* ---------- shared create params ---------- */
+function baseParams(develop){
+  return new URLSearchParams({
+    style: state.style || '', render_mode: state.mode,
+    scheduled_for: PRESET_DAY ? `${PRESET_DAY}T18:00` : '',
+    develop: develop ? 'true' : '',
+  });
+}
+function afterStart(r, develop){
+  state.ideaId = r.idea_id;
+  history.replaceState(null, '', `/create?idea=${r.idea_id}`);
+  if (develop) goDevelop();
+  else { show('write'); showWriteWait('The engine is writing your carousel'); pollBuild(); }
+}
+
+/* ---------- radar (moments / evergreen lanes) ---------- */
 const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in'};
 const LANE_HINT = {
   moments: 'What the UK is living through this week — tap a story, pick your angle.',
   evergreen: 'Fascinating, shareable facts that work any week of the year.',
 };
+const LANE_EYEBROW = {moments: 'Happening now', evergreen: 'Worth knowing'};
 // Evergreen facts don't go stale like moments do — rescan far less often.
 const LANE_MAX_AGE_H = {moments: 12, evergreen: 24 * 7};
 let lane = 'moments';
@@ -381,9 +625,10 @@ const laneJobs = {moments: null, evergreen: null};
 
 function switchLane(l){
   lane = l;
-  document.querySelectorAll('.lane-tab').forEach(t =>
-    t.classList.toggle('on', t.dataset.lane === l));
+  document.querySelectorAll('[data-lane]').forEach(t =>
+    t.classList.toggle('sel', t.dataset.lane === l));
   document.getElementById('lane-hint').textContent = LANE_HINT[l];
+  document.getElementById('radar-eyebrow').textContent = LANE_EYEBROW[l];
   loadLane();
 }
 
@@ -450,7 +695,7 @@ function drawMoments(data){
         <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>
         <div class="angle-actions">
           <button type="button">⚡ Build it now</button>
-          <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Develop it with me</button>
+          <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Shape it first</button>
         </div>`;
       chip.onclick = ev => ev.stopPropagation();
       const [quick, dev] = chip.querySelectorAll('button');
@@ -468,115 +713,114 @@ function drawMoments(data){
 }
 
 async function useMoment(mi, ai, develop){
-  const style = document.getElementById('style-select').value;
-  const render_mode = document.getElementById('mode-select').value;
-  const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
-  const r = await post(`/api/moments/${laneJobs[lane]}/use`,
-    new URLSearchParams({moment: mi, angle: ai, style, render_mode,
-                         scheduled_for: sched, develop: develop ? 'true' : ''}));
+  const body = baseParams(develop);
+  body.set('moment', mi);
+  body.set('angle', ai);
+  const r = await post(`/api/moments/${laneJobs[lane]}/use`, body);
   if (!r) return;
-  state.ideaId = r.idea_id;
-  history.replaceState(null, '', `/create?idea=${r.idea_id}`);
-  if (develop) { goDevelop(); } else { go('write'); pollBuild(); }
+  afterStart(r, develop);
 }
 
-/* ---------- step 1: the three doors ---------- */
-function pickDoor(d){
-  state.door = d;
-  document.querySelectorAll('.door').forEach(el =>
-    el.classList.toggle('on', el.dataset.door === d));
-  document.getElementById('start-form').style.display = '';
-  for (const k of ['idea','facts','blank'])
-    document.getElementById(`door-${k}-fields`).style.display = (k===d) ? '' : 'none';
-  document.getElementById('start-btn').textContent =
-    d === 'facts' ? 'Find angles →' : 'Start →';
-  // Facts get their develop choice per-angle; idea/blank get it up front.
-  document.getElementById('develop-btn').style.display = d === 'facts' ? 'none' : '';
+/* ---------- idea / facts / format / manual starts ---------- */
+document.getElementById('idea-text').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startIdea(false); }
+});
+
+async function startIdea(develop){
+  const text = document.getElementById('idea-text').value;
+  if (!text.trim()) return alert('Give the idea a line of text first.');
+  const body = baseParams(develop);
+  body.set('mode', 'idea');
+  body.set('text', text);
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, develop);
 }
+
+async function startFacts(){
+  const text = document.getElementById('facts-text').value;
+  if (!text.trim()) return alert('Paste some facts first.');
+  const body = baseParams(false);
+  body.set('mode', 'facts');
+  body.set('text', text);
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  state.anglesJob = r.job_id;
+  show('angles');
+  document.getElementById('angles-body').innerHTML =
+    '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  pollAngles();
+}
+
 function pickMech(key, el){
   state.mech = (state.mech === key) ? null : key;
-  document.querySelectorAll('.mech .m').forEach(m =>
-    m.classList.toggle('on', m.dataset.key === state.mech));
+  document.querySelectorAll('#mech-gallery .opt').forEach(m =>
+    m.classList.toggle('sel', m.dataset.key === state.mech));
 }
 
-async function startCreate(ev, develop = false){
-  if (ev) ev.preventDefault();
-  const style = document.getElementById('style-select').value;
-  const render_mode = document.getElementById('mode-select').value;
-  const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
-  const body = new URLSearchParams({mode: state.door, style, render_mode,
-    scheduled_for: sched, develop: develop ? 'true' : ''});
-  if (state.door === 'idea') body.set('text', document.getElementById('idea-text').value);
-  if (state.door === 'facts') body.set('text', document.getElementById('facts-text').value);
-  if (state.door === 'blank') {
-    body.set('text', document.getElementById('blank-text').value);
-    if (state.mech) body.set('mechanic', state.mech);
-    if (document.getElementById('manual-mode').checked) body.set('manual', 'true');
-  }
+async function startBlank(develop, manual = false){
+  const body = baseParams(develop);
+  body.set('mode', 'blank');
+  body.set('text', manual ? '' : document.getElementById('blank-text').value);
+  if (!manual && state.mech) body.set('mechanic', state.mech);
+  if (manual) body.set('manual', 'true');
   const r = await post('/api/create/start', body);
-  if (!r) return false;
-
-  if (state.door === 'facts') {
-    state.anglesJob = r.job_id;
-    document.getElementById('start-form').style.display = 'none';
-    document.getElementById('angles-wait').style.display = '';
-    pollAngles();
-  } else {
+  if (!r) return;
+  if (r.manual) {
     state.ideaId = r.idea_id;
     history.replaceState(null, '', `/create?idea=${r.idea_id}`);
-    if (r.manual) { openWriteStep(); }
-    else if (r.develop) { goDevelop(); }
-    else { go('write'); pollBuild(); }
+    show('write');
+    openWriteStep(false);
+    return;
   }
-  return false;
+  afterStart(r, develop);
 }
+function startManual(){ startBlank(false, true); }
 
+/* ---------- angles from facts ---------- */
 async function pollAngles(){
   const job = await (await fetch(`/api/jobs/${state.anglesJob}`)).json();
   if (job.status === 'ERROR') return fail('Angle generation failed: ' + job.error);
   if (job.status !== 'COMPLETED') return setTimeout(pollAngles, 1500);
   const angles = (JSON.parse(job.result_json || '{}').angles) || [];
-  document.getElementById('angles-wait').style.display = 'none';
-  const box = document.getElementById('angles-cards');
+  const box = document.getElementById('angles-body');
   box.innerHTML = '';
+  if (!angles.length) box.innerHTML = '<p class="muted">No angles came back — go back and try different facts.</p>';
   angles.forEach((a, i) => {
     const el = document.createElement('div');
-    el.className = 'angle';
-    el.innerHTML = `<b>${esc(a.title)}</b> <span class="pill">${esc(a.mechanic||'')}</span><br>
-      <span class="muted" style="font-size:13px">${esc(a.concept_note)}</span><br>
-      <small class="k">hook: “${esc(a.hook||'')}” · from: ${esc(a.fact||'')}</small>
+    el.className = 'angle-chip';
+    el.style.marginBottom = '10px';
+    el.innerHTML = `<span class="a-type">${esc(a.mechanic || '')}</span>
+      <b>${esc(a.title)}</b>
+      <span class="a-hook">${esc(a.concept_note || '')}</span>
+      <span class="a-hook">hook: “${esc(a.hook || '')}” · from: ${esc(a.fact || '')}</span>
       <div class="angle-actions">
         <button type="button">⚡ Build it now</button>
-        <button type="button" class="ghost">🧭 Develop it with me</button>
+        <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Shape it first</button>
       </div>`;
     const [quick, dev] = el.querySelectorAll('button');
     quick.onclick = () => pickAngle(i, false);
     dev.onclick = () => pickAngle(i, true);
     box.appendChild(el);
   });
-  document.getElementById('angles-list').style.display = '';
 }
 
-async function pickAngle(i, develop = false){
-  const style = document.getElementById('style-select').value;
-  const render_mode = document.getElementById('mode-select').value;
-  const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
-  const r = await post(`/api/create/angle/${state.anglesJob}`,
-    new URLSearchParams({index: i, style, render_mode, scheduled_for: sched,
-                         develop: develop ? 'true' : ''}));
+async function pickAngle(i, develop){
+  const body = baseParams(develop);
+  body.set('index', i);
+  const r = await post(`/api/create/angle/${state.anglesJob}`, body);
   if (!r) return;
-  state.ideaId = r.idea_id;
-  history.replaceState(null, '', `/create?idea=${r.idea_id}`);
-  if (develop) { goDevelop(); } else { go('write'); pollBuild(); }
+  afterStart(r, develop);
 }
 
-/* ---------- step 1.5: develop the concept ---------- */
+/* ---------- develop: the optional concept round ---------- */
 let developStart = null;
 
 function showDevelopWait(title){
   developStart = Date.now();
   document.getElementById('develop-wait').style.display = '';
   document.getElementById('develop-wait').innerHTML = `
+    <h2>Shaping the concept</h2>
     <div class="job-panel">
       <p style="margin:0"><span class="spin">🧭</span> <b>${esc(title)}</b></p>
       <div class="bar"><div id="dev-bar"></div></div>
@@ -587,7 +831,7 @@ function showDevelopWait(title){
 }
 
 function goDevelop(){
-  go('develop');
+  show('develop');
   showDevelopWait('Sketching the concept');
   pollDevelop();
 }
@@ -674,18 +918,19 @@ async function evolveBrief(){
 async function writeFromBrief(){
   await saveBrief();
   await post(`/api/ideas/${state.ideaId}/build`, new URLSearchParams());
-  go('write');
+  show('write');
   showWriteWait('Writing the full post from your brief');
   pollBuild();
 }
 
-/* ---------- step 2: write ---------- */
+/* ---------- write & score ---------- */
 let buildStart = null;
 
 function showWriteWait(title){
   buildStart = Date.now();
   document.getElementById('write-wait').style.display = '';
   document.getElementById('write-wait').innerHTML = `
+    <h2>Writing it</h2>
     <div class="job-panel">
       <p style="margin:0"><span class="spin">⚙️</span> <b>${esc(title)}</b></p>
       <div class="bar"><div id="write-bar"></div></div>
@@ -745,36 +990,45 @@ async function retryBuild(){
   pollBuild();
 }
 
-async function openWriteStep(){
+function toggleAcc(head){ head.parentElement.classList.toggle('open'); }
+
+function slidePreview(s, i){
+  const h = (s.headline || '').trim();
+  return h ? esc(h) : `<span class="dim">slide ${i+1} — tap to write it</span>`;
+}
+
+// autoJump: on resume/build-completion, skip ahead to images if they already
+// exist. The "Amend the copy" button passes false so it actually stays here.
+async function openWriteStep(autoJump = true){
   const d = await detail();
-  go('write');
+  show('write');
   document.getElementById('write-wait').style.display = 'none';
   document.getElementById('write-done').style.display = '';
   document.getElementById('write-meta').textContent =
     `${d.idea_id} · ${d.status}` + (d.mechanic ? ` · ${d.mechanic}` : '') +
     (d.style ? ` · style: ${d.style}` : '');
 
-  // scorecard
+  // scorecard chips
   const grid = document.getElementById('qa-grid');
   grid.innerHTML = '';
   const qa = d.qa || {};
   for (const [k, v] of Object.entries(qa)) {
-    const el = document.createElement('div');
+    const el = document.createElement('span');
     const cls = v >= 9 ? 'good' : (v >= QA_MIN ? 'ok' : 'bad');
-    el.className = `qa ${cls}`;
-    el.innerHTML = `<span class="v">${v}</span> ${esc(k.replaceAll('_',' '))}`;
+    el.className = `qa-chip ${cls}`;
+    el.innerHTML = `<span class="qv">${v}</span> ${esc(k.replaceAll('_',' '))}`;
     if (v < QA_MIN && k !== 'overall') {
       const b = document.createElement('button');
-      b.className = 'ghost'; b.textContent = '⚡ punch it up';
+      b.className = 'ghost'; b.textContent = '⚡ punch up';
       b.onclick = () => punchUp(k);
       el.appendChild(b);
     }
     grid.appendChild(el);
   }
   if (!Object.keys(qa).length)
-    grid.innerHTML = '<p class="muted">No scorecard — manual post. Write your slides below.</p>';
+    grid.innerHTML = '<p class="muted" style="margin:0">No scorecard — manual post. Tap each slide below and write it.</p>';
 
-  // hook options
+  // hook options — tap to set
   const hooks = document.getElementById('hook-options');
   hooks.innerHTML = '';
   const opts = d.hook_options && d.hook_options.length ? d.hook_options : (d.hook ? [d.hook] : []);
@@ -782,35 +1036,46 @@ async function openWriteStep(){
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'hookopt' + (h === d.hook ? ' on' : '');
-    b.textContent = h;
+    b.innerHTML = `<span class="ck"></span><span>${esc(h)}</span>`;
     b.onclick = async () => {
       await post(`/api/ideas/${state.ideaId}/hook`, new URLSearchParams({hook: h}));
-      openWriteStep();
+      openWriteStep(false);
     };
     hooks.appendChild(b);
   });
+  if (!opts.length) hooks.innerHTML = '<p class="muted" style="margin:0 0 4px">Manual post — your slide 1 headline is the hook.</p>';
 
-  // slide copy editor
-  const sf = document.getElementById('slide-fields');
+  // slide copy — accordion per slide, closed unless it's empty (manual)
+  const sf = document.getElementById('slide-acc');
   sf.innerHTML = '';
   (d.slides || []).forEach((s, i) => {
-    const div = document.createElement('div');
-    div.innerHTML = `
-      <div class="row" style="align-items:flex-start">
-        <div style="flex:1"><label>Slide ${i+1} headline</label>
-          <input name="slide_headline_${i}" value="${esc(s.headline)}"></div>
-        <div style="flex:2"><label>Supporting</label>
-          <input name="slide_supporting_${i}" value="${esc(s.supporting)}"></div>
-      </div>
-      <label>Slide ${i+1} image brief <small class="k">(what the background should show — no text in it)</small></label>
-      <input name="slide_image_prompt_${i}" value="${esc(s.image_prompt)}">`;
-    sf.appendChild(div);
+    const item = document.createElement('div');
+    item.className = 'acc-item' + (!(s.headline || '').trim() ? ' open' : '');
+    item.innerHTML = `
+      <button type="button" class="acc-head" onclick="toggleAcc(this)">
+        <span class="acc-n">${i+1}</span>
+        <span class="acc-p">${slidePreview(s, i)}</span>
+        <span class="acc-c">▾</span>
+      </button>
+      <div class="acc-body">
+        <label>Headline</label>
+        <input name="slide_headline_${i}" value="${esc(s.headline)}">
+        <label>Supporting</label>
+        <input name="slide_supporting_${i}" value="${esc(s.supporting)}">
+        <label>Image brief <small class="k">(what the background should show — no text in it)</small></label>
+        <input name="slide_image_prompt_${i}" value="${esc(s.image_prompt)}">
+      </div>`;
+    // live preview in the accordion head while typing
+    item.querySelector(`[name=slide_headline_${i}]`).addEventListener('input', e => {
+      item.querySelector('.acc-p').innerHTML = slidePreview({headline: e.target.value}, i);
+    });
+    sf.appendChild(item);
   });
   document.getElementById('f-caption').value = d.caption || '';
   document.getElementById('f-trigger').value = d.comment_trigger || '';
   document.getElementById('f-hashtags').value = (d.hashtags || []).join(' ');
 
-  if (d.assets && d.assets.length) {
+  if (autoJump && d.assets && d.assets.length) {
     // already rendered once — jump to images on resume
     openImagesStep();
   }
@@ -824,34 +1089,34 @@ async function punchUp(metric){
 }
 
 async function sendFeedback(){
-  const fb = document.getElementById('feedback-text').value.trim();
-  if (!fb) return alert('Type the feedback first.');
+  const chips = [...document.querySelectorAll('#fb-chips .chip.sel')].map(c => c.textContent.trim());
+  const text = document.getElementById('feedback-text').value.trim();
+  const fb = [...chips, text].filter(Boolean).join(' · ');
+  if (!fb) return alert('Tap a chip or type the feedback first.');
+  await saveCopy();
   await post(`/api/ideas/${state.ideaId}/revise`, new URLSearchParams({focus: fb}));
+  document.querySelectorAll('#fb-chips .chip.sel').forEach(c => c.classList.remove('sel'));
+  document.getElementById('feedback-text').value = '';
   showWriteWait('Reworking the post with your feedback');
   pollBuild();
 }
 
-async function saveCopy(ev){
-  if (ev) ev.preventDefault();
+async function saveCopy(){
   const form = document.getElementById('copy-form');
   const body = new URLSearchParams(new FormData(form));
-  body.set('hashtags', document.getElementById('f-hashtags').value);
-  body.set('caption', document.getElementById('f-caption').value);
-  body.set('comment_trigger', document.getElementById('f-trigger').value);
   await post(`/api/ideas/${state.ideaId}/edit`, body);
-  return false;
 }
 
 async function makeImages(){
   await saveCopy();
   const dry = document.getElementById('img-dry').checked;
   await post(`/api/jobs/render/${state.ideaId}?dry_run=${dry}`, new URLSearchParams());
-  go('images');
+  show('images');
   document.getElementById('img-wait').style.display = '';
   pollRender();
 }
 
-/* ---------- step 3: images ---------- */
+/* ---------- images ---------- */
 let renderStart = null;
 async function pollRender(){
   if (!renderStart) renderStart = Date.now();
@@ -877,7 +1142,7 @@ async function pollRender(){
 
 async function openImagesStep(){
   const d = await detail();
-  go('images');
+  show('images');
   drawImages(d);
   if (d.active_jobs.render || d.active_jobs.render_slide) {
     document.getElementById('img-wait').style.display = '';
@@ -913,16 +1178,16 @@ function drawImages(d){
   const aiDesign = d.render_mode === 'ai_design';
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <h2 style="font-size:16px; margin-top:0">Slide ${i+1}
-      <small class="k">${aiDesign ? 'AI-designed — text is part of the artwork' : 'photo + overlay text'}</small></h2>
+    <h3 class="sec-h" style="margin-top:0">Slide ${i+1}
+      <small>${aiDesign ? 'AI-designed — text is part of the artwork' : 'photo + overlay text'}</small></h3>
     <label>Headline</label><input id="t-head" value="${esc(s.headline||'')}">
     <label>Supporting</label><input id="t-supp" value="${esc(s.supporting||'')}">
     <label>${aiDesign ? 'Design brief' : 'Image brief'} <small class="k">${aiDesign ? '(the full slide concept: composition, art direction, how the type is treated)' : '(what the background should show — no text in it)'}</small></label>
     <textarea id="t-prompt" style="min-height:60px">${esc(s.image_prompt||'')}</textarea>
-    <div class="row" style="margin-top:10px">
+    <div class="cta-row" style="margin-top:12px">
       ${aiDesign
         ? `<button onclick="regenSlide()" title="paid — redesigns this slide from the brief + current copy">🎨 Redesign slide</button>
-           <small class="k">copy or brief changed? redesign applies it</small>`
+           <span class="note">copy or brief changed? redesign applies it</span>`
         : `<button class="ghost" onclick="relayText()" title="free — re-overlays the text on the same background">✎ Re-lay text (free)</button>
            <button onclick="regenSlide()" title="paid — a brand-new background from the image brief">🎨 Regenerate background</button>`}
     </div>
@@ -974,9 +1239,31 @@ async function saveSlideCopy(){
   await post(`/api/ideas/${state.ideaId}/edit`, body);
 }
 
-/* ---------- step 4: finish ---------- */
+/* ---------- schedule ---------- */
 let pickedDay = null;
+const TIME_PRESETS = ['07:30', '12:00', '18:00', '20:00'];
+
+function drawTimeChips(){
+  const box = document.getElementById('time-chips');
+  if (box.childElementCount) return;
+  TIME_PRESETS.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip' + (t === '18:00' ? ' sel' : '');
+    b.textContent = t;
+    b.onclick = () => {
+      document.getElementById('finish-time').value = t;
+      box.querySelectorAll('.chip').forEach(c => c.classList.remove('sel'));
+      b.classList.add('sel');
+    };
+    box.appendChild(b);
+  });
+  document.getElementById('finish-time').addEventListener('input', () =>
+    box.querySelectorAll('.chip').forEach(c => c.classList.remove('sel')));
+}
+
 async function drawMiniCal(){
+  drawTimeChips();
   const cal = document.getElementById('mini-cal');
   cal.innerHTML = '';
   for (const d of ['Mo','Tu','We','Th','Fr','Sa','Su'])
@@ -1022,16 +1309,20 @@ async function finishSchedule(){
   await approveIfNeeded();
   const t = document.getElementById('finish-time').value || '18:00';
   await post(`/api/ideas/${state.ideaId}/schedule`, new URLSearchParams({when: `${pickedDay}T${t}`}));
-  document.getElementById('finish-note').innerHTML =
-    `✅ Scheduled for <b>${pickedDay} ${t}</b>. See it on the <a href="/calendar">calendar</a> —
-     export that week when you're ready to load Metricool.`;
+  document.getElementById('done-title').textContent = 'Scheduled ⚡';
+  document.getElementById('done-msg').innerHTML =
+    `Going out <b>${pickedDay} at ${t}</b>. Export that week from the calendar
+     when you're ready to load Metricool.`;
+  show('done');
 }
 
 async function finishTray(){
   await approveIfNeeded();
   await post(`/api/ideas/${state.ideaId}/schedule`, new URLSearchParams({when: ''}));
-  document.getElementById('finish-note').innerHTML =
-    `✅ Saved to the tray. Drag it onto a day on the <a href="/calendar">calendar</a> whenever.`;
+  document.getElementById('done-title').textContent = 'Banked in the tray';
+  document.getElementById('done-msg').innerHTML =
+    `Drag it onto a day on the <a href="/calendar">calendar</a> whenever you like.`;
+  show('done');
 }
 
 /* ---------- shared ---------- */
@@ -1058,20 +1349,19 @@ function fail(msg){ alert(msg); }
 /* ---------- boot ---------- */
 if (RESUME_IDEA) {
   state.ideaId = RESUME_IDEA;
+  nav = ['source'];
   (async () => {
     const d = await detail();
     if (!d.slides.length && (d.active_jobs.concept || d.concept_brief)) { goDevelop(); }
-    else if (!d.slides.length) { go('write'); pollBuild(); }
-    else if (!d.assets.length) { openWriteStep(); }
-    else { openImagesStep(); }
+    else if (!d.slides.length) { show('write'); pollBuild(); }
+    else { openWriteStep(); }  // autoJump carries it on to images if they exist
   })();
 } else {
-  go('start');
+  show('source');
   if (PRESET_DAY) {
     document.getElementById('preset-day-note').style.display = '';
     document.getElementById('preset-day-label').textContent = PRESET_DAY;
   }
-  loadLane();
 }
 </script>
 {% endblock %}
