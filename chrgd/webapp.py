@@ -610,10 +610,21 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         render_mode: str = Form(""),
         scheduled_for: str = Form(""),
         manual: bool = Form(False),
+        develop: bool = Form(False),
         _: str = Depends(require_user),
     ):
         """Open one of the three doors into the create journey."""
+        from .worker import enqueue_concept
+
         when = _parse_when(scheduled_for)
+
+        def _first_job(store: Store, idea_id: str) -> int:
+            return (
+                enqueue_concept(store, idea_id)
+                if develop
+                else enqueue_build_one(store, idea_id)
+            )
+
         with _store(settings) as store:
             if mode == "facts":
                 if not text.strip():
@@ -628,8 +639,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     store, concept_note=text.strip(), style=style,
                     render_mode=render_mode, scheduled_for=when,
                 )
-                job_id = enqueue_build_one(store, idea.idea_id)
-                return {"mode": mode, "idea_id": idea.idea_id, "job_id": job_id}
+                job_id = _first_job(store, idea.idea_id)
+                return {
+                    "mode": mode, "idea_id": idea.idea_id,
+                    "job_id": job_id, "develop": develop,
+                }
 
             if mode == "blank":
                 idea = _new_seed(
@@ -657,8 +671,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                         },
                     )
                     return {"mode": mode, "idea_id": idea.idea_id, "manual": True}
-                job_id = enqueue_build_one(store, idea.idea_id)
-                return {"mode": mode, "idea_id": idea.idea_id, "job_id": job_id}
+                job_id = _first_job(store, idea.idea_id)
+                return {
+                    "mode": mode, "idea_id": idea.idea_id,
+                    "job_id": job_id, "develop": develop,
+                }
 
         raise HTTPException(400, f"unknown mode '{mode}'")
 
@@ -669,9 +686,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         style: str = Form(""),
         render_mode: str = Form(""),
         scheduled_for: str = Form(""),
+        develop: bool = Form(False),
         _: str = Depends(require_user),
     ):
-        """Pick one of a completed angles job's takes and build it."""
+        """Pick one of a completed angles job's takes and build/develop it."""
         when = _parse_when(scheduled_for)
         with _store(settings) as store:
             job = store.get_job(job_id)
@@ -692,8 +710,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 render_mode=render_mode,
                 scheduled_for=when,
             )
-            build_job = enqueue_build_one(store, idea.idea_id)
-        return {"idea_id": idea.idea_id, "job_id": build_job}
+            if develop:
+                from .worker import enqueue_concept
+
+                next_job = enqueue_concept(store, idea.idea_id)
+            else:
+                next_job = enqueue_build_one(store, idea.idea_id)
+        return {"idea_id": idea.idea_id, "job_id": next_job, "develop": develop}
 
     @app.get("/api/ideas/{idea_id}/detail")
     def api_idea_detail(idea_id: str, _: str = Depends(require_user)):
@@ -706,7 +729,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             idea = _idea_or_404(store, idea_id)
             jobs = {
                 kind: store.active_job_for(idea_id, kind)
-                for kind in ("build_one", "render", "render_slide", "revise")
+                for kind in ("build_one", "render", "render_slide", "revise", "concept")
             }
             # Only report an error if the LATEST attempt failed — an old
             # failure that was retried successfully is not news.
@@ -738,6 +761,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "qa": route.get("qa", {}),
             "style": route.get("style", ""),
             "render_mode": render_mode_for_idea(idea, brand),
+            "concept_brief": route.get("concept_brief"),
             "mechanic": (route.get("mechanic_lock") or {}).get("name")
             or route.get("mechanic", ""),
             "assets": assets,
@@ -842,20 +866,28 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             raise HTTPException(400, str(exc))
         return {"idea_id": idea_id, "slide": n, "path": path}
 
-    # --- UK moments radar -----------------------------------------------------
+    # --- discovery radar (moments = UK now · evergreen = worth knowing) --------
+
+    def _discover_kind(kind: str) -> str:
+        if kind not in ("moments", "evergreen"):
+            raise HTTPException(400, f"unknown discover kind '{kind}'")
+        return kind
 
     @app.get("/api/moments")
-    def api_moments(_: str = Depends(require_user)):
-        """Latest completed radar scan + whether one is running."""
+    def api_moments(kind: str = "moments", _: str = Depends(require_user)):
+        """Latest completed scan for one lane + whether one is running."""
+        kind = _discover_kind(kind)
         with _store(settings) as store:
             done = store.conn.execute(
                 "SELECT job_id, result_json, updated_at FROM jobs "
-                "WHERE kind = 'moments' AND status = 'COMPLETED' "
-                "ORDER BY job_id DESC LIMIT 1"
+                "WHERE kind = ? AND status = 'COMPLETED' "
+                "ORDER BY job_id DESC LIMIT 1",
+                (kind,),
             ).fetchone()
             active = store.conn.execute(
-                "SELECT job_id FROM jobs WHERE kind = 'moments' "
-                "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1"
+                "SELECT job_id FROM jobs WHERE kind = ? "
+                "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1",
+                (kind,),
             ).fetchone()
         payload = {
             "job_id": None,
@@ -879,12 +911,15 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         return payload
 
     @app.post("/api/jobs/moments")
-    def api_job_moments(count: int = Form(6), _: str = Depends(require_user)):
-        from .worker import enqueue_moments
+    def api_job_moments(
+        count: int = Form(6), kind: str = Form("moments"), _: str = Depends(require_user)
+    ):
+        from .worker import enqueue_discover
 
+        kind = _discover_kind(kind)
         with _store(settings) as store:
-            job_id = enqueue_moments(store, count=count)
-        return {"job_id": job_id, "kind": "moments"}
+            job_id = enqueue_discover(store, kind, count=count)
+        return {"job_id": job_id, "kind": kind}
 
     @app.post("/api/moments/{job_id}/use")
     def api_moments_use(
@@ -894,14 +929,15 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         style: str = Form(""),
         render_mode: str = Form(""),
         scheduled_for: str = Form(""),
+        develop: bool = Form(False),
         _: str = Depends(require_user),
     ):
-        """Turn one angle of one moment into a building post — one tap."""
+        """Turn one angle into a post — quick build, or develop-first."""
         when = _parse_when(scheduled_for)
         with _store(settings) as store:
             job = store.get_job(job_id)
-            if job is None or job["kind"] != "moments":
-                raise HTTPException(404, "no such moments scan")
+            if job is None or job["kind"] not in ("moments", "evergreen"):
+                raise HTTPException(404, "no such discovery scan")
             moments = json.loads(job["result_json"] or "{}").get("moments", [])
             if not 0 <= moment < len(moments):
                 raise HTTPException(400, "moment index out of range")
@@ -931,8 +967,53 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 ),
             )
             store.conn.commit()
-            build_job = enqueue_build_one(store, idea.idea_id)
-        return {"idea_id": idea.idea_id, "job_id": build_job}
+            if develop:
+                from .worker import enqueue_concept
+
+                next_job = enqueue_concept(store, idea.idea_id)
+            else:
+                next_job = enqueue_build_one(store, idea.idea_id)
+        return {"idea_id": idea.idea_id, "job_id": next_job, "develop": develop}
+
+    # --- concept development ("develop it with me") ----------------------------
+
+    @app.post("/api/ideas/{idea_id}/develop")
+    def api_develop(
+        idea_id: str, feedback: str = Form(""), _: str = Depends(require_user)
+    ):
+        """One development round; feedback is the editor's plain-words input."""
+        from .worker import enqueue_concept
+
+        with _store(settings) as store:
+            _idea_or_404(store, idea_id)
+            job_id = enqueue_concept(store, idea_id, feedback=feedback.strip())
+        return {"job_id": job_id, "kind": "concept", "idea_id": idea_id}
+
+    @app.post("/api/ideas/{idea_id}/brief")
+    async def api_save_brief(
+        idea_id: str, request: Request, _: str = Depends(require_user)
+    ):
+        """Save the editor's direct edits to the concept brief."""
+        form = await request.form()
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+            route = json.loads(idea.route_json) if idea.route_json else {}
+            brief = route.get("concept_brief", {})
+            for key in ("angle", "hook_direction", "tone", "visual_direction"):
+                if key in form:
+                    brief[key] = str(form[key])
+            outline = [
+                str(form[f"outline_{i}"]) for i in range(8) if f"outline_{i}" in form
+            ]
+            if outline:
+                brief["outline"] = outline
+            route["concept_brief"] = brief
+            store.conn.execute(
+                "UPDATE ideas SET route_json = ? WHERE idea_id = ?",
+                (json.dumps(route), idea_id),
+            )
+            store.conn.commit()
+        return {"idea_id": idea_id, "brief": brief}
 
     # --- scheduling + calendar ------------------------------------------------
 

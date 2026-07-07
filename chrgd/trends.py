@@ -251,6 +251,67 @@ class MomentsResult(BaseModel):
     moments: list[Moment] = Field(default_factory=list)
 
 
+# The second discovery lane: not time-pegged at all — the fascinating,
+# tell-your-mates facts that pull interaction in any week of the year.
+EVERGREEN_PROMPT = """You are the Curiosity Scout for CHRGD, a premium UK gym/supplement brand.
+
+Use web search to find genuinely FASCINATING, shareable facts and curiosities —
+the kind a normal person reads and immediately tells their mate. Not tied to
+any date, season or trend. Hunt broadly around the body, training, food,
+sleep, caffeine, psychology of habits, sport science history, weird records,
+counterintuitive research — anything a UK gym-adjacent audience would stop on,
+even if they never lift.
+
+Quality bar for each fact:
+- Surprising or counterintuitive — a "wait, WHAT?" reaction.
+- True and checkable — no myths presented as fact, no shaky pop-science.
+- Sticky — explainable in one slide, argued about in the comments.
+
+For EACH fact, propose 2-3 ready-to-build content angles: usually one
+straight-telling angle (the fact, told well), one funny/relatable angle, and
+one practical "use this" angle where natural. Claim-safe: nothing medical, no
+cure/treat/prevent/guaranteed-outcome language; supplements observational only.
+
+Limitation you MUST respect: {limitation}
+
+Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape:
+{{
+  "moments": [
+    {{
+      "title": "the fact in one tight line",
+      "emoji": "one emoji",
+      "category": "science | psychology | history | body | food | records",
+      "when": "evergreen",
+      "peak": "",
+      "why": "why people will stop, share and argue, one line",
+      "decay_speed": "weeks",
+      "angles": [
+        {{
+          "type": "advice | funny | tiein",
+          "title": "short label",
+          "hook": "the slide-1 hook this would open with",
+          "concept_note": "1-2 sentence buildable brief"
+        }}
+      ]
+    }}
+  ]
+}}
+Rank by expected reach. Strongest, most shareable facts first.
+""".format(limitation=LIMITATION)
+
+_DISCOVER_PROMPTS = {"moments": MOMENTS_PROMPT, "evergreen": EVERGREEN_PROMPT}
+_DISCOVER_ASKS = {
+    "moments": (
+        "Find up to {count} shared UK moments for the coming week, each with "
+        "2-3 ready angles. Rank by expected reach and return the JSON object."
+    ),
+    "evergreen": (
+        "Find up to {count} fascinating evergreen facts, each with 2-3 ready "
+        "angles. Rank by shareability and return the JSON object."
+    ),
+}
+
+
 def parse_moments(text: str) -> MomentsResult:
     try:
         return MomentsResult.model_validate(json.loads(_extract_json(text)))
@@ -258,18 +319,29 @@ def parse_moments(text: str) -> MomentsResult:
         raise TrendError(f"could not parse moments: {exc}") from exc
 
 
+def scout_discover(
+    settings: Settings,
+    kind: str = "moments",
+    count: int = 6,
+    *,
+    client: TrendSearchClient | None = None,
+) -> MomentsResult:
+    """One discovery scan: 'moments' (UK now) or 'evergreen' (worth knowing)."""
+    if kind not in _DISCOVER_PROMPTS:
+        raise TrendError(f"unknown discover kind '{kind}'")
+    client = client or OpenAITrendClient(settings)
+    result = parse_moments(
+        client.search(_DISCOVER_PROMPTS[kind], _DISCOVER_ASKS[kind].format(count=count))
+    )
+    result.moments = result.moments[:count]
+    return result
+
+
 def scout_moments(
     settings: Settings, count: int = 6, *, client: TrendSearchClient | None = None
 ) -> MomentsResult:
     """Scan what the UK is living through right now → pickable moments."""
-    client = client or OpenAITrendClient(settings)
-    user = (
-        f"Find up to {count} shared UK moments for the coming week, each with "
-        "2-3 ready angles. Rank by expected reach and return the JSON object."
-    )
-    result = parse_moments(client.search(MOMENTS_PROMPT, user))
-    result.moments = result.moments[:count]
-    return result
+    return scout_discover(settings, "moments", count, client=client)
 
 
 # --- seeding ----------------------------------------------------------------

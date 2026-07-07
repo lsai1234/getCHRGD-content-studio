@@ -666,22 +666,32 @@ def test_scout_moments_parses_and_ranks(settings):
     assert "COLLECTIVELY" in fake.system  # the radar brief, not the gym scout
 
 
-def test_worker_moments_job_and_dedupe(settings, store, monkeypatch):
+def test_worker_discover_job_and_dedupe(settings, store, monkeypatch):
     import chrgd.trends as trends_mod
     from chrgd.trends import MomentsResult
-    from chrgd.worker import Worker, enqueue_moments
+    from chrgd.worker import Worker, enqueue_discover
 
-    monkeypatch.setattr(
-        trends_mod, "scout_moments",
-        lambda s, count=6, client=None: MomentsResult.model_validate(MOMENTS_PAYLOAD),
-    )
-    a = enqueue_moments(store)
-    b = enqueue_moments(store)
-    assert a == b  # one scan at a time
-    Worker(settings).run_once()
-    job = store.get_job(a)
-    assert job["status"] == "COMPLETED"
-    assert len(json.loads(job["result_json"])["moments"]) == 2
+    seen_kinds = []
+
+    def fake_scout(s, kind="moments", count=6, client=None):
+        seen_kinds.append(kind)
+        return MomentsResult.model_validate(MOMENTS_PAYLOAD)
+
+    monkeypatch.setattr(trends_mod, "scout_discover", fake_scout)
+    a = enqueue_discover(store, "moments")
+    b = enqueue_discover(store, "moments")
+    assert a == b  # one scan per lane at a time
+    c = enqueue_discover(store, "evergreen")
+    assert c != a  # separate lane, separate scan
+    worker = Worker(settings)
+    worker.run_once()
+    worker.run_once()
+    assert store.get_job(a)["status"] == "COMPLETED"
+    assert store.get_job(c)["status"] == "COMPLETED"
+    assert seen_kinds == ["moments", "evergreen"]
+    assert len(json.loads(store.get_job(a)["result_json"])["moments"]) == 2
+    with pytest.raises(ValueError):
+        enqueue_discover(store, "nope")
 
 
 def test_moments_api_and_use_flow(client, settings):
@@ -724,6 +734,133 @@ def test_moments_api_and_use_flow(client, settings):
     # Bad indices → 400, unknown job → 404.
     assert client.post(f"/api/moments/{job_id}/use", data={"moment": 9, "angle": 0}).status_code == 400
     assert client.post("/api/moments/99999/use", data={"moment": 0, "angle": 0}).status_code == 404
+
+
+def test_evergreen_lane_and_develop_from_moment(client, settings):
+    # Lanes are cached separately.
+    assert client.get("/api/moments", params={"kind": "nope"}).status_code == 400
+    ever_job = client.post("/api/jobs/moments", data={"kind": "evergreen"}).json()["job_id"]
+    with Store(settings.db_path) as store:
+        store.update_job(
+            ever_job, status="COMPLETED", result_json=json.dumps(MOMENTS_PAYLOAD)
+        )
+    assert client.get("/api/moments").json()["moments"] == []  # moments lane untouched
+    ever = client.get("/api/moments", params={"kind": "evergreen"}).json()
+    assert len(ever["moments"]) == 2
+
+    # Using an evergreen card with develop=true starts a concept round.
+    r = client.post(
+        f"/api/moments/{ever_job}/use",
+        data={"moment": 0, "angle": 0, "develop": "true"},
+    )
+    body = r.json()
+    assert body["develop"] is True
+    with Store(settings.db_path) as store:
+        job = store.get_job(body["job_id"])
+        assert job["kind"] == "concept" and job["idea_id"] == body["idea_id"]
+
+
+# --- concept development ("develop it with me") -----------------------------------
+
+BRIEF = {
+    "angle": "the 2am kick-off is a training problem",
+    "hook_direction": "open on the alarm going off",
+    "outline": ["hook", "the problem", "the science", "the plan", "cta"],
+    "tone": "dry, mate-to-mate",
+    "visual_direction": "dark kitchen at 2am, phone glow",
+}
+
+
+def test_develop_concept_iterates_with_feedback(settings):
+    from chrgd.pipeline import develop_concept
+
+    idea = Idea(
+        idea_id="G-0001", concept_note="england game staying up",
+        route_json=json.dumps({"concept_brief": BRIEF}),
+    )
+    fake = FakeChat([dict(BRIEF, angle="sharper angle")])
+    brief, spend = develop_concept(
+        idea, settings, feedback="make it about pre-work training", client=fake
+    )
+    assert brief.angle == "sharper angle"
+    assert spend > 0
+    _, user = fake.calls[0]
+    assert "EDITOR FEEDBACK" in user and "pre-work training" in user
+    assert "evolve it, don't start over" in user  # prior brief included
+    assert BRIEF["angle"] in user
+
+
+def test_worker_concept_job_saves_brief(settings, store, monkeypatch):
+    import chrgd.pipeline as pipeline_mod
+    from chrgd.pipeline import ConceptBrief
+    from chrgd.worker import Worker, enqueue_concept
+
+    store.add_idea(
+        Idea(idea_id="G-0001", concept_note="x",
+             route_json=json.dumps({"style": "gritty"}))
+    )
+    monkeypatch.setattr(
+        pipeline_mod, "develop_concept",
+        lambda idea, settings, feedback="", client=None: (
+            ConceptBrief.model_validate(BRIEF), 0.01
+        ),
+    )
+    job_id = enqueue_concept(store, "G-0001", feedback="go")
+    assert enqueue_concept(store, "G-0001") == job_id  # no double-queue
+    Worker(settings).run_once()
+    job = store.get_job(job_id)
+    assert job["status"] == "COMPLETED", job["error"]
+    route = json.loads(store.get_idea("G-0001").route_json)
+    assert route["concept_brief"]["angle"] == BRIEF["angle"]
+    assert route["style"] == "gritty"  # untouched
+
+
+def test_build_user_message_follows_brief():
+    idea = Idea(
+        idea_id="G-0001", concept_note="x",
+        route_json=json.dumps({"concept_brief": BRIEF}),
+    )
+    msg = build_user_message(idea)
+    assert "CONCEPT BRIEF" in msg
+    assert BRIEF["angle"] in msg
+    assert "slide 3: the science" in msg
+
+
+def test_create_start_develop_flag(client, settings):
+    r = client.post(
+        "/api/create/start",
+        data={"mode": "idea", "text": "x", "develop": "true"},
+    )
+    body = r.json()
+    assert body["develop"] is True
+    with Store(settings.db_path) as store:
+        job = store.get_job(body["job_id"])
+        assert job["kind"] == "concept" and job["idea_id"] == body["idea_id"]
+
+
+def test_brief_edit_develop_and_detail(client, settings):
+    with Store(settings.db_path) as store:
+        store.add_idea(
+            Idea(idea_id="G-0001", concept_note="x",
+                 route_json=json.dumps({"concept_brief": BRIEF, "style": "meme"}))
+        )
+    # Direct edits save into the brief.
+    r = client.post(
+        "/api/ideas/G-0001/brief",
+        data={"angle": "my edited angle", "outline_0": "my hook",
+              "outline_1": "b", "outline_2": "c", "outline_3": "d", "outline_4": "e"},
+    )
+    assert r.json()["brief"]["angle"] == "my edited angle"
+    d = client.get("/api/ideas/G-0001/detail").json()
+    assert d["concept_brief"]["angle"] == "my edited angle"
+    assert d["concept_brief"]["outline"][0] == "my hook"
+    assert d["concept_brief"]["tone"] == BRIEF["tone"]  # untouched fields kept
+    # Another round enqueues a concept job carrying the feedback.
+    r = client.post("/api/ideas/G-0001/develop", data={"feedback": "funnier"})
+    with Store(settings.db_path) as store:
+        job = store.get_job(r.json()["job_id"])
+        assert job["kind"] == "concept"
+        assert json.loads(job["params_json"])["feedback"] == "funnier"
 
 
 # --- scheduling + calendar -------------------------------------------------------

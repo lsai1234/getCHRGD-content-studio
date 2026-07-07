@@ -223,6 +223,36 @@ def _handle_revise(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_concept(store: Store, settings: Settings, job: dict) -> dict:
+    """One concept-development round: seed + brief + editor feedback → brief."""
+    from .pipeline import develop_concept
+
+    params = json.loads(job["params_json"] or "{}")
+    idea = store.get_idea(job["idea_id"])
+    if idea is None:
+        raise ValueError(f"no such idea {job['idea_id']}")
+
+    store.update_job(
+        job["job_id"], progress=20,
+        result_json=json.dumps({"note": "sketching the concept with the engine"}),
+    )
+    brief, spend = develop_concept(
+        idea, settings, feedback=str(params.get("feedback", ""))
+    )
+    # Merge into route_json without touching status or other creation prefs.
+    route = json.loads(idea.route_json) if idea.route_json else {}
+    route["concept_brief"] = brief.model_dump()
+    store.conn.execute(
+        "UPDATE ideas SET route_json = ? WHERE idea_id = ?",
+        (json.dumps(route), idea.idea_id),
+    )
+    store.conn.commit()
+
+    run_id = store.start_run("concept")
+    store.finish_run(run_id, spend_usd=round(spend, 4), notes=idea.idea_id)
+    return {"brief": brief.model_dump(), "spend_usd": spend}
+
+
 def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
     """(Re)generate the background(s) for a single slide."""
     from .images import list_variants, render_slide
@@ -274,12 +304,12 @@ def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
-def _handle_moments(store: Store, settings: Settings, job: dict) -> dict:
-    """Scan shared UK moments (sport/weather/telly/viral) with ready angles."""
-    from .trends import scout_moments
+def _handle_discover(store: Store, settings: Settings, job: dict) -> dict:
+    """One discovery scan: 'moments' (UK now) or 'evergreen' (worth knowing)."""
+    from .trends import scout_discover
 
     params = json.loads(job["params_json"] or "{}")
-    result = scout_moments(settings, int(params.get("count", 6)))
+    result = scout_discover(settings, job["kind"], int(params.get("count", 6)))
     return {
         "limitation": result.limitation,
         "moments": [m.model_dump(mode="json") for m in result.moments],
@@ -316,7 +346,9 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "revise": _handle_revise,
     "video": _handle_video,
     "trends": _handle_trends,
-    "moments": _handle_moments,
+    "moments": _handle_discover,
+    "evergreen": _handle_discover,
+    "concept": _handle_concept,
     "run": _handle_run,
 }
 
@@ -339,15 +371,25 @@ def enqueue_trends(store: Store, *, count: int) -> int:
     return store.create_job("trends", params={"count": count})
 
 
-def enqueue_moments(store: Store, *, count: int = 6) -> int:
-    """One radar scan at a time — reuse an in-flight scan instead of stacking."""
+def enqueue_discover(store: Store, kind: str = "moments", *, count: int = 6) -> int:
+    """One scan per lane at a time — reuse an in-flight scan, don't stack."""
+    if kind not in ("moments", "evergreen"):
+        raise ValueError(f"unknown discover kind '{kind}'")
     row = store.conn.execute(
-        "SELECT job_id FROM jobs WHERE kind = 'moments' "
-        "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1"
+        "SELECT job_id FROM jobs WHERE kind = ? "
+        "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1",
+        (kind,),
     ).fetchone()
     if row:
         return int(row["job_id"])
-    return store.create_job("moments", params={"count": count})
+    return store.create_job(kind, params={"count": count})
+
+
+def enqueue_concept(store: Store, idea_id: str, *, feedback: str = "") -> int:
+    existing = store.active_job_for(idea_id, "concept")
+    if existing:
+        return existing["job_id"]
+    return store.create_job("concept", idea_id=idea_id, params={"feedback": feedback})
 
 
 def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:

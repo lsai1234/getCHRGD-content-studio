@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .config import Settings
 from .db import Store
@@ -196,9 +196,25 @@ def build_user_message(idea: Idea, retry_reasons: list[str] | None = None) -> st
         if value:
             lines.append(f"- {key}: {value}")
 
+    # A concept brief the human developed and approved outranks free choice —
+    # the full write must follow the agreed direction.
+    prefs = creation_prefs(idea)
+    brief = prefs.get("concept_brief")
+    if brief:
+        lines.append("")
+        lines.append(
+            "CONCEPT BRIEF — a human editor developed and approved this "
+            "direction with you; the full post MUST follow it:"
+        )
+        for key in ("angle", "hook_direction", "tone", "visual_direction"):
+            if brief.get(key):
+                lines.append(f"- {key}: {brief[key]}")
+        for i, step in enumerate(brief.get("outline") or [], 1):
+            lines.append(f"  slide {i}: {step}")
+
     # A mechanic chosen up-front (create journey "blank canvas" door) constrains
     # Stage 2 instead of leaving format selection free.
-    lock = creation_prefs(idea).get("mechanic_lock")
+    lock = prefs.get("mechanic_lock")
     if lock:
         lines.append("")
         lines.append(
@@ -236,7 +252,7 @@ def creation_prefs(idea: Idea) -> dict:
         return {}
     return {
         k: route[k]
-        for k in ("style", "mechanic_lock", "render_mode")
+        for k in ("style", "mechanic_lock", "render_mode", "concept_brief")
         if k in route
     }
 
@@ -477,6 +493,78 @@ def build_single_idea(
             notes=idea_id,
         )
     return result
+
+
+# --- concept development (the "develop it with me" path) ----------------------
+#
+# A cheap, iterable stage BEFORE the full six-stage write: the engine sketches
+# a concept brief (angle, hook direction, slide outline, tone, visual
+# direction); the human edits it and feeds back in plain words as many rounds
+# as they like; the approved brief then constrains the full build.
+
+BRIEF_CONTRACT = """
+---
+
+## Output contract (STRICT — this run only)
+
+You are NOT writing the full post this run. You are developing the CONCEPT
+with a human editor. Return a SINGLE JSON object, nothing else:
+
+{
+  "angle": "the take in one sharp line",
+  "hook_direction": "how slide 1 should open (direction, not final copy)",
+  "outline": ["one line per slide describing what it does", "... exactly 5"],
+  "tone": "the voice/energy, one line",
+  "visual_direction": "the overall look for the designed slides, one line"
+}
+
+If the editor gave feedback, apply it faithfully — their input outranks your
+own preferences. Keep everything claim-safe and in the brand voice.
+"""
+
+
+class ConceptBrief(BaseModel):
+    """The evolving concept a human and the engine develop together."""
+
+    angle: str = ""
+    hook_direction: str = ""
+    outline: list[str] = Field(default_factory=list)
+    tone: str = ""
+    visual_direction: str = ""
+
+
+def develop_concept(
+    idea: Idea,
+    settings: Settings,
+    *,
+    feedback: str = "",
+    client: ChatClient | None = None,
+) -> tuple[ConceptBrief, float]:
+    """One development round: seed (+ current brief + editor feedback) → brief."""
+    if client is None:
+        client = OpenAIChatClient(settings)
+    base = PROMPT_FILE.read_text(encoding="utf-8")
+    system = base + "\n" + BRIEF_CONTRACT
+
+    lines = ["Develop the concept for this backlog row (do NOT write the full post):", ""]
+    for key in ("content_category", "target_viewer", "pain_point", "core_tension",
+                "concept_note", "learning_tag"):
+        value = getattr(idea, key)
+        if value:
+            lines.append(f"- {key}: {value}")
+    current = creation_prefs(idea).get("concept_brief")
+    if current:
+        lines += ["", "Current brief (evolve it, don't start over):",
+                  json.dumps(current, indent=2)]
+    if feedback.strip():
+        lines += ["", "EDITOR FEEDBACK — apply this faithfully:", feedback.strip()]
+
+    result = client.complete(system, "\n".join(lines))
+    spend = estimate_cost(
+        settings.openai_model, result.prompt_tokens, result.completion_tokens
+    )
+    brief = ConceptBrief.model_validate(json.loads(result.content))
+    return brief, spend
 
 
 # --- facts → angles (create journey, "facts" door) ---------------------------

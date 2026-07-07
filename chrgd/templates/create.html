@@ -95,6 +95,13 @@
   .angle-chip:hover { border-color:var(--accent2); }
   .angle-chip .a-type { font-size:11px; color:var(--accent2); margin-right:8px; }
   .angle-chip .a-hook { display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+  .lane-tabs { display:flex; gap:6px; }
+  .lane-tab { background:transparent; border:1px solid var(--line); color:var(--muted);
+              border-radius:20px; padding:6px 14px; margin:0; font-size:13.5px;
+              font-weight:600; }
+  .lane-tab.on { border-color:var(--accent); color:var(--fg); background:#1c1310; }
+  .angle-actions { display:flex; gap:6px; margin-top:8px; }
+  .angle-actions button { margin:0; padding:6px 12px; font-size:12px; }
   .skel { height:64px; border-radius:12px; margin-top:10px;
           background:linear-gradient(90deg, #101014 25%, #1a1a20 50%, #101014 75%);
           background-size:200% 100%; animation:shimmer 1.4s infinite; }
@@ -111,9 +118,10 @@
 
 <div class="steps">
   <span class="step-pill" data-step="start">1 · Start</span>
-  <span class="step-pill" data-step="write">2 · Write &amp; score</span>
-  <span class="step-pill" data-step="images">3 · Images</span>
-  <span class="step-pill" data-step="finish">4 · Schedule</span>
+  <span class="step-pill" data-step="develop">2 · Develop</span>
+  <span class="step-pill" data-step="write">3 · Write &amp; score</span>
+  <span class="step-pill" data-step="images">4 · Images</span>
+  <span class="step-pill" data-step="finish">5 · Schedule</span>
 </div>
 
 <!-- ===================== STEP 1 · START ===================== -->
@@ -134,12 +142,16 @@
 
   <div class="radar">
     <div class="radar-head">
-      <h2>🇬🇧 Happening in the UK</h2>
-      <span class="muted" style="font-size:12.5px">tap a moment → pick your angle → it builds</span>
+      <div class="lane-tabs">
+        <button type="button" class="lane-tab on" data-lane="moments" onclick="switchLane('moments')">🇬🇧 Happening now</button>
+        <button type="button" class="lane-tab" data-lane="evergreen" onclick="switchLane('evergreen')">🤯 Worth knowing</button>
+      </div>
       <span class="age" id="radar-age"></span>
       <button class="ghost" id="radar-refresh" style="margin:0;padding:4px 12px;font-size:12px"
-              onclick="refreshMoments()">↻ Rescan</button>
+              onclick="refreshLane(true)">↻ Rescan</button>
     </div>
+    <p class="muted" id="lane-hint" style="font-size:12.5px; margin:8px 0 0">
+      What the UK is living through this week — tap a story, pick your angle.</p>
     <div id="radar-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </div>
 
@@ -183,7 +195,13 @@
         <input type="checkbox" id="manual-mode" style="width:auto"> Fully manual — skip the engine, I'll write all five slides
       </label>
     </div>
-    <button type="submit" id="start-btn" style="margin-top:16px">Start →</button>
+    <div class="row" style="margin-top:16px">
+      <button type="submit" id="start-btn" style="margin:0">Start →</button>
+      <button type="button" class="ghost" id="develop-btn" style="margin:0; display:none"
+              onclick="startCreate(null, true)"
+              title="the engine sketches a concept brief you can edit and evolve before the full write">
+        🧭 Develop it with me first</button>
+    </div>
   </form>
 
   <div id="angles-wait" style="display:none">
@@ -205,6 +223,45 @@
   .job-panel .note { font-size:14px; }
   .job-panel .elapsed { color:var(--muted); font-size:12.5px; }
 </style>
+
+<!-- ===================== STEP 1.5 · DEVELOP ===================== -->
+<div class="stage" id="stage-develop">
+  <div id="develop-wait"></div>
+  <div id="develop-done" style="display:none">
+    <div class="row" style="justify-content:space-between">
+      <h2 style="font-size:17px; margin:0">The concept — make it yours</h2>
+      <small class="k" id="develop-meta"></small>
+    </div>
+    <p class="muted" style="font-size:13px">Edit anything directly, or tell the
+      engine what to change and evolve it another round. Nothing is written in
+      full until you say so.</p>
+
+    <form class="inline" onsubmit="return false">
+      <label>The angle</label>
+      <input id="b-angle">
+      <div class="row">
+        <div style="flex:1"><label>Hook direction (how slide 1 opens)</label><input id="b-hook"></div>
+        <div style="flex:1"><label>Tone</label><input id="b-tone"></div>
+      </div>
+      <label>Visual direction</label>
+      <input id="b-visual">
+      <label>Slide-by-slide outline</label>
+      <div id="b-outline"></div>
+
+      <div class="job-panel" style="max-width:none; margin:16px 0">
+        <label style="margin-top:0">💬 Evolve it — what should change?</label>
+        <textarea id="b-feedback" style="min-height:52px"
+          placeholder="e.g. angle it at people who train before work · make slide 4 a plot twist · less salesy"></textarea>
+        <button type="button" class="ghost" style="margin-top:10px" onclick="evolveBrief()">🧭 Evolve another round</button>
+      </div>
+
+      <div class="row">
+        <button type="button" onclick="writeFromBrief()">✍️ Happy — write the full post</button>
+        <small class="k">the full write follows this brief exactly</small>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- ===================== STEP 2 · WRITE ===================== -->
 <div class="stage" id="stage-write">
@@ -311,36 +368,56 @@ function go(step){
   });
 }
 
-/* ---------- step 1: the UK moments radar ---------- */
+/* ---------- step 1: the discovery radar (two lanes) ---------- */
 const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in'};
-let momentsJob = null;
+const LANE_HINT = {
+  moments: 'What the UK is living through this week — tap a story, pick your angle.',
+  evergreen: 'Fascinating, shareable facts that work any week of the year.',
+};
+// Evergreen facts don't go stale like moments do — rescan far less often.
+const LANE_MAX_AGE_H = {moments: 12, evergreen: 24 * 7};
+let lane = 'moments';
+const laneJobs = {moments: null, evergreen: null};
 
-async function loadMoments(){
-  const r = await fetch('/api/moments');
-  if (!r.ok) return;
-  const data = await r.json();
-  momentsJob = data.job_id;
-  if (data.moments.length) drawMoments(data);
-  // Fresh enough (<12h) and nothing running → done. Otherwise (re)scan.
-  if (data.scanning) return pollMoments();
-  if (!data.moments.length || data.age_hours === null || data.age_hours > 12)
-    refreshMoments(!data.moments.length);
+function switchLane(l){
+  lane = l;
+  document.querySelectorAll('.lane-tab').forEach(t =>
+    t.classList.toggle('on', t.dataset.lane === l));
+  document.getElementById('lane-hint').textContent = LANE_HINT[l];
+  loadLane();
 }
 
-async function refreshMoments(showSkeleton = true){
+async function loadLane(){
+  document.getElementById('radar-body').innerHTML =
+    '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  document.getElementById('radar-age').textContent = '';
+  const r = await fetch(`/api/moments?kind=${lane}`);
+  if (!r.ok) return;
+  const data = await r.json();
+  laneJobs[lane] = data.job_id;
+  if (data.moments.length) drawMoments(data);
+  if (data.scanning) return pollLane(lane);
+  if (!data.moments.length || data.age_hours === null || data.age_hours > LANE_MAX_AGE_H[lane])
+    refreshLane(!data.moments.length);
+}
+
+async function refreshLane(showSkeleton = true){
   if (showSkeleton)
     document.getElementById('radar-body').innerHTML =
       '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
-  document.getElementById('radar-age').textContent = 'scanning what the UK is talking about…';
-  await post('/api/jobs/moments', new URLSearchParams());
-  pollMoments();
+  document.getElementById('radar-age').textContent =
+    lane === 'moments' ? 'scanning what the UK is talking about…' : 'hunting fascinating facts…';
+  await post('/api/jobs/moments', new URLSearchParams({kind: lane}));
+  pollLane(lane);
 }
 
-async function pollMoments(){
-  const r = await fetch('/api/moments');
+async function pollLane(forLane){
+  if (forLane !== lane) return;  // user switched tabs — that lane polls itself
+  const r = await fetch(`/api/moments?kind=${forLane}`);
   const data = await r.json();
-  if (data.scanning) return setTimeout(pollMoments, 2500);
-  momentsJob = data.job_id;
+  if (data.scanning) return setTimeout(() => pollLane(forLane), 2500);
+  laneJobs[forLane] = data.job_id;
+  if (forLane !== lane) return;
   if (data.moments.length) drawMoments(data);
   else document.getElementById('radar-age').textContent = 'scan came back empty — try rescan';
 }
@@ -350,7 +427,9 @@ function drawMoments(data){
   body.innerHTML = '';
   document.getElementById('radar-age').textContent =
     data.age_hours === null ? '' :
-    data.age_hours < 1 ? 'updated just now' : `updated ${Math.round(data.age_hours)}h ago`;
+    data.age_hours < 1 ? 'updated just now' :
+    data.age_hours < 48 ? `updated ${Math.round(data.age_hours)}h ago` :
+    `updated ${Math.round(data.age_hours / 24)}d ago`;
   data.moments.forEach((m, mi) => {
     const el = document.createElement('div');
     el.className = 'moment';
@@ -364,14 +443,20 @@ function drawMoments(data){
       <div class="m-angles"></div>`;
     const anglesBox = el.querySelector('.m-angles');
     (m.angles || []).forEach((a, ai) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'angle-chip';
-      b.innerHTML = `<span class="a-type">${TYPE_LABEL[a.type] || esc(a.type || '')}</span>
+      const chip = document.createElement('div');
+      chip.className = 'angle-chip';
+      chip.innerHTML = `<span class="a-type">${TYPE_LABEL[a.type] || esc(a.type || '')}</span>
         <b>${esc(a.title)}</b>
-        <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>`;
-      b.onclick = (ev) => { ev.stopPropagation(); useMoment(mi, ai); };
-      anglesBox.appendChild(b);
+        <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>
+        <div class="angle-actions">
+          <button type="button">⚡ Build it now</button>
+          <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Develop it with me</button>
+        </div>`;
+      chip.onclick = ev => ev.stopPropagation();
+      const [quick, dev] = chip.querySelectorAll('button');
+      quick.onclick = () => useMoment(mi, ai, false);
+      dev.onclick = () => useMoment(mi, ai, true);
+      anglesBox.appendChild(chip);
     });
     el.onclick = () => {
       const was = el.classList.contains('open');
@@ -382,16 +467,17 @@ function drawMoments(data){
   });
 }
 
-async function useMoment(mi, ai){
+async function useMoment(mi, ai, develop){
   const style = document.getElementById('style-select').value;
   const render_mode = document.getElementById('mode-select').value;
   const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
-  const r = await post(`/api/moments/${momentsJob}/use`,
-    new URLSearchParams({moment: mi, angle: ai, style, render_mode, scheduled_for: sched}));
+  const r = await post(`/api/moments/${laneJobs[lane]}/use`,
+    new URLSearchParams({moment: mi, angle: ai, style, render_mode,
+                         scheduled_for: sched, develop: develop ? 'true' : ''}));
   if (!r) return;
   state.ideaId = r.idea_id;
   history.replaceState(null, '', `/create?idea=${r.idea_id}`);
-  go('write'); pollBuild();
+  if (develop) { goDevelop(); } else { go('write'); pollBuild(); }
 }
 
 /* ---------- step 1: the three doors ---------- */
@@ -404,6 +490,8 @@ function pickDoor(d){
     document.getElementById(`door-${k}-fields`).style.display = (k===d) ? '' : 'none';
   document.getElementById('start-btn').textContent =
     d === 'facts' ? 'Find angles →' : 'Start →';
+  // Facts get their develop choice per-angle; idea/blank get it up front.
+  document.getElementById('develop-btn').style.display = d === 'facts' ? 'none' : '';
 }
 function pickMech(key, el){
   state.mech = (state.mech === key) ? null : key;
@@ -411,12 +499,13 @@ function pickMech(key, el){
     m.classList.toggle('on', m.dataset.key === state.mech));
 }
 
-async function startCreate(ev){
-  ev.preventDefault();
+async function startCreate(ev, develop = false){
+  if (ev) ev.preventDefault();
   const style = document.getElementById('style-select').value;
   const render_mode = document.getElementById('mode-select').value;
   const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
-  const body = new URLSearchParams({mode: state.door, style, render_mode, scheduled_for: sched});
+  const body = new URLSearchParams({mode: state.door, style, render_mode,
+    scheduled_for: sched, develop: develop ? 'true' : ''});
   if (state.door === 'idea') body.set('text', document.getElementById('idea-text').value);
   if (state.door === 'facts') body.set('text', document.getElementById('facts-text').value);
   if (state.door === 'blank') {
@@ -435,7 +524,9 @@ async function startCreate(ev){
   } else {
     state.ideaId = r.idea_id;
     history.replaceState(null, '', `/create?idea=${r.idea_id}`);
-    if (r.manual) { openWriteStep(); } else { go('write'); pollBuild(); }
+    if (r.manual) { openWriteStep(); }
+    else if (r.develop) { goDevelop(); }
+    else { go('write'); pollBuild(); }
   }
   return false;
 }
@@ -453,23 +544,139 @@ async function pollAngles(){
     el.className = 'angle';
     el.innerHTML = `<b>${esc(a.title)}</b> <span class="pill">${esc(a.mechanic||'')}</span><br>
       <span class="muted" style="font-size:13px">${esc(a.concept_note)}</span><br>
-      <small class="k">hook: “${esc(a.hook||'')}” · from: ${esc(a.fact||'')}</small>`;
-    el.onclick = () => pickAngle(i);
+      <small class="k">hook: “${esc(a.hook||'')}” · from: ${esc(a.fact||'')}</small>
+      <div class="angle-actions">
+        <button type="button">⚡ Build it now</button>
+        <button type="button" class="ghost">🧭 Develop it with me</button>
+      </div>`;
+    const [quick, dev] = el.querySelectorAll('button');
+    quick.onclick = () => pickAngle(i, false);
+    dev.onclick = () => pickAngle(i, true);
     box.appendChild(el);
   });
   document.getElementById('angles-list').style.display = '';
 }
 
-async function pickAngle(i){
+async function pickAngle(i, develop = false){
   const style = document.getElementById('style-select').value;
   const render_mode = document.getElementById('mode-select').value;
   const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
   const r = await post(`/api/create/angle/${state.anglesJob}`,
-    new URLSearchParams({index: i, style, render_mode, scheduled_for: sched}));
+    new URLSearchParams({index: i, style, render_mode, scheduled_for: sched,
+                         develop: develop ? 'true' : ''}));
   if (!r) return;
   state.ideaId = r.idea_id;
   history.replaceState(null, '', `/create?idea=${r.idea_id}`);
-  go('write'); pollBuild();
+  if (develop) { goDevelop(); } else { go('write'); pollBuild(); }
+}
+
+/* ---------- step 1.5: develop the concept ---------- */
+let developStart = null;
+
+function showDevelopWait(title){
+  developStart = Date.now();
+  document.getElementById('develop-wait').style.display = '';
+  document.getElementById('develop-wait').innerHTML = `
+    <div class="job-panel">
+      <p style="margin:0"><span class="spin">🧭</span> <b>${esc(title)}</b></p>
+      <div class="bar"><div id="dev-bar"></div></div>
+      <div class="note" id="dev-note">warming up…</div>
+      <div class="elapsed" id="dev-elapsed"></div>
+    </div>`;
+  document.getElementById('develop-done').style.display = 'none';
+}
+
+function goDevelop(){
+  go('develop');
+  showDevelopWait('Sketching the concept');
+  pollDevelop();
+}
+
+async function pollDevelop(){
+  const d = await detail();
+  const j = d.active_jobs.concept;
+  if (!j) {
+    developStart = null;
+    if (d.concept_brief) return drawBrief(d);
+    if (d.last_error) {
+      document.getElementById('develop-wait').innerHTML = `
+        <div class="job-panel" style="border-color:#7a2c2c">
+          <p style="margin:0">❌ <b>Concept round failed</b></p>
+          <p class="note" style="margin:8px 0">${esc(d.last_error.error)}</p>
+          <button onclick="retryDevelop()" style="margin:4px 0 0">Try again</button>
+        </div>`;
+      return;
+    }
+  } else {
+    const secs = Math.round((Date.now() - developStart) / 1000);
+    const bar = document.getElementById('dev-bar');
+    if (bar) {
+      bar.style.width = Math.max(5, j.progress || 0) + '%';
+      document.getElementById('dev-note').textContent =
+        j.status === 'QUEUED' ? 'waiting in the job queue…' : (j.note || 'thinking…');
+      document.getElementById('dev-elapsed').textContent =
+        `${secs}s elapsed — a concept round usually takes 15–40s`;
+    }
+  }
+  setTimeout(pollDevelop, 2000);
+}
+
+async function retryDevelop(){
+  await post(`/api/ideas/${state.ideaId}/develop`, new URLSearchParams());
+  showDevelopWait('Sketching the concept');
+  pollDevelop();
+}
+
+function drawBrief(d){
+  const b = d.concept_brief || {};
+  document.getElementById('develop-wait').style.display = 'none';
+  document.getElementById('develop-done').style.display = '';
+  document.getElementById('develop-meta').textContent =
+    `${d.idea_id}` + (d.style ? ` · style: ${d.style}` : '');
+  document.getElementById('b-angle').value = b.angle || '';
+  document.getElementById('b-hook').value = b.hook_direction || '';
+  document.getElementById('b-tone').value = b.tone || '';
+  document.getElementById('b-visual').value = b.visual_direction || '';
+  const box = document.getElementById('b-outline');
+  box.innerHTML = '';
+  const outline = (b.outline && b.outline.length) ? b.outline : ['', '', '', '', ''];
+  outline.forEach((line, i) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.style.marginBottom = '6px';
+    row.innerHTML = `<span class="muted" style="width:56px; font-size:12px">slide ${i+1}</span>
+      <input id="b-outline-${i}" style="flex:1" value="${esc(line)}">`;
+    box.appendChild(row);
+  });
+  document.getElementById('b-feedback').value = '';
+}
+
+async function saveBrief(){
+  const body = new URLSearchParams({
+    angle: document.getElementById('b-angle').value,
+    hook_direction: document.getElementById('b-hook').value,
+    tone: document.getElementById('b-tone').value,
+    visual_direction: document.getElementById('b-visual').value,
+  });
+  document.querySelectorAll('#b-outline input').forEach((inp, i) =>
+    body.set(`outline_${i}`, inp.value));
+  await post(`/api/ideas/${state.ideaId}/brief`, body);
+}
+
+async function evolveBrief(){
+  const fb = document.getElementById('b-feedback').value.trim();
+  await saveBrief();
+  await post(`/api/ideas/${state.ideaId}/develop`, new URLSearchParams({feedback: fb}));
+  showDevelopWait(fb ? 'Evolving the concept with your feedback' : 'Evolving the concept');
+  pollDevelop();
+}
+
+async function writeFromBrief(){
+  await saveBrief();
+  await post(`/api/ideas/${state.ideaId}/build`, new URLSearchParams());
+  go('write');
+  showWriteWait('Writing the full post from your brief');
+  pollBuild();
 }
 
 /* ---------- step 2: write ---------- */
@@ -853,7 +1060,8 @@ if (RESUME_IDEA) {
   state.ideaId = RESUME_IDEA;
   (async () => {
     const d = await detail();
-    if (!d.slides.length) { go('write'); pollBuild(); }
+    if (!d.slides.length && (d.active_jobs.concept || d.concept_brief)) { goDevelop(); }
+    else if (!d.slides.length) { go('write'); pollBuild(); }
     else if (!d.assets.length) { openWriteStep(); }
     else { openImagesStep(); }
   })();
@@ -863,7 +1071,7 @@ if (RESUME_IDEA) {
     document.getElementById('preset-day-note').style.display = '';
     document.getElementById('preset-day-label').textContent = PRESET_DAY;
   }
-  loadMoments();
+  loadLane();
 }
 </script>
 {% endblock %}
