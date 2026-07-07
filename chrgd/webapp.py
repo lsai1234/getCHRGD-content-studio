@@ -570,6 +570,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         core_tension: str = "",
         style: str = "",
         mechanic_key: str = "",
+        render_mode: str = "",
         scheduled_for: datetime | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
@@ -578,6 +579,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         route: dict = {}
         if style:
             route["style"] = style
+        if render_mode:
+            if render_mode not in ("ai_design", "overlay"):
+                raise HTTPException(400, f"unknown render mode '{render_mode}'")
+            route["render_mode"] = render_mode
         if mechanic_key:
             mech = get_mechanic(mechanic_key)
             if mech is None:
@@ -602,6 +607,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         text: str = Form(""),
         mechanic: str = Form(""),
         style: str = Form(""),
+        render_mode: str = Form(""),
         scheduled_for: str = Form(""),
         manual: bool = Form(False),
         _: str = Depends(require_user),
@@ -620,7 +626,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     raise HTTPException(400, "give the idea a line of text")
                 idea = _new_seed(
                     store, concept_note=text.strip(), style=style,
-                    scheduled_for=when,
+                    render_mode=render_mode, scheduled_for=when,
                 )
                 job_id = enqueue_build_one(store, idea.idea_id)
                 return {"mode": mode, "idea_id": idea.idea_id, "job_id": job_id}
@@ -631,6 +637,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     concept_note=text.strip() or "blank canvas",
                     style=style,
                     mechanic_key=mechanic,
+                    render_mode=render_mode,
                     scheduled_for=when,
                 )
                 if manual:
@@ -660,6 +667,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         job_id: int,
         index: int = Form(...),
         style: str = Form(""),
+        render_mode: str = Form(""),
         scheduled_for: str = Form(""),
         _: str = Depends(require_user),
     ):
@@ -681,6 +689,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 pain_point=a.get("pain_point", ""),
                 core_tension=a.get("core_tension", ""),
                 style=style,
+                render_mode=render_mode,
                 scheduled_for=when,
             )
             build_job = enqueue_build_one(store, idea.idea_id)
@@ -690,7 +699,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def api_idea_detail(idea_id: str, _: str = Depends(require_user)):
         """Everything the create journey UI needs to draw one post."""
         from .brand import load_brand
-        from .images import list_variants
+        from .images import list_variants, render_mode_for_idea
 
         brand = load_brand()
         with _store(settings) as store:
@@ -728,6 +737,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "slides": slides,
             "qa": route.get("qa", {}),
             "style": route.get("style", ""),
+            "render_mode": render_mode_for_idea(idea, brand),
             "mechanic": (route.get("mechanic_lock") or {}).get("name")
             or route.get("mechanic", ""),
             "assets": assets,

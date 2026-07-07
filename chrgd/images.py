@@ -148,13 +148,24 @@ def _generate_background(
 
 # --- prompt composition -------------------------------------------------------
 
+# Text-placement rules for AI-designed slides. Ported from the proven n8n
+# pipeline's image call: the model designs the whole slide, typography
+# included, but must use exactly the approved copy.
+_DESIGN_TEXT_RULES = (
+    "\n\nText rules:"
+    "\n- Place the headline text prominently in large bold readable type."
+    "\n- Place the supporting text below it in smaller but still readable type."
+    "\n- Use exactly the text provided above."
+    "\n- Do not add any extra words, labels, logos, captions, watermarks, "
+    "UI elements, or random text."
+    "\n- Keep all text inside safe margins."
+    "\n- Make the text readable on a phone screen."
+)
+
 
 def compose_image_prompt(slide_prompt: str, brand: Brand, style: str | None) -> str:
-    """The full prompt sent to the image API for one background.
-
-    `[style preset] + [slide prompt] + [consistency clause] + [negative]` —
-    text is always overlaid in code, so the model must never paint its own.
-    """
+    """Background-only prompt (overlay mode): text is added in code, so the
+    model must never paint its own."""
     parts = []
     style_block = brand.style_prompt(style)
     if style_block:
@@ -168,14 +179,44 @@ def compose_image_prompt(slide_prompt: str, brand: Brand, style: str | None) -> 
     return " ".join(parts)
 
 
+def compose_design_prompt(slide: Slide, brand: Brand, style: str | None) -> str:
+    """Full-slide design prompt (ai_design mode): the model designs the whole
+    piece — concept, layout, and the approved copy rendered as typography."""
+    parts = []
+    if slide.image_prompt.strip():
+        parts.append(slide.image_prompt.strip())
+    style_block = brand.style_prompt(style)
+    if style_block:
+        parts.append(f"Art direction: {style_block}")
+    if brand.generation.consistency_clause:
+        parts.append(brand.generation.consistency_clause)
+    prompt = " ".join(parts)
+    prompt += "\n\nTEXT TO PLACE ON IMAGE:"
+    prompt += f"\nHeadline text: {slide.headline}"
+    if slide.supporting:
+        prompt += f"\nSupporting text: {slide.supporting}"
+    prompt += _DESIGN_TEXT_RULES
+    return prompt
+
+
+def _route_of(idea: Idea) -> dict:
+    if not idea.route_json:
+        return {}
+    try:
+        return json.loads(idea.route_json)
+    except json.JSONDecodeError:
+        return {}
+
+
 def style_for_idea(idea: Idea) -> str | None:
     """The style preset chosen for this idea (stored in route_json)."""
-    if not idea.route_json:
-        return None
-    try:
-        return json.loads(idea.route_json).get("style")
-    except json.JSONDecodeError:
-        return None
+    return _route_of(idea).get("style")
+
+
+def render_mode_for_idea(idea: Idea, brand: Brand) -> str:
+    """'ai_design' or 'overlay' — per-post choice, falling back to brand.toml."""
+    mode = _route_of(idea).get("render_mode") or brand.generation.render_mode
+    return mode if mode in ("ai_design", "overlay") else "ai_design"
 
 
 # --- text overlay -----------------------------------------------------------
@@ -345,9 +386,17 @@ def render_slide(
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
-    The raw (fitted) background is saved alongside the composed slide so copy
-    edits can re-overlay text for free, without a paid regeneration. Variant
-    files get an `_a`/`_b` suffix; the first variant also becomes the
+    Two modes (per-post via route_json.render_mode, default from brand.toml):
+
+    * ``ai_design`` — the model designs the WHOLE slide, typography included
+      (the proven n8n approach). The design is saved as both `slide_N` and
+      `bg_N` so variant-picking works identically; there is no free text
+      re-lay in this mode.
+    * ``overlay`` — the model paints a background; the approved copy is
+      overlaid in code. The raw background is kept on disk so copy edits can
+      re-overlay text for free.
+
+    Variant files get an `_a`/`_b` suffix; the first variant also becomes the
     canonical `slide_N` / `bg_N` until a different one is picked.
     """
     brand = brand or load_brand()
@@ -358,6 +407,7 @@ def render_slide(
     out_dir = _out_dir(settings, idea.idea_id)
     ext, pil_format = _ext(brand)
     style = style_for_idea(idea)
+    mode = render_mode_for_idea(idea, brand)
 
     n = variants if variants is not None else brand.generation.variants_for(slide_index)
     n = max(1, min(n, len(_VARIANT_KEYS)))
@@ -376,13 +426,22 @@ def render_slide(
                     f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
                     f"at slide {slide_index + 1} — aborting render"
                 )
-            prompt = compose_image_prompt(slide.image_prompt, brand, style)
+            if mode == "ai_design":
+                prompt = compose_design_prompt(slide, brand, style)
+            else:
+                prompt = compose_image_prompt(slide.image_prompt, brand, style)
             background = _generate_background(prompt, settings, brand, quality)
             result.spend_usd += per_image
             result.generated += 1
 
         fitted = _fit_to_canvas(background, brand.canvas.width, brand.canvas.height)
-        composed = compose_slide(fitted, slide, brand, slide_index)
+        if mode == "ai_design" and not dry_run:
+            # The model output IS the finished slide — no code overlay.
+            composed = fitted
+        else:
+            # Overlay mode always; ai_design dry-run gets an approximate
+            # overlay so test mode still previews the copy on the slide.
+            composed = compose_slide(fitted, slide, brand, slide_index)
         key = _VARIANT_KEYS[v] if n > 1 else None
         _save(fitted, _bg_path(out_dir, slide_index, ext, key), pil_format, brand)
         _save(composed, _slide_path(out_dir, slide_index, ext, key), pil_format, brand)
@@ -407,10 +466,16 @@ def recompose_slide(
 ) -> SlideRenderResult:
     """Re-overlay the current copy onto the saved background — free, instant.
 
-    Refreshes the canonical slide and any variant previews that still have
-    their background on disk. Raises if the slide was never rendered.
+    Overlay mode only: in ai_design mode the text is part of the artwork, so
+    copy changes need a regeneration. Refreshes the canonical slide and any
+    variant previews that still have their background on disk.
     """
     brand = brand or load_brand()
+    if render_mode_for_idea(idea, brand) == "ai_design":
+        raise ImageError(
+            "this post uses AI-designed slides — the text is part of the "
+            "artwork, so regenerate the slide to apply copy changes"
+        )
     slides = _slides_from_idea(idea)
     if not 0 <= slide_index < len(slides):
         raise ImageError(f"slide {slide_index + 1} out of range for {idea.idea_id}")

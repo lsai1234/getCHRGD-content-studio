@@ -35,6 +35,13 @@ class Generation(BaseModel):
     quality_rest: str = "medium"
     # How many background options slide 1 gets to choose from (paid each).
     variants_first: int = 2
+    # How slides are produced:
+    #   "ai_design" — gpt-image-2 designs the WHOLE slide, typography included
+    #                 (concept art / graphic-design energy; text is part of
+    #                 the artwork). Copy changes need a regeneration.
+    #   "overlay"   — model paints a background only; approved text is
+    #                 overlaid in code (free to re-lay after copy edits).
+    render_mode: str = "ai_design"
     # Composed into every image prompt (see images.compose_image_prompt).
     consistency_clause: str = (
         "Part of a 5-image set: keep the same location, lighting, colour "

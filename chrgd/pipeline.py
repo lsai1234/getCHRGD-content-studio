@@ -46,7 +46,7 @@ in exactly this shape:
     {
       "headline": "string",
       "supporting": "string",
-      "image_prompt": "string, uses ONLY approved slide text",
+      "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art: the visual concept (subject, setting, action, mood), the composition and layout, the art direction (photographic/illustrated/graphic style, colour, lighting), and how the typography should be treated as part of the design (placement, scale, energy). Think agency-level concept art for TikTok, not a stock photo description. Do NOT invent text beyond the approved slide copy.",
       "visual_intent": "string: subject, setting, action, prop, double-take"
     }
     // EXACTLY 5 slide objects, in order
@@ -234,7 +234,11 @@ def creation_prefs(idea: Idea) -> dict:
         route = json.loads(idea.route_json)
     except json.JSONDecodeError:
         return {}
-    return {k: route[k] for k in ("style", "mechanic_lock") if k in route}
+    return {
+        k: route[k]
+        for k in ("style", "mechanic_lock", "render_mode")
+        if k in route
+    }
 
 
 def parse_post(content: str) -> Post:
@@ -551,10 +555,11 @@ def generate_angles(
 # --- targeted revision (the scorecard's "punch it up") ------------------------
 
 REVISE_INSTRUCTION = (
-    "REVISION RUN: below is a post you already built, plus one focus. "
-    "Rewrite it to maximise the focus while keeping everything that already "
-    "works — same core idea, same mechanic, same slide count. Re-run the "
-    "brutal QA stage on the revision before returning it."
+    "REVISION RUN: below is a post you already built, plus feedback from the "
+    "human editor. Apply the feedback while keeping everything that already "
+    "works — same core idea and slide count unless the feedback says "
+    "otherwise. If the feedback names a QA metric, rewrite to maximise that "
+    "metric. Re-run the brutal QA stage on the revision before returning it."
 )
 
 
@@ -565,7 +570,9 @@ def revise_post(
     *,
     client: ChatClient | None = None,
 ) -> tuple[Post, float]:
-    """One focused revision pass, e.g. focus='saveability'. Returns (post, spend)."""
+    """One revision pass. `focus` is a QA metric ('saveability') or freeform
+    editor feedback ('make slide 3 about gym anxiety, drop the bro tone').
+    Returns (post, spend)."""
     if not idea.slides_json:
         raise ValueError(f"{idea.idea_id} has no built post to revise")
     if client is None:
@@ -582,7 +589,7 @@ def revise_post(
         [
             REVISE_INSTRUCTION,
             "",
-            f"FOCUS: maximise **{focus}**.",
+            f"FEEDBACK / FOCUS: {focus}",
             "",
             "Current post:",
             json.dumps(current, indent=2),

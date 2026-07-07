@@ -118,10 +118,15 @@
     </div>
 
     <div id="style-picker" style="display:none">
-      <label>Visual style (applied to every slide's image)</label>
+      <label>Visual style (applied to every slide's design)</label>
       <select id="style-select">
         {% for s in styles %}<option value="{{ s.key }}">{{ s.label }}</option>{% endfor %}
         <option value="">No preset</option>
+      </select>
+      <label>Slide design</label>
+      <select id="mode-select">
+        <option value="ai_design">AI-designed slides — full concept art, text in the artwork (recommended)</option>
+        <option value="overlay">Photo background + clean overlay text (free text edits)</option>
       </select>
       <div class="row" id="preset-day-note" style="display:none; margin-top:8px">
         <span class="pill">📅 will be scheduled for <b id="preset-day-label"></b></span>
@@ -159,6 +164,13 @@
       <small class="k" id="write-meta"></small>
     </div>
     <div class="qa-grid" id="qa-grid"></div>
+
+    <div class="job-panel" style="max-width:none; margin:16px 0">
+      <label style="margin-top:0">💬 Suggest improvements <small class="k">— tell the engine what to change before any images are made</small></label>
+      <textarea id="feedback-text" style="min-height:56px"
+        placeholder="e.g. make it about women's gym anxiety · slide 3 is weak, replace it · funnier, less preachy · make the designs feel more premium"></textarea>
+      <button type="button" class="ghost" style="margin-top:10px" onclick="sendFeedback()">⚡ Rework it with this feedback</button>
+    </div>
 
     <h2 style="font-size:17px">Pick the hook <small class="k">(slide 1 decides everything)</small></h2>
     <div id="hook-options"></div>
@@ -272,8 +284,9 @@ function pickMech(key, el){
 async function startCreate(ev){
   ev.preventDefault();
   const style = document.getElementById('style-select').value;
+  const render_mode = document.getElementById('mode-select').value;
   const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
-  const body = new URLSearchParams({mode: state.door, style, scheduled_for: sched});
+  const body = new URLSearchParams({mode: state.door, style, render_mode, scheduled_for: sched});
   if (state.door === 'idea') body.set('text', document.getElementById('idea-text').value);
   if (state.door === 'facts') body.set('text', document.getElementById('facts-text').value);
   if (state.door === 'blank') {
@@ -319,9 +332,10 @@ async function pollAngles(){
 
 async function pickAngle(i){
   const style = document.getElementById('style-select').value;
+  const render_mode = document.getElementById('mode-select').value;
   const sched = PRESET_DAY ? `${PRESET_DAY}T18:00` : '';
   const r = await post(`/api/create/angle/${state.anglesJob}`,
-    new URLSearchParams({index: i, style, scheduled_for: sched}));
+    new URLSearchParams({index: i, style, render_mode, scheduled_for: sched}));
   if (!r) return;
   state.ideaId = r.idea_id;
   history.replaceState(null, '', `/create?idea=${r.idea_id}`);
@@ -472,6 +486,14 @@ async function punchUp(metric){
   pollBuild();
 }
 
+async function sendFeedback(){
+  const fb = document.getElementById('feedback-text').value.trim();
+  if (!fb) return alert('Type the feedback first.');
+  await post(`/api/ideas/${state.ideaId}/revise`, new URLSearchParams({focus: fb}));
+  showWriteWait('Reworking the post with your feedback');
+  pollBuild();
+}
+
 async function saveCopy(ev){
   if (ev) ev.preventDefault();
   const form = document.getElementById('copy-form');
@@ -551,15 +573,21 @@ function drawImages(d){
   }
   const i = state.slideIdx;
   const s = (d.slides || [])[i] || {};
+  const aiDesign = d.render_mode === 'ai_design';
   const wrap = document.createElement('div');
   wrap.innerHTML = `
-    <h2 style="font-size:16px; margin-top:0">Slide ${i+1}</h2>
+    <h2 style="font-size:16px; margin-top:0">Slide ${i+1}
+      <small class="k">${aiDesign ? 'AI-designed — text is part of the artwork' : 'photo + overlay text'}</small></h2>
     <label>Headline</label><input id="t-head" value="${esc(s.headline||'')}">
     <label>Supporting</label><input id="t-supp" value="${esc(s.supporting||'')}">
-    <label>Image brief</label><textarea id="t-prompt" style="min-height:60px">${esc(s.image_prompt||'')}</textarea>
+    <label>${aiDesign ? 'Design brief' : 'Image brief'} <small class="k">${aiDesign ? '(the full slide concept: composition, art direction, how the type is treated)' : '(what the background should show — no text in it)'}</small></label>
+    <textarea id="t-prompt" style="min-height:60px">${esc(s.image_prompt||'')}</textarea>
     <div class="row" style="margin-top:10px">
-      <button class="ghost" onclick="relayText()" title="free — re-overlays the text on the same background">✎ Re-lay text (free)</button>
-      <button onclick="regenSlide()" title="paid — a brand-new background from the image brief">🎨 Regenerate background</button>
+      ${aiDesign
+        ? `<button onclick="regenSlide()" title="paid — redesigns this slide from the brief + current copy">🎨 Redesign slide</button>
+           <small class="k">copy or brief changed? redesign applies it</small>`
+        : `<button class="ghost" onclick="relayText()" title="free — re-overlays the text on the same background">✎ Re-lay text (free)</button>
+           <button onclick="regenSlide()" title="paid — a brand-new background from the image brief">🎨 Regenerate background</button>`}
     </div>
     <div id="variant-box"></div>`;
   tools.appendChild(wrap);
@@ -567,7 +595,7 @@ function drawImages(d){
   const vnames = (d.variants || {})[String(i)] || [];
   if (vnames.length) {
     const vb = wrap.querySelector('#variant-box');
-    vb.innerHTML = '<label>Background options — tap to use</label>';
+    vb.innerHTML = `<label>${aiDesign ? 'Design options' : 'Background options'} — tap to use</label>`;
     const row = document.createElement('div'); row.className = 'variants';
     vnames.forEach(name => {
       const img = document.createElement('img');

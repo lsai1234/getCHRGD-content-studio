@@ -328,8 +328,12 @@ def test_detail_surfaces_note_and_only_latest_error(client, settings):
 # --- images: variants, recompose, style prompts --------------------------------
 
 
-def make_built_idea(idea_id="G-0001", style=None):
-    route = {"style": style} if style else {}
+def make_built_idea(idea_id="G-0001", style=None, render_mode=None):
+    route = {}
+    if style:
+        route["style"] = style
+    if render_mode:
+        route["render_mode"] = render_mode
     return Idea(
         idea_id=idea_id,
         concept_note="x",
@@ -356,7 +360,7 @@ def test_render_saves_backgrounds_and_variants(settings):
 def test_recompose_is_free_and_updates_slide(settings):
     from chrgd.images import recompose_slide, render_carousel
 
-    idea = make_built_idea()
+    idea = make_built_idea(render_mode="overlay")
     render_carousel(idea, settings, dry_run=True)
     # Edit the copy, then re-lay text without regenerating.
     slides = json.loads(idea.slides_json)
@@ -371,7 +375,74 @@ def test_recompose_without_background_errors(settings):
     from chrgd.images import ImageError, recompose_slide
 
     with pytest.raises(ImageError):
-        recompose_slide(make_built_idea(), 0, settings)
+        recompose_slide(make_built_idea(render_mode="overlay"), 0, settings)
+
+
+def test_recompose_refused_for_ai_designed_slides(settings):
+    from chrgd.images import ImageError, recompose_slide, render_carousel
+
+    idea = make_built_idea()  # default mode: ai_design
+    render_carousel(idea, settings, dry_run=True)
+    with pytest.raises(ImageError, match="regenerate"):
+        recompose_slide(idea, 0, settings)
+
+
+def test_render_mode_default_and_override():
+    from chrgd.images import render_mode_for_idea
+
+    brand = load_brand()
+    assert render_mode_for_idea(make_built_idea(), brand) == "ai_design"
+    assert (
+        render_mode_for_idea(make_built_idea(render_mode="overlay"), brand)
+        == "overlay"
+    )
+
+
+def test_compose_design_prompt_places_copy_as_typography():
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    brand = load_brand()
+    slide = Slide(
+        headline="THE MYTH DIES HERE",
+        supporting="toning is just fat loss",
+        image_prompt="brutalist poster, torn paper collage, huge condensed type",
+    )
+    prompt = compose_design_prompt(slide, brand, "editorial")
+    assert "TEXT TO PLACE ON IMAGE:" in prompt
+    assert "Headline text: THE MYTH DIES HERE" in prompt
+    assert "Supporting text: toning is just fat loss" in prompt
+    assert "brutalist poster" in prompt
+    assert brand.styles["editorial"].prompt in prompt
+    assert "Use exactly the text provided above." in prompt
+    # The overlay-mode "no text" clause must NOT leak into design mode.
+    assert "no text, no words" not in prompt.lower()
+
+
+def test_ai_design_render_uses_model_output_verbatim(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    marker = PILImage.new("RGB", (1080, 1350), (12, 200, 34))
+    prompts = []
+
+    def fake_generate(prompt, *a, **k):
+        prompts.append(prompt)
+        return marker.copy()
+
+    monkeypatch.setattr(images, "_generate_background", fake_generate)
+    idea = make_built_idea()  # ai_design default
+    result = images.render_slide(idea, 2, settings, dry_run=False)
+    # Prompt was a full design prompt with the copy in it…
+    assert "TEXT TO PLACE ON IMAGE:" in prompts[0]
+    # …and the finished slide is the model's design, not overlaid by code
+    # (centre pixel matches the marker within JPEG tolerance — an overlay's
+    # contrast panel would sit exactly there and darken it heavily).
+    out = PILImage.open(result.path)
+    px = out.getpixel((540, 675))
+    assert all(abs(a - b) <= 3 for a, b in zip(px, (12, 200, 34))), px
 
 
 def test_pick_variant_promotes_canonical(settings):
@@ -501,9 +572,27 @@ def test_detail_endpoint_shape(client, settings):
     assert client.get("/api/ideas/NOPE/detail").status_code == 404
 
 
+def test_create_start_render_mode_stored(client, settings):
+    r = client.post(
+        "/api/create/start",
+        data={"mode": "idea", "text": "x", "render_mode": "overlay"},
+    )
+    idea_id = r.json()["idea_id"]
+    with Store(settings.db_path) as store:
+        assert json.loads(store.get_idea(idea_id).route_json)["render_mode"] == "overlay"
+    d = client.get(f"/api/ideas/{idea_id}/detail").json()
+    assert d["render_mode"] == "overlay"
+    assert (
+        client.post(
+            "/api/create/start", data={"mode": "idea", "text": "x", "render_mode": "nope"}
+        ).status_code
+        == 400
+    )
+
+
 def test_slide_endpoints_roundtrip(client, settings):
     with Store(settings.db_path) as store:
-        store.add_idea(make_built_idea())
+        store.add_idea(make_built_idea(render_mode="overlay"))
     # Render synchronously (dry) so backgrounds exist.
     client.post("/api/render/G-0001", params={"dry_run": True})
     # Free recompose works.

@@ -17,6 +17,9 @@ quality_first = "high"
 quality_rest = "medium"
 # Slide 1 gets this many background options to pick from (paid per variant).
 variants_first = 2
+# "ai_design": gpt-image-2 designs the whole slide, typography included.
+# "overlay":   model paints a background; text is overlaid in code (free re-lay).
+render_mode = "ai_design"
 # Appended to every slide prompt so the five backgrounds read as ONE carousel.
 consistency_clause = "Part of a 5-image set: keep the same location, lighting, colour grade and photographic style across all images in this set."
 # Text is always overlaid in code — the model must never paint its own.
