@@ -74,12 +74,13 @@ def test_non_dry_run_without_key_errors(settings):
 
 def test_per_slide_quality_selection():
     brand = load_brand()
-    assert brand.generation.quality_for(0) == "high"   # slide 1
-    assert brand.generation.quality_for(1) == "medium"  # slides 2-5
-    assert brand.generation.quality_for(4) == "medium"
+    # Slide 1 = medium (scroll-stopper), slides 2+ = low, to keep spend down.
+    assert brand.generation.quality_for(0) == "medium"
+    assert brand.generation.quality_for(1) == "low"
+    assert brand.generation.quality_for(4) == "low"
 
 
-def test_non_dry_run_cost_uses_high_then_medium(settings, monkeypatch):
+def test_non_dry_run_cost_first_medium_rest_low(settings, monkeypatch):
     from chrgd import images
 
     settings.openai_api_key = "sk-test"
@@ -87,10 +88,8 @@ def test_non_dry_run_cost_uses_high_then_medium(settings, monkeypatch):
         images, "_generate_background", lambda *a, **k: Image.new("RGB", (100, 150))
     )
     result = images.render_carousel(make_idea(), settings, dry_run=False)
-    # Slide 1 renders `variants_first` high-quality options; slides 2-5 one
-    # medium background each.
     n_first = load_brand().generation.variants_first
-    expected = n_first * images._IMAGE_COST["high"] + 4 * images._IMAGE_COST["medium"]
+    expected = n_first * images._IMAGE_COST["medium"] + 4 * images._IMAGE_COST["low"]
     assert result.generated == 4 + n_first
     assert result.spend_usd == pytest.approx(expected)
     if n_first > 1:

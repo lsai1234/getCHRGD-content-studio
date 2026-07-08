@@ -436,12 +436,13 @@
             <span class="acc-c">▾</span>
           </button>
           <div class="acc-body">
-            <label>Caption</label>
-            <textarea name="caption" id="f-caption"></textarea>
+            <label>Caption <span class="muted" style="font-weight:400">— title line + description, this is the TikTok post text</span></label>
+            <textarea name="caption" id="f-caption" style="min-height:90px"></textarea>
             <div class="row">
               <div style="flex:1"><label>Comment trigger</label><input name="comment_trigger" id="f-trigger"></div>
-              <div style="flex:1"><label>Hashtags</label><input name="hashtags" id="f-hashtags"></div>
+              <div style="flex:1"><label>Hashtags <span class="muted" style="font-weight:400">— appended to the caption on export</span></label><input name="hashtags" id="f-hashtags"></div>
             </div>
+            <div class="muted" id="caption-preview" style="font-size:12.5px; margin-top:10px; white-space:pre-wrap; border-left:2px solid var(--line); padding-left:10px"></div>
           </div>
         </div>
       </form>
@@ -990,6 +991,15 @@ function showWriteWait(title){
   document.getElementById('write-done').style.display = 'none';
 }
 
+function updateCaptionPreview(){
+  const cap = (document.getElementById('f-caption').value || '').trim();
+  const tags = (document.getElementById('f-hashtags').value || '').trim()
+    .split(/\s+/).filter(Boolean).map(t => t.startsWith('#') ? t : '#' + t).join(' ');
+  const box = document.getElementById('caption-preview');
+  if (!box) return;
+  box.textContent = (cap + (tags ? '\n\n' + tags : '')) || 'This is how the post text will read on TikTok.';
+}
+
 function showBuildError(msg){
   document.getElementById('write-wait').style.display = '';
   document.getElementById('write-wait').innerHTML = `
@@ -1169,6 +1179,9 @@ async function openWriteStep(autoJump = true){
   document.getElementById('f-caption').value = d.caption || '';
   document.getElementById('f-trigger').value = d.comment_trigger || '';
   document.getElementById('f-hashtags').value = (d.hashtags || []).join(' ');
+  const cap = document.getElementById('f-caption'), tags = document.getElementById('f-hashtags');
+  cap.oninput = tags.oninput = updateCaptionPreview;
+  updateCaptionPreview();
 
   if (autoJump && d.assets && d.assets.length) {
     // already rendered once — jump to images on resume

@@ -52,9 +52,9 @@ in exactly this shape:
     // One object per slide, in order — 1 to 10 slides, however many the
     // Architect stage decided this idea deserves
   ],
-  "caption": "string",
-  "comment_trigger": "string",
-  "hashtags": ["string", "..."],
+  "caption": "string — the TikTok caption. Line 1 is a punchy TITLE that stops the scroll (can use an emoji). Then 1-2 short DESCRIPTION sentences giving context and driving a comment/save. Do NOT put hashtags in here — they go in the hashtags array below.",
+  "comment_trigger": "string — one question that bait-hooks the comments",
+  "hashtags": ["6-10 relevant hashtags: a mix of broad UK gym/fitness reach tags and 2-3 niche/topical ones for this exact post; each starts with #"],
   "route": {
     "mechanic": "string (one of the virality mechanics)",
     "visual_engine": "string (one of the visual engines)",

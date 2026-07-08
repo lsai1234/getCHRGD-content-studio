@@ -23,16 +23,18 @@ _FONT_FALLBACKS = [
 
 class Canvas(BaseModel):
     width: int = 1080
-    height: int = 1350
+    # 2:3 to match the generation size (see Generation.size) so AI-designed
+    # slides never get cropped onto the canvas.
+    height: int = 1620
     format: str = "jpeg"
     save_quality: int = 90
 
 
 class Generation(BaseModel):
     size: str = "1024x1536"
-    # Slide 1 leads the carousel, so it renders at a stronger quality tier.
-    quality_first: str = "high"
-    quality_rest: str = "medium"
+    # Slide 1 is the scroll-stopper (medium); the rest are low to keep spend down.
+    quality_first: str = "medium"
+    quality_rest: str = "low"
     # Options generated for slide 1 (paid each). Default: one image per slide.
     variants_first: int = 1
     # How slides are produced:

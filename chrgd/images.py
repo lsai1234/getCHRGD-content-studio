@@ -152,14 +152,22 @@ def _generate_background(
 # pipeline's image call: the model designs the whole slide, typography
 # included, but must use exactly the approved copy.
 _DESIGN_TEXT_RULES = (
-    "\n\nText rules:"
-    "\n- Place the headline text prominently in large bold readable type."
-    "\n- Place the supporting text below it in smaller but still readable type."
-    "\n- Use exactly the text provided above."
-    "\n- Do not add any extra words, labels, logos, captions, watermarks, "
-    "UI elements, or random text."
-    "\n- Keep all text inside safe margins."
-    "\n- Make the text readable on a phone screen."
+    "\n\nText & layout rules (follow EXACTLY):"
+    "\n- The image is a vertical 2:3 phone graphic. Treat the outer 12% on"
+    " every side as an untouchable margin: NO text may touch, overlap or run"
+    " off any edge. Every letter of every word must sit fully inside the frame"
+    " with clear breathing room around it."
+    "\n- Place the headline in the upper third but BELOW the top margin — leave"
+    " clear empty space above the first line. Never let the title bleed off the"
+    " top. If the headline is long, reduce the font size so the whole thing"
+    " fits on 2-3 lines well inside the margins rather than cropping it."
+    "\n- Place the supporting text below the headline in smaller but readable"
+    " type, also inside the margins."
+    "\n- Use EXACTLY the text provided above, spelled correctly, complete —"
+    " never truncate, abbreviate or cut off a word."
+    "\n- Do not add any extra words, labels, logos, captions, watermarks,"
+    " UI elements, page numbers or random text."
+    "\n- Make the text large, high-contrast and readable at a glance on a phone."
 )
 
 

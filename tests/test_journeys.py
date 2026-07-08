@@ -444,7 +444,9 @@ def test_compose_design_prompt_places_copy_as_typography():
     assert "Supporting text: toning is just fat loss" in prompt
     assert "brutalist poster" in prompt
     assert brand.styles["editorial"].prompt in prompt
-    assert "Use exactly the text provided above." in prompt
+    assert "Use EXACTLY the text provided above" in prompt
+    # Edge-safety: the model must be told to keep text off the frame edges.
+    assert "margin" in prompt.lower() and "off any edge" in prompt.lower()
     # The overlay-mode "no text" clause must NOT leak into design mode.
     assert "no text, no words" not in prompt.lower()
 
