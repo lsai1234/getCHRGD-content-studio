@@ -690,15 +690,16 @@ MOMENTS_PAYLOAD = {
             ],
         },
         {
-            "title": "England v Mexico, 2am kick-off Thu",
-            "emoji": "⚽",
-            "category": "sport",
-            "when": "Thu",
-            "why": "half the UK staying up for it",
+            "title": "World Cup semi-final, Weds night",
+            "emoji": "🏆",
+            "category": "global",
+            "scope": "global",
+            "when": "Weds",
+            "why": "the whole planet is watching",
             "decay_speed": "days",
             "angles": [
-                {"type": "advice", "title": "Surviving the 2am kick-off",
-                 "hook": "staying up for the game? read this", "concept_note": "sleep/caffeine timing tips"}
+                {"type": "funny", "title": "Match-night snack guilt",
+                 "hook": "your macros vs the World Cup", "concept_note": "relatable"}
             ],
         },
     ]
@@ -719,9 +720,11 @@ def test_scout_moments_parses_and_ranks(settings):
 
     fake = FakeSearch(MOMENTS_PAYLOAD)
     result = scout_moments(settings, client=fake)
-    assert [m.category for m in result.moments] == ["weather", "sport"]
+    assert [m.category for m in result.moments] == ["weather", "global"]
     assert result.moments[0].angles[0].type == "advice"
+    assert result.moments[1].scope == "global"
     assert "COLLECTIVELY" in fake.system  # the radar brief, not the gym scout
+    assert "global" in fake.system.lower()  # global moments now in scope
 
 
 def test_worker_discover_job_and_dedupe(settings, store, monkeypatch):
@@ -768,7 +771,9 @@ def test_moments_api_and_use_flow(client, settings):
         )
     data = client.get("/api/moments").json()
     assert data["job_id"] == job_id
-    assert [m["title"] for m in data["moments"]][1].startswith("England v Mexico")
+    titles = [m["title"] for m in data["moments"]]
+    assert titles[1].startswith("World Cup")
+    assert data["moments"][1]["scope"] == "global"  # global moments carry scope
     assert data["age_hours"] is not None and data["age_hours"] < 1
 
     # One tap on an angle → seeded idea + build job.
@@ -779,11 +784,11 @@ def test_moments_api_and_use_flow(client, settings):
     body = r.json()
     with Store(settings.db_path) as store:
         idea = store.get_idea(body["idea_id"])
-        assert "England v Mexico" in idea.concept_note
-        assert "staying up for the game" in idea.concept_note  # hook carried in
+        assert "World Cup" in idea.concept_note
+        assert "your macros vs the World Cup" in idea.concept_note  # hook carried in
         assert idea.content_category == "moment"
         assert idea.decay_speed is not None and idea.decay_speed.value == "days"
-        assert idea.learning_tag == "moment:sport"
+        assert idea.learning_tag == "moment:global"
         route = json.loads(idea.route_json)
         assert route["style"] == "gritty" and route["render_mode"] == "ai_design"
         job = store.get_job(body["job_id"])

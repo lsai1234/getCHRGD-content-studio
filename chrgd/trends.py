@@ -182,22 +182,34 @@ def scout_trends(
 
 MOMENTS_PROMPT = """You are the Cultural Radar for CHRGD, a premium UK gym/supplement brand.
 
-Use web search to find what the UK is COLLECTIVELY experiencing right now and
-over the next 7-10 days. You are NOT looking for gym content — you are looking
-for shared national moments the brand can show up inside:
+Use web search to find the biggest shared moments people are COLLECTIVELY
+experiencing and talking about right now and over the next 7-10 days — both in
+the UK and the huge GLOBAL stories a UK audience is fully aware of. You are NOT
+looking for gym content — you are looking for shared cultural moments the brand
+can show up inside:
 
-- Sport: big fixtures, kick-off times, results everyone will be talking about
+- Global mega-moments: World Cup / Olympics / major finals, a huge news story
+  everyone's discussing (e.g. something a world leader like Trump just did), a
+  worldwide viral moment, a massive release or event. If it's genuinely global,
+  say so — these travel further than UK-only stories.
+- UK sport: big fixtures, kick-off times, results everyone will be talking about
   (football, boxing, F1, tennis, the lot) — note late/awkward UK kick-off times.
-- Weather: heatwaves, storms, cold snaps, the first hot/cold weekend.
+- Weather: heatwaves, storms, cold snaps, the first hot/cold weekend (UK).
 - Telly & culture: reality shows, finales, big releases everyone's watching.
-- Viral: memes/formats/conversations currently everywhere in the UK.
+- Viral: memes/formats/conversations currently everywhere.
 - Seasonal rituals: bank holidays, payday, exam season, January, clock changes.
+
+Aim for a MIX — include a couple of big global moments alongside the UK ones,
+ranked by how many people in the UK audience are actually aware of and engaged
+with them. A story only counts if the audience genuinely knows about it.
 
 For EACH moment, propose 2-3 ready-to-build content angles for a gym/supplement
 audience: usually one practical/advice angle (genuinely useful, e.g. "how to
 survive the 3am kick-off"), one funny/relatable angle, and one natural product
 tie-in ONLY where it isn't forced (observational/educational, never medical or
-guaranteed-outcome claims; humour is social commentary, never a named person).
+guaranteed-outcome claims; humour is social commentary; be light-touch and
+non-partisan on politics — never attack a named person, just play the shared
+cultural awareness).
 
 Limitation you MUST respect: {limitation}
 
@@ -205,12 +217,13 @@ Return a SINGLE JSON object, no markdown, no commentary:
 {{
   "moments": [
     {{
-      "title": "the moment in one line (e.g. Heatwave hitting Sat-Sun, 32C)",
+      "title": "the moment in one line (e.g. World Cup semi-final Weds night)",
       "emoji": "one emoji",
-      "category": "sport | weather | tv | viral | seasonal | news",
+      "category": "global | sport | weather | tv | viral | seasonal | news",
+      "scope": "global | uk",
       "when": "tonight | this weekend | Thu 10 Jul | now",
-      "peak": "when UK attention peaks",
-      "why": "why the whole UK cares, one line",
+      "peak": "when attention peaks",
+      "why": "why people care right now, one line",
       "decay_speed": "days | weeks",
       "angles": [
         {{
@@ -223,8 +236,9 @@ Return a SINGLE JSON object, no markdown, no commentary:
     }}
   ]
 }}
-Rank by expected reach for this brand THIS week. Prefer moments still ahead or
-live over ones already fading. Only claim-safe, brand-safe angles.
+Rank by expected reach for this brand THIS week (a mix of global and UK).
+Prefer moments still ahead or live over ones already fading. Only claim-safe,
+brand-safe angles.
 """.format(limitation=LIMITATION)
 
 
@@ -239,6 +253,7 @@ class Moment(BaseModel):
     title: str
     emoji: str = "📌"
     category: str = "news"
+    scope: str = "uk"  # global | uk
     when: str = ""
     peak: str = ""
     why: str = ""

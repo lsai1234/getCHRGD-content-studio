@@ -299,7 +299,7 @@
 
     <div class="lane-meta">
       <div class="lane-tabs">
-        <button type="button" class="chip sel" data-lane="moments" onclick="switchLane('moments')">🇬🇧 Happening now</button>
+        <button type="button" class="chip sel" data-lane="moments" onclick="switchLane('moments')">🌍 Happening now</button>
         <button type="button" class="chip" data-lane="evergreen" onclick="switchLane('evergreen')">🤯 Worth knowing</button>
       </div>
       <span class="age" id="radar-age"></span>
@@ -640,7 +640,7 @@ function afterStart(r, develop){
 /* ---------- radar (moments / evergreen lanes) ---------- */
 const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in'};
 const LANE_HINT = {
-  moments: 'What the UK is living through this week — tap a story, pick your angle.',
+  moments: 'The biggest UK & global moments this week — tap a story, pick your angle.',
   evergreen: 'Fascinating, shareable facts that work any week of the year.',
 };
 const LANE_EYEBROW = {moments: 'Happening now', evergreen: 'Worth knowing'};
@@ -708,6 +708,7 @@ function drawMoments(data){
       <div class="m-top">
         <span>${esc(m.emoji || '📌')}</span>
         <span class="m-title">${esc(m.title)}</span>
+        ${m.scope === 'global' ? '<span class="m-when" style="color:#7fb3ff;border-color:#2c4a7a">🌍 global</span>' : ''}
         <span class="m-when">${esc(m.when || m.category || '')}</span>
       </div>
       <div class="m-why">${esc(m.why || '')}</div>
