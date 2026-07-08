@@ -939,6 +939,35 @@ def test_schedule_set_and_clear(client, settings):
     assert client.post("/api/ideas/G-0001/schedule", data={"when": "gibberish"}).status_code == 400
 
 
+def test_manual_post_bundle(client, settings):
+    with Store(settings.db_path) as store:
+        store.add_idea(
+            Idea(
+                idea_id="G-0001",
+                concept_note="x",
+                slides_json=json.dumps(good_post()["slides"]),
+                caption="Sweating just looking at the forecast?\nHere's how to cope.",
+                hashtags=json.dumps(["#gymtok", "heatwave", "#uk"]),
+                asset_paths_json=json.dumps(
+                    [f"/out/G-0001/slide_{i}.jpg" for i in range(1, 4)]
+                ),
+            )
+        )
+    d = client.get("/api/ideas/G-0001/manual").json()
+    assert d["count"] == 3
+    # Images in slide order, renamed for a clean camera-roll.
+    assert [im["filename"] for im in d["images"]] == [
+        "G-0001_slide_1.jpg", "G-0001_slide_2.jpg", "G-0001_slide_3.jpg"
+    ]
+    assert d["images"][0]["url"] == "/media/G-0001/slide_1.jpg"
+    # Caption keeps its line breaks (TikTok app allows them), then hashtags,
+    # every tag prefixed with '#'.
+    assert "Sweating just looking" in d["caption_text"]
+    assert d["caption_text"].endswith("#gymtok #heatwave #uk")
+    assert "\n\n#gymtok" in d["caption_text"]
+    assert client.get("/api/ideas/NOPE/manual").status_code == 404
+
+
 def test_calendar_groups_days_and_tray(client, settings):
     slides = json.dumps(good_post()["slides"])
     with Store(settings.db_path) as store:

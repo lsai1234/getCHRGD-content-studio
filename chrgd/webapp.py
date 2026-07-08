@@ -1060,6 +1060,41 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             store.conn.commit()
         return {"idea_id": idea_id, "brief": brief}
 
+    # --- manual posting (download photos + copy caption) -----------------------
+
+    @app.get("/api/ideas/{idea_id}/manual")
+    def api_manual_post(idea_id: str, _: str = Depends(require_user)):
+        """Everything needed to post by hand: the images + one caption block.
+
+        The caption keeps its natural line breaks (the TikTok app allows them
+        when you type; only the bulk-CSV API strips them), then a blank line,
+        then the hashtags — ready to paste in one go.
+        """
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+        paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []
+        images = []
+        for i, p in enumerate(paths):
+            src = Path(p)
+            images.append(
+                {
+                    "url": f"/media/{idea_id}/{src.name}",
+                    "filename": f"{idea_id}_slide_{i + 1}{src.suffix or '.jpg'}",
+                }
+            )
+        caption = (idea.caption or "").strip()
+        hashtags = json.loads(idea.hashtags) if idea.hashtags else []
+        tag_str = " ".join(
+            t if t.startswith("#") else f"#{t}" for t in hashtags if t
+        ).strip()
+        caption_text = caption + (f"\n\n{tag_str}" if tag_str else "")
+        return {
+            "idea_id": idea_id,
+            "caption_text": caption_text,
+            "images": images,
+            "count": len(images),
+        }
+
     # --- learning loop (real results → future builds) --------------------------
 
     @app.post("/api/ideas/{idea_id}/metrics")
