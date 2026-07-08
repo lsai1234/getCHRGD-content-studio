@@ -507,10 +507,29 @@ def build_single_idea(
     if client is None:
         client = OpenAIChatClient(settings)
 
+    # Narrate the actual call lifecycle so the queue shows real steps, not a
+    # spinner: request sent → waiting → response received → validating.
+    class _NarratedClient:
+        def __init__(self, inner, model):
+            self._inner, self._model, self._pct = inner, model, 20
+
+        def complete(self, system, user):
+            _prog(
+                self._pct,
+                f"request sent to {self._model} — waiting for the engine "
+                "(a full write takes 30-90s)",
+            )
+            result = self._inner.complete(system, user)
+            self._pct = min(self._pct + 30, 85)
+            _prog(self._pct, "response received — validating + running the QA gate")
+            return result
+
+    client = _NarratedClient(client, settings.openai_model)
+
     run_id = store.start_run("build") if record_run else None
     store.mark_processing(idea_id)
     _attempt_notes = {
-        1: (15, "engine writing — running all six stages"),
+        1: (15, "composing the build instructions"),
         2: (60, "QA gate missed — asking for a stronger rewrite"),
     }
     from .learning import performance_notes

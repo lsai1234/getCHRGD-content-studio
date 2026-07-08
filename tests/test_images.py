@@ -93,7 +93,10 @@ def test_non_dry_run_cost_uses_high_then_medium(settings, monkeypatch):
     expected = n_first * images._IMAGE_COST["high"] + 4 * images._IMAGE_COST["medium"]
     assert result.generated == 4 + n_first
     assert result.spend_usd == pytest.approx(expected)
-    assert len(result.variants.get(0, [])) == n_first
+    if n_first > 1:
+        assert len(result.variants.get(0, [])) == n_first
+    else:
+        assert result.variants == {}  # one image per slide, no variant files
 
 
 def test_webp_format(tmp_path):

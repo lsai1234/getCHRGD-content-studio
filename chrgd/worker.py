@@ -119,25 +119,15 @@ def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
         raise ValueError(f"no such idea {job['idea_id']}")
 
     def on_slide(done: int, total: int) -> None:
-        note = (
-            f"slide {done} of {total} done — generating slide {done + 1}"
-            if done < total
-            else "finishing up"
-        )
-        store.update_job(
-            job["job_id"],
-            progress=int(done * 100 / total),
-            result_json=json.dumps({"note": note}),
-        )
+        store.update_job(job["job_id"], progress=int(done * 100 / total))
 
-    store.update_job(
-        job["job_id"],
-        progress=2,
-        result_json=json.dumps(
-            {"note": "generating slide 1 — this one gets multiple options"}
-        ),
+    def notify(note: str) -> None:
+        store.update_job(job["job_id"], result_json=json.dumps({"note": note}))
+
+    notify("starting — composing the design prompts")
+    result = render_idea(
+        store, settings, idea, dry_run=dry_run, on_slide=on_slide, notify=notify
     )
-    result = render_idea(store, settings, idea, dry_run=dry_run, on_slide=on_slide)
     return {
         "paths": result.paths,
         "variants": result.variants,
@@ -261,12 +251,16 @@ def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
     idea = store.get_idea(job["idea_id"])
     if idea is None:
         raise ValueError(f"no such idea {job['idea_id']}")
+    def notify(note: str) -> None:
+        store.update_job(job["job_id"], result_json=json.dumps({"note": note}))
+
     result = render_slide(
         idea,
         int(params.get("slide", 0)),
         settings,
         dry_run=bool(params.get("dry_run", False)),
         variants=params.get("variants"),
+        notify=notify,
     )
     # Keep asset_paths_json in step for posts rendered slide-by-slide.
     paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []

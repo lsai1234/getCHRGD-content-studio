@@ -294,8 +294,12 @@ def test_build_single_idea_reports_progress(settings, store):
         client=FakeChat([bad, good_post()]),
         on_progress=lambda pct, note: seen.append((pct, note)),
     )
-    assert seen[0][0] == 15 and "six stages" in seen[0][1]
-    assert seen[1][0] == 60 and "rewrite" in seen[1][1]
+    notes = [n for _, n in seen]
+    # The queue narrates the real call lifecycle, both attempts.
+    assert "composing the build instructions" in notes[0]
+    assert any("request sent" in n and "waiting" in n for n in notes)
+    assert any("response received" in n and "QA" in n for n in notes)
+    assert any("stronger rewrite" in n for n in notes)
 
 
 def test_detail_surfaces_note_and_only_latest_error(client, settings):
@@ -342,19 +346,45 @@ def make_built_idea(idea_id="G-0001", style=None, render_mode=None):
     )
 
 
-def test_render_saves_backgrounds_and_variants(settings):
+def test_render_saves_backgrounds_one_image_per_slide(settings):
     from chrgd.images import list_variants, render_carousel
 
     idea = make_built_idea()
     result = render_carousel(idea, settings, dry_run=True)
     out = settings.output_dir / "G-0001"
-    n_first = load_brand().generation.variants_first
+    assert load_brand().generation.variants_first == 1  # one image per slide
     assert (out / "bg_1.jpg").exists() and (out / "bg_5.jpg").exists()
-    assert (out / "bg_1_a.jpg").exists()
-    variants = list_variants(idea, settings)
-    assert len(variants[0]) == n_first
-    assert 1 not in variants  # slides 2-5 have no variants
+    assert not (out / "bg_1_a.jpg").exists()  # no default variant pairs
+    assert list_variants(idea, settings) == {}
     assert len(result.paths) == 5
+
+
+def test_explicit_variants_still_work(settings):
+    from chrgd.images import list_variants, render_slide
+
+    idea = make_built_idea()
+    result = render_slide(idea, 0, settings, dry_run=True, variants=2)
+    assert len(result.variant_paths) == 2
+    assert len(list_variants(idea, settings)[0]) == 2
+
+
+def test_render_slide_narrates_each_step(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    monkeypatch.setattr(
+        images, "_generate_background",
+        lambda *a, **k: PILImage.new("RGB", (100, 150)),
+    )
+    seen = []
+    images.render_slide(
+        make_built_idea(), 2, settings, dry_run=False, notify=seen.append
+    )
+    assert any("request sent" in n and "waiting" in n for n in seen)
+    assert any("image received" in n for n in seen)
+    assert all(n.startswith("slide 3:") for n in seen)
 
 
 def test_recompose_is_free_and_updates_slide(settings):
@@ -446,10 +476,10 @@ def test_ai_design_render_uses_model_output_verbatim(settings, monkeypatch):
 
 
 def test_pick_variant_promotes_canonical(settings):
-    from chrgd.images import pick_variant, render_carousel
+    from chrgd.images import pick_variant, render_slide
 
     idea = make_built_idea()
-    render_carousel(idea, settings, dry_run=True)
+    render_slide(idea, 0, settings, dry_run=True, variants=2)
     out = settings.output_dir / "G-0001"
     picked = pick_variant(idea, 0, "b", settings)
     assert picked.endswith("slide_1.jpg")
@@ -591,14 +621,19 @@ def test_create_start_render_mode_stored(client, settings):
 
 
 def test_slide_endpoints_roundtrip(client, settings):
+    from chrgd.images import render_slide
+
+    idea = make_built_idea(render_mode="overlay")
     with Store(settings.db_path) as store:
-        store.add_idea(make_built_idea(render_mode="overlay"))
+        store.add_idea(idea)
     # Render synchronously (dry) so backgrounds exist.
     client.post("/api/render/G-0001", params={"dry_run": True})
     # Free recompose works.
     r = client.post("/api/ideas/G-0001/slides/2/recompose")
     assert r.status_code == 200 and r.json()["path"].endswith("slide_3.jpg")
-    # Variant pick works for slide 1.
+    # Variant pick works once options exist (explicitly requested — the
+    # default is one image per slide).
+    render_slide(idea, 0, settings, dry_run=True, variants=2)
     r = client.post("/api/ideas/G-0001/slides/0/variant", data={"variant": "b"})
     assert r.status_code == 200
     # Unknown variant → 400.
@@ -609,6 +644,27 @@ def test_slide_endpoints_roundtrip(client, settings):
     # Regenerate enqueues a render_slide job.
     r = client.post("/api/ideas/G-0001/slides/1/regenerate", params={"dry_run": True})
     assert r.json()["kind"] == "render_slide"
+
+
+def test_queue_page_and_retry(client, settings):
+    assert "Queue" in client.get("/queue").text
+    with Store(settings.db_path) as store:
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+        job_id = store.create_job(
+            "render", idea_id="G-0001", params={"dry_run": True}
+        )
+        store.update_job(job_id, status="ERROR", error="boom")
+    r = client.post(f"/api/jobs/{job_id}/retry")
+    body = r.json()
+    assert body["kind"] == "render" and body["retried_from"] == job_id
+    with Store(settings.db_path) as store:
+        new = store.get_job(body["job_id"])
+        assert new["status"] == "QUEUED"
+        assert json.loads(new["params_json"]) == {"dry_run": True}
+        assert new["idea_id"] == "G-0001"
+    # Only failed jobs can be retried.
+    assert client.post(f"/api/jobs/{body['job_id']}/retry").status_code == 400
+    assert client.post("/api/jobs/99999/retry").status_code == 404
 
 
 # --- UK moments radar -----------------------------------------------------------

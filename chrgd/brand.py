@@ -33,8 +33,8 @@ class Generation(BaseModel):
     # Slide 1 leads the carousel, so it renders at a stronger quality tier.
     quality_first: str = "high"
     quality_rest: str = "medium"
-    # How many background options slide 1 gets to choose from (paid each).
-    variants_first: int = 2
+    # Options generated for slide 1 (paid each). Default: one image per slide.
+    variants_first: int = 1
     # How slides are produced:
     #   "ai_design" — gpt-image-2 designs the WHOLE slide, typography included
     #                 (concept art / graphic-design energy; text is part of

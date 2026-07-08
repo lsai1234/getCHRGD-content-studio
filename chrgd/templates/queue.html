@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Queue — CHRGD{% endblock %}
+{% block body %}
+<style>
+  .q-card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+            padding:14px 16px; margin-bottom:10px; }
+  .q-card.running { border-color:var(--accent); }
+  .q-card.failed { border-color:#7a2c2c; }
+  .q-top { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .q-kind { font-weight:600; }
+  .q-idea { color:var(--accent2); text-decoration:none; font-size:13px; }
+  .q-chip { font-size:11px; padding:2px 10px; border-radius:20px; border:1px solid var(--line);
+            text-transform:uppercase; letter-spacing:.5px; }
+  .q-chip.QUEUED { color:var(--muted); }
+  .q-chip.PROCESSING { color:var(--accent); border-color:var(--accent); }
+  .q-chip.COMPLETED { color:#5dd177; border-color:#2e6b34; }
+  .q-chip.ERROR { color:#ff6a6a; border-color:#7a2c2c; }
+  .q-when { color:var(--muted); font-size:12px; margin-left:auto; }
+  .q-bar { height:5px; background:#0d0d10; border-radius:3px; margin:10px 0 8px; overflow:hidden; }
+  .q-bar > div { height:100%; background:var(--accent); border-radius:3px; transition:width .6s; }
+  .q-note { font-size:13.5px; }
+  .q-note.live::before { content:'● '; color:var(--accent); animation:blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+  .q-err { color:#ff9a9a; font-size:13px; margin-top:6px; }
+  .q-meta { color:var(--muted); font-size:12px; margin-top:6px; }
+  .q-retry { margin:8px 0 0; padding:5px 14px; font-size:12.5px; }
+  .q-section { color:var(--muted); font-size:12.5px; text-transform:uppercase;
+               letter-spacing:.8px; margin:22px 0 10px; }
+</style>
+
+<h1>Queue</h1>
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+<p class="muted">Everything the engine is doing, live — writes, revisions, concept
+rounds, image generations, radar scans and exports. This page updates itself.</p>
+
+<div id="q-live"><p class="muted" id="q-live-empty">Nothing running right now.</p></div>
+<p class="q-section">Recent</p>
+<div id="q-done"><p class="muted">No finished jobs yet.</p></div>
+
+<script>
+const KIND_LABEL = {
+  build: '✍️ Batch write', build_one: '✍️ Writing the post',
+  render: '🎨 Generating the images', render_slide: '🎨 Regenerating one slide',
+  angles: '📐 Proposing angles', revise: '⚡ Punch-up rewrite',
+  concept: '🧭 Concept round', trends: '📡 Trend scout',
+  moments: '🇬🇧 UK moments scan', evergreen: '🤯 Worth-knowing scan',
+  run: '⛓ Full chain', video: '🎬 Video',
+};
+
+function ago(iso){
+  if (!iso) return '';
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return `${Math.round(s)}s ago`;
+  if (s < 3600) return `${Math.round(s/60)}m ago`;
+  if (s < 86400) return `${Math.round(s/3600)}h ago`;
+  return `${Math.round(s/86400)}d ago`;
+}
+
+function runningFor(job){
+  const s = Math.max(0, (Date.now() - new Date(job.updated_at).getTime()) / 1000);
+  return s > 5 ? ` · on this step for ${Math.round(s)}s` : '';
+}
+
+function note(job){
+  try { return JSON.parse(job.result_json || '{}').note || null; } catch(e){ return null; }
+}
+
+function summary(job){
+  try {
+    const r = JSON.parse(job.result_json || '{}');
+    const bits = [];
+    if (r.paths) bits.push(`${r.paths.length} slide image${r.paths.length===1?'':'s'}`);
+    if (r.status) bits.push(`post ${r.status}`);
+    if (r.brief) bits.push('brief ready');
+    if (r.angles) bits.push(`${r.angles.length} angles`);
+    if (r.moments) bits.push(`${r.moments.length} found`);
+    if (r.spend_usd) bits.push(`$${Number(r.spend_usd).toFixed(2)}`);
+    return bits.join(' · ');
+  } catch(e){ return ''; }
+}
+
+function card(job){
+  const el = document.createElement('div');
+  const running = job.status === 'PROCESSING' || job.status === 'QUEUED';
+  el.className = 'q-card' + (job.status === 'PROCESSING' ? ' running' : '')
+               + (job.status === 'ERROR' ? ' failed' : '');
+  let html = `<div class="q-top">
+    <span class="q-kind">${KIND_LABEL[job.kind] || job.kind}</span>`;
+  if (job.idea_id)
+    html += `<a class="q-idea" href="/create?idea=${job.idea_id}">${job.idea_id} →</a>`;
+  html += `<span class="q-chip ${job.status}">${job.status === 'PROCESSING' ? 'running' : job.status.toLowerCase()}</span>
+    <span class="q-when">#${job.job_id} · ${ago(job.created_at)}</span></div>`;
+
+  if (job.status === 'PROCESSING') {
+    html += `<div class="q-bar"><div style="width:${Math.max(4, job.progress || 0)}%"></div></div>
+      <div class="q-note live">${esc(note(job) || 'working…')}${runningFor(job)}</div>`;
+  } else if (job.status === 'QUEUED') {
+    html += `<div class="q-note">waiting in the queue — jobs run one at a time</div>`;
+  } else if (job.status === 'ERROR') {
+    html += `<div class="q-err">${esc(job.error || 'failed')}</div>
+      <button class="ghost q-retry" onclick="retry(${job.job_id}, this)">↻ Retry</button>`;
+  } else {
+    const s = summary(job);
+    if (s) html += `<div class="q-meta">${esc(s)}</div>`;
+  }
+  el.innerHTML = html;
+  return el;
+}
+
+async function load(){
+  const r = await fetch('/api/jobs');
+  if (!r.ok) return;
+  const jobs = await r.json();
+  const live = jobs.filter(j => j.status === 'PROCESSING' || j.status === 'QUEUED');
+  const done = jobs.filter(j => j.status !== 'PROCESSING' && j.status !== 'QUEUED').slice(0, 25);
+
+  const liveBox = document.getElementById('q-live');
+  liveBox.innerHTML = '';
+  if (!live.length) {
+    liveBox.innerHTML = '<p class="muted">Nothing running right now.</p>';
+  } else {
+    // Oldest first: that's the order they'll actually run.
+    for (const j of live.slice().reverse()) liveBox.appendChild(card(j));
+  }
+  const doneBox = document.getElementById('q-done');
+  doneBox.innerHTML = '';
+  if (!done.length) doneBox.innerHTML = '<p class="muted">No finished jobs yet.</p>';
+  for (const j of done) doneBox.appendChild(card(j));
+}
+
+async function retry(id, btn){
+  btn.disabled = true; btn.textContent = 'requeued…';
+  await fetch(`/api/jobs/${id}/retry`, {method:'POST', headers:{accept:'application/json'}});
+  load();
+}
+
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+load();
+setInterval(load, 2000);
+</script>
+{% endblock %}

@@ -25,9 +25,12 @@ def render_idea(
     dry_run: bool = False,
     record_run: bool = True,
     on_slide=None,
+    notify=None,
 ) -> RenderResult:
     """Render one carousel, persist asset paths, and log image spend."""
-    result = render_carousel(idea, settings, dry_run=dry_run, on_slide=on_slide)
+    result = render_carousel(
+        idea, settings, dry_run=dry_run, on_slide=on_slide, notify=notify
+    )
     store.save_asset_paths(idea.idea_id, result.paths)
     log.info(
         "render idea=%s slides=%d generated=%d spend=%.4f dry_run=%s",

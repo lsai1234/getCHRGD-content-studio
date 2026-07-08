@@ -146,11 +146,16 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def render_page(request: Request, name: str, active: str, **ctx):
         with _store(settings) as store:
             review_count = store.count(Status.review)
+            queue_active = store.conn.execute(
+                "SELECT COUNT(*) AS c FROM jobs "
+                "WHERE status IN ('QUEUED','PROCESSING')"
+            ).fetchone()["c"]
         ctx.update(
             request=request,
             user=current_user(request),
             active=active,
             review_count=review_count,
+            queue_active=int(queue_active),
             flash=request.query_params.get("flash"),
         )
         return templates.TemplateResponse(request=request, name=name, context=ctx)
@@ -239,6 +244,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             resume_idea=idea or "",
             preset_day=day or "",
         )
+
+    @app.get("/queue", response_class=HTMLResponse)
+    def queue_page(request: Request, _: str = Depends(require_user_page)):
+        return render_page(request, "queue.html", "queue")
 
     @app.get("/calendar", response_class=HTMLResponse)
     def calendar_page(request: Request, _: str = Depends(require_user_page)):
@@ -1198,6 +1207,28 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "skipped": result.skipped,
             "csv_path": result.csv_path,
         }
+
+    @app.post("/api/jobs/{job_id}/retry")
+    def api_job_retry(job_id: int, _: str = Depends(require_user)):
+        """Re-enqueue a failed job with the same kind, idea and params."""
+        retryable = {
+            "build", "build_one", "render", "render_slide",
+            "angles", "revise", "concept", "trends", "moments", "evergreen", "run",
+        }
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+            if job is None:
+                raise HTTPException(404, "no such job")
+            if job["status"] != "ERROR":
+                raise HTTPException(400, "only failed jobs can be retried")
+            if job["kind"] not in retryable:
+                raise HTTPException(400, f"'{job['kind']}' jobs can't be retried here")
+            new_id = store.create_job(
+                job["kind"],
+                idea_id=job["idea_id"],
+                params=json.loads(job["params_json"] or "{}"),
+            )
+        return {"job_id": new_id, "kind": job["kind"], "retried_from": job_id}
 
     @app.get("/api/jobs")
     def api_jobs(_: str = Depends(require_user)):

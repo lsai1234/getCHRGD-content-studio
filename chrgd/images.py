@@ -383,6 +383,7 @@ def render_slide(
     dry_run: bool = False,
     variants: int | None = None,
     spent_so_far: float = 0.0,
+    notify=None,
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
@@ -414,11 +415,16 @@ def render_slide(
     quality = brand.generation.quality_for(slide_index)
     per_image = _IMAGE_COST.get(quality, 0.042)
 
+    def _note(msg: str) -> None:
+        if notify:
+            notify(f"slide {slide_index + 1}: {msg}")
+
     result = SlideRenderResult(
         idea_id=idea.idea_id, slide_index=slide_index, dry_run=dry_run
     )
     for v in range(n):
         if dry_run:
+            _note("test mode — painting a placeholder")
             background = _placeholder_background(brand, slide_index + v)
         else:
             if spent_so_far + result.spend_usd + per_image > settings.max_spend_per_run:
@@ -430,7 +436,12 @@ def render_slide(
                 prompt = compose_design_prompt(slide, brand, style)
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
+            _note(
+                f"request sent to {settings.image_model} ({quality} quality) — "
+                "waiting for the image, typically 20-60s"
+            )
             background = _generate_background(prompt, settings, brand, quality)
+            _note("image received — fitting to canvas and saving")
             result.spend_usd += per_image
             result.generated += 1
 
@@ -557,11 +568,13 @@ def render_carousel(
     brand: Brand | None = None,
     dry_run: bool = False,
     on_slide=None,
+    notify=None,
 ) -> RenderResult:
     """Render every slide for one idea to disk. Returns paths + spend.
 
-    Slide 1 renders `generation.variants_first` background options; the rest
-    one each. `on_slide(done, total)` fires after each slide for job progress.
+    `on_slide(done, total)` fires after each slide for job progress;
+    `notify(msg)` streams fine-grained step updates (request sent, waiting,
+    image received) for the queue page.
     """
     brand = brand or load_brand()
     slides = _slides_from_idea(idea)
@@ -575,6 +588,7 @@ def render_carousel(
             brand=brand,
             dry_run=dry_run,
             spent_so_far=result.spend_usd,
+            notify=notify,
         )
         result.spend_usd += slide_result.spend_usd
         result.generated += slide_result.generated

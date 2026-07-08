@@ -75,3 +75,20 @@ try:
     print("OK:", result.content[:80])
 except Exception as exc:  # noqa: BLE001
     print("FAILED:", type(exc).__name__, str(exc)[:400])
+
+print("--- LIVE image generation (low quality, ~$0.01 — the exact render path) ---")
+try:
+    from chrgd.brand import load_brand
+    from chrgd.images import _generate_background
+
+    brand = load_brand()
+    img = _generate_background(
+        "a single dumbbell on a dark gym floor, moody lighting, no text",
+        s,
+        brand,
+        "low",
+    )
+    print(f"OK: {s.image_model} returned a {img.width}x{img.height} image")
+except Exception as exc:  # noqa: BLE001
+    print("FAILED:", type(exc).__name__, str(exc)[:400])
+    print("^^ if this fails, the create journey's image step fails the same way")

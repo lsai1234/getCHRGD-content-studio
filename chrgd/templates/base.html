@@ -76,6 +76,7 @@
     <nav>
       <a href="/create" class="{{ 'on' if active=='create' }}">Create</a>
       <a href="/calendar" class="{{ 'on' if active=='calendar' }}">Calendar</a>
+      <a href="/queue" class="{{ 'on' if active=='queue' }}">Queue{% if queue_active %} <span style="color:var(--accent)">●{{ queue_active }}</span>{% endif %}</a>
       <a href="/backlog" class="{{ 'on' if active in ('backlog','build','trends','review','export','dashboard') }}">Library{% if review_count %} ({{ review_count }}){% endif %}</a>
       <form method="post" action="/logout" style="display:inline">
         <button class="ghost" style="margin:0;padding:6px 12px">Log out</button>

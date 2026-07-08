@@ -478,11 +478,12 @@
     <p class="hint">Tap a thumbnail to inspect a slide — amend and regenerate anything.</p>
     <div id="img-wait" style="display:none">
       <div class="job-panel" style="margin-bottom:16px">
-        <p style="margin:0"><span class="spin">🎨</span> <b>Generating backgrounds</b>
-          — slides appear below as they finish</p>
+        <p style="margin:0"><span class="spin">🎨</span> <b>Generating the slides</b>
+          — queued and running in the background; each appears below as it finishes</p>
         <div class="bar"><div id="img-bar"></div></div>
         <div class="note" id="img-note">starting…</div>
         <div class="elapsed" id="img-elapsed"></div>
+        <div style="margin-top:8px"><a href="/queue" style="font-size:12.5px">watch every step in the queue →</a></div>
       </div>
     </div>
     <div class="imgs">
@@ -984,6 +985,7 @@ function showWriteWait(title){
       <div class="bar"><div id="write-bar"></div></div>
       <div class="note" id="write-note">warming up…</div>
       <div class="elapsed" id="write-elapsed"></div>
+      <div style="margin-top:8px"><a href="/queue" style="font-size:12.5px">watch every step in the queue →</a></div>
     </div>`;
   document.getElementById('write-done').style.display = 'none';
 }
