@@ -22,14 +22,17 @@
   .cal-day:hover .d a { opacity:1; color:var(--accent); }
   .cal-card { background:#0d0d10; border:1px solid var(--line); border-radius:8px;
               padding:4px 6px; font-size:11.5px; line-height:1.3; cursor:grab;
-              display:flex; gap:6px; align-items:center; overflow:hidden; }
+              display:flex; gap:6px 4px; align-items:center; flex-wrap:wrap; }
+  .cal-card .t { min-width:0; flex:1 1 40px; }
   .cal-card img { width:26px; height:32px; object-fit:cover; border-radius:4px; flex:none; }
   .cal-card .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .cal-card .time { color:var(--muted); font-size:10.5px; }
   .cal-card.exported { border-color:#2e6b34; }
   .cal-card.st-review { border-color:#8a6d00; }
-  .cal-card .x { margin-left:auto; color:var(--muted); cursor:pointer; padding:0 2px; }
-  .cal-card .x:hover { color:var(--accent); }
+  /* a ready post shows a small 📤 hint; tapping the card opens the actions */
+  .cal-card .ready-dot { margin-left:auto; font-size:11px; flex:none; }
+  .cal-card .views { margin-left:auto; color:var(--accent2); font-size:10px; font-weight:700; flex:none; }
+  .cal-card .ready-dot + .views { margin-left:4px; }
   .stale { color:var(--accent2); }
   .tray { background:var(--panel); border:1px solid var(--line); border-radius:12px;
           padding:12px; align-self:start; }
@@ -111,6 +114,18 @@
   </div>
 </div>
 
+<!-- card action sheet -->
+<div id="card-modal" style="display:none; position:fixed; inset:0; z-index:50;
+     background:rgba(0,0,0,.65); align-items:center; justify-content:center; padding:16px">
+  <div style="background:var(--panel); border:1px solid var(--line); border-radius:14px;
+              padding:20px 22px; width:min(400px, 96vw)">
+    <h2 style="font-size:16px; margin:0 0 2px" id="card-title"></h2>
+    <p class="muted" id="card-sub" style="font-size:12px; margin:4px 0 16px"></p>
+    <div id="card-actions"></div>
+    <div class="row"><button class="ghost" style="margin:0; margin-left:auto" onclick="closeCard()">Close</button></div>
+  </div>
+</div>
+
 <!-- manual-post modal -->
 <div id="manual-modal" style="display:none; position:fixed; inset:0; z-index:50;
      background:rgba(0,0,0,.65); align-items:center; justify-content:center; padding:16px">
@@ -179,36 +194,43 @@ function cardEl(c, inTray){
     tm.textContent = c.scheduled_for.slice(11,16);
     el.appendChild(tm);
   }
-  if (!inTray && !c.exported) {
-    const x = document.createElement('span'); x.className='x'; x.textContent='×';
-    x.title = 'unschedule (back to tray)';
-    x.onclick = ev => { ev.stopPropagation(); schedule(c.idea_id, ''); };
-    el.appendChild(x);
-  }
   if (c.rendered) {
-    // Manual post: save photos + copy caption to paste into TikTok by hand.
-    const p = document.createElement('span'); p.className = 'x'; p.textContent = '📤';
-    p.title = 'post manually — save photos + copy caption';
-    p.onclick = ev => { ev.stopPropagation(); openManual(c); };
-    el.appendChild(p);
+    // A small camera badge signals "ready — tap for post options".
+    const r = document.createElement('span'); r.className = 'ready-dot'; r.textContent = '📤';
+    el.appendChild(r);
   }
-  if (c.exported) {
-    // Learning loop: exported posts either show their logged views or ask.
-    const m = document.createElement('span'); m.className = 'x';
-    if (c.views !== null && c.views !== undefined) {
-      m.textContent = '▶' + fmtViews(c.views);
-      m.title = 'update results';
-      m.style.color = 'var(--accent2)';
-    } else {
-      m.textContent = '📈';
-      m.title = 'log how it performed';
-    }
-    m.onclick = ev => { ev.stopPropagation(); openMetrics(c); };
-    el.appendChild(m);
+  if (c.exported && c.views !== null && c.views !== undefined) {
+    const v = document.createElement('span'); v.className = 'views'; v.textContent = '▶' + fmtViews(c.views);
+    el.appendChild(v);
   }
-  el.onclick = () => location.href = `/create?idea=${c.idea_id}`;
+  // Tapping the card opens a clear action sheet (drag still reschedules).
+  el.onclick = () => openCardActions(c);
   return el;
 }
+
+/* ---------- card action sheet (mobile-first) ---------- */
+function openCardActions(c){
+  const modal = document.getElementById('card-modal');
+  document.getElementById('card-title').textContent = c.label || c.idea_id;
+  document.getElementById('card-sub').textContent =
+    `${c.idea_id} · ${c.status}` + (c.scheduled_for ? ` · ${c.scheduled_for.slice(0,10)} ${c.scheduled_for.slice(11,16)}` : '') +
+    (c.views != null ? ` · ▶${fmtViews(c.views)} views` : '');
+  const box = document.getElementById('card-actions');
+  box.innerHTML = '';
+  const add = (label, cls, fn) => {
+    const b = document.createElement('button');
+    b.className = cls; b.style.cssText = 'width:100%; margin:0 0 8px';
+    b.textContent = label;
+    b.onclick = () => { closeCard(); fn(); };
+    box.appendChild(b);
+  };
+  if (c.rendered) add('📤 Post it now — photos & caption', '', () => openManual(c));
+  add('✏️ Open & edit', 'ghost', () => location.href = `/create?idea=${c.idea_id}`);
+  if (c.exported) add(c.views != null ? '📈 Update results' : '📈 Log how it performed', 'ghost', () => openMetrics(c));
+  if (!c.exported && c.scheduled_for) add('🗂 Move to tray (unschedule)', 'ghost', () => schedule(c.idea_id, ''));
+  modal.style.display = 'flex';
+}
+function closeCard(){ document.getElementById('card-modal').style.display = 'none'; }
 
 function draw(){
   const grid = document.getElementById('cal-grid');
@@ -455,6 +477,9 @@ async function downloadEach(){
 
 document.getElementById('manual-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('manual-modal')) closeManual();
+});
+document.getElementById('card-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('card-modal')) closeCard();
 });
 
 load();
