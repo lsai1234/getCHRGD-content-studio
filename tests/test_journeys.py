@@ -727,6 +727,18 @@ def test_scout_moments_parses_and_ranks(settings):
     assert "global" in fake.system.lower()  # global moments now in scope
 
 
+def test_evergreen_scout_requires_brand_tie(settings):
+    from chrgd.trends import scout_discover
+
+    fake = FakeSearch(MOMENTS_PAYLOAD)
+    scout_discover(settings, "evergreen", client=fake)
+    sys = fake.system.lower()
+    # Facts must sit in CHRGD's world and bridge back to the brand.
+    assert "chrgd's world" in sys or "brand can naturally own" in sys
+    assert "reject" in sys and "no link" in sys
+    assert "bridge" in sys
+
+
 def test_worker_discover_job_and_dedupe(settings, store, monkeypatch):
     import chrgd.trends as trends_mod
     from chrgd.trends import MomentsResult
