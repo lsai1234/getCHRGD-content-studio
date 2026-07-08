@@ -31,6 +31,7 @@
   .cal-card.st-review { border-color:#8a6d00; }
   /* a ready post shows a small 📤 hint; tapping the card opens the actions */
   .cal-card .ready-dot { margin-left:auto; font-size:11px; flex:none; }
+  .cal-card .gen { margin-left:auto; font-size:9px; color:var(--accent); flex:none; }
   .cal-card .views { margin-left:auto; color:var(--accent2); font-size:10px; font-weight:700; flex:none; }
   .cal-card .ready-dot + .views { margin-left:4px; }
   .stale { color:var(--accent2); }
@@ -172,6 +173,21 @@ async function load(){
   const r = await fetch(`/api/calendar?date_from=${iso(start)}T00:00:00&date_to=${iso(end)}T00:00:00`);
   cal = await r.json();
   draw();
+  scheduleGenPoll();
+}
+
+// While any scheduled post is still rendering, refresh the calendar so its
+// card flips from "🎨…" to a ready "📤" on its own — no manual reload.
+let genTimer = null;
+function scheduleGenPoll(){
+  if (genTimer) { clearTimeout(genTimer); genTimer = null; }
+  const cards = [...Object.values(cal.days || {}).flat(), ...(cal.tray || [])];
+  if (!cards.some(c => c.built && !c.rendered)) return;
+  genTimer = setTimeout(() => {
+    const open = ['card-modal','manual-modal','metrics-modal'].some(id =>
+      getComputedStyle(document.getElementById(id)).display !== 'none');
+    if (open) scheduleGenPoll(); else load();  // don't reload under an open modal
+  }, 15000);
 }
 
 function cardEl(c, inTray){
@@ -198,6 +214,11 @@ function cardEl(c, inTray){
     // A small camera badge signals "ready — tap for post options".
     const r = document.createElement('span'); r.className = 'ready-dot'; r.textContent = '📤';
     el.appendChild(r);
+  } else if (c.built) {
+    // Scheduled before the images finished — they're generating in the bg.
+    const g = document.createElement('span'); g.className = 'gen'; g.textContent = '🎨…';
+    g.title = 'images generating — refresh in a moment';
+    el.appendChild(g);
   }
   if (c.exported && c.views !== null && c.views !== undefined) {
     const v = document.createElement('span'); v.className = 'views'; v.textContent = '▶' + fmtViews(c.views);

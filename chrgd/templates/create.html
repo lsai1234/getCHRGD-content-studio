@@ -469,6 +469,10 @@
                title="placeholder backgrounds, no API spend — for testing">
           <input type="checkbox" id="img-dry" style="width:auto; margin:0"> test mode</label>
       </div>
+      <div class="cta-row" style="margin-top:8px">
+        <button type="button" class="ghost" onclick="scheduleFirst()">📅 Schedule now — generate images in the background</button>
+      </div>
+      <p class="hint" style="margin-top:4px">Pick when it goes out and the images render while you get on with your day — they'll be waiting on the calendar.</p>
     </div>
   </section>
 
@@ -1438,24 +1442,49 @@ async function approveIfNeeded(){
     await post(`/api/ideas/${state.ideaId}/approve`, new URLSearchParams());
 }
 
+// Jump straight from copy to scheduling, deferring image generation.
+async function scheduleFirst(){
+  await saveCopy();
+  show('finish');
+  drawMiniCal();
+}
+
+// Kick off image generation if it hasn't happened yet. Returns true if the
+// images are now generating in the background (so we can tell the user).
+async function ensureImagesQueued(){
+  const d = await detail();
+  if (d.assets && d.assets.length) return false;               // already rendered
+  if (d.active_jobs && (d.active_jobs.render || d.active_jobs.render_slide))
+    return true;                                                // already generating
+  const dry = document.getElementById('img-dry').checked;
+  await post(`/api/jobs/render/${state.ideaId}?dry_run=${dry}`, new URLSearchParams());
+  return true;
+}
+
 async function finishSchedule(){
   if (!pickedDay) return;
   await approveIfNeeded();
   const t = document.getElementById('finish-time').value || '18:00';
   await post(`/api/ideas/${state.ideaId}/schedule`, new URLSearchParams({when: `${pickedDay}T${t}`}));
+  const generating = await ensureImagesQueued();
   document.getElementById('done-title').textContent = 'Scheduled ⚡';
   document.getElementById('done-msg').innerHTML =
-    `Going out <b>${pickedDay} at ${t}</b>. Export that week from the calendar
-     when you're ready to load Metricool.`;
+    `Going out <b>${pickedDay} at ${t}</b>. ` + (generating
+      ? `The images are generating now — check back on the
+         <a href="/calendar">calendar</a> in a couple of minutes and they'll be ready.`
+      : `Export that week from the calendar when you're ready to load Metricool.`);
   show('done');
 }
 
 async function finishTray(){
   await approveIfNeeded();
   await post(`/api/ideas/${state.ideaId}/schedule`, new URLSearchParams({when: ''}));
+  const generating = await ensureImagesQueued();
   document.getElementById('done-title').textContent = 'Banked in the tray';
-  document.getElementById('done-msg').innerHTML =
-    `Drag it onto a day on the <a href="/calendar">calendar</a> whenever you like.`;
+  document.getElementById('done-msg').innerHTML = generating
+    ? `The images are generating now. It'll appear in the
+       <a href="/calendar">calendar</a> tray ready to drag onto a day shortly.`
+    : `Drag it onto a day on the <a href="/calendar">calendar</a> whenever you like.`;
   show('done');
 }
 
