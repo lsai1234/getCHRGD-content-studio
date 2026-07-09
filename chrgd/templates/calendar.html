@@ -47,6 +47,47 @@
   .wk-export button { margin:0; padding:2px 10px; font-size:11px; }
   .legend { color:var(--muted); font-size:12px; margin-top:10px; }
   .legend span { margin-right:12px; }
+
+  /* ── mobile agenda (a month grid is unusable on a phone) ── */
+  #cal-agenda { display:none; }
+  .ag-new { width:100%; margin:2px 0 18px; padding:13px; font-size:15px; }
+  .ag-export-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 16px; }
+  .ag-export-row .lbl { color:var(--muted); font-size:12.5px; }
+  .ag-export-row button { margin:0; padding:6px 12px; font-size:12.5px; }
+  .ag-empty { text-align:center; color:var(--muted); padding:40px 16px; font-size:14px; }
+  .ag-day { margin-bottom:20px; }
+  .ag-date { display:flex; align-items:center; gap:8px; margin:0 0 9px; padding-bottom:7px;
+             border-bottom:1px solid var(--line); }
+  .ag-date .num { color:var(--fg); font-weight:700; font-size:15px; letter-spacing:-.01em; }
+  .ag-date .cnt { color:var(--muted); font-size:12.5px; }
+  .ag-date .today-pill { color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.06em;
+             text-transform:uppercase; border:1px solid var(--accent-line); border-radius:20px; padding:1px 8px; }
+  .ag-date .add { margin-left:auto; color:var(--accent); font-size:20px; font-weight:700;
+             text-decoration:none; line-height:1; padding:2px 6px; }
+  .ag-card { display:flex; gap:13px; align-items:center; padding:11px 13px; margin-bottom:9px;
+             background:linear-gradient(180deg,var(--panel-2),var(--panel)); border:1px solid var(--line-2);
+             border-radius:var(--r-lg); box-shadow:var(--sh-1); cursor:pointer;
+             transition:transform .14s var(--ease), box-shadow .14s var(--ease), border-color .14s; }
+  .ag-card:active { transform:scale(.99); }
+  .ag-card:hover { border-color:var(--accent-line); box-shadow:var(--sh-2); }
+  .ag-card.exported { border-color:rgba(86,211,100,.5); }
+  .ag-card.st-review { border-color:rgba(227,179,65,.5); }
+  .ag-card .ph { width:50px; height:63px; border-radius:9px; flex:none; object-fit:cover;
+             background:var(--bg-2); border:1px solid var(--line); display:flex; align-items:center;
+             justify-content:center; font-size:20px; color:var(--faint); }
+  .ag-card .info { flex:1; min-width:0; }
+  .ag-card .hk { font-weight:600; font-size:14px; line-height:1.35; overflow:hidden;
+             display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .ag-card .meta { color:var(--muted); font-size:12px; margin-top:4px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .ag-card .meta .dot { width:6px; height:6px; border-radius:50%; background:var(--muted); flex:none; }
+  .ag-card .chev { color:var(--faint); font-size:20px; flex:none; }
+  @media(max-width:820px){
+    #cal-dows, #cal-grid, .legend { display:none; }
+    #cal-agenda { display:block; }
+    .cal-head { gap:8px; }
+    .cal-head h1 { width:100%; }
+    .cal-head .stats { margin-left:0; text-align:left; width:100%; order:5; }
+  }
 </style>
 
 <div class="cal-head">
@@ -70,6 +111,7 @@
       <div class="cal-dow">Sun</div>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
+    <div id="cal-agenda"></div>
     <p class="legend">
       <span>🟩 exported</span><span>🟨 needs review</span>
       <span class="stale">⚠ going stale — ship or void</span>
@@ -344,6 +386,83 @@ function draw(){
   tray.innerHTML = '';
   for (const c of cal.tray) tray.appendChild(cardEl(c, true));
   document.getElementById('tray-empty').style.display = cal.tray.length ? 'none' : '';
+
+  buildAgenda();
+}
+
+/* ── mobile agenda: full-width post rows grouped by day ── */
+function agendaCardEl(c){
+  const el = document.createElement('div');
+  el.className = 'ag-card' + (c.exported ? ' exported' : '') + (c.status==='review' ? ' st-review' : '');
+  const ph = c.thumb
+    ? `<img class="ph" src="/media/${c.idea_id}/${c.thumb}">`
+    : `<div class="ph">${c.rendered ? '🖼' : '✎'}</div>`;
+  const bits = [];
+  if (c.scheduled_for) bits.push(c.scheduled_for.slice(11,16));
+  if (c.rating) bits.push({hit:'🔥 hit',meh:'😐 meh',flop:'💀 flop'}[c.rating]);
+  else if (c.exported) bits.push('exported');
+  else if (c.rendered) bits.push('ready to post');
+  else if (c.built) bits.push('needs images');
+  if (c.views != null) bits.push('▶' + fmtViews(c.views));
+  if (c.stale) bits.push('⚠ going stale');
+  const meta = bits.map((b,i) => (i ? '<span class="dot"></span>' : '') + `<span>${esc2(b)}</span>`).join('');
+  el.innerHTML = `${ph}<div class="info">
+      <div class="hk">${esc2(c.label || c.idea_id)}</div>
+      <div class="meta">${meta}</div>
+    </div><span class="chev">›</span>`;
+  el.onclick = () => openCardActions(c);
+  return el;
+}
+
+function buildAgenda(){
+  const ag = document.getElementById('cal-agenda');
+  ag.innerHTML = '';
+  const nb = document.createElement('button');
+  nb.className = 'ag-new'; nb.textContent = '＋ Create a post';
+  nb.onclick = () => location.href = '/create';
+  ag.appendChild(nb);
+
+  const days = Object.keys(cal.days).filter(k => (cal.days[k] || []).length).sort();
+
+  // Export-a-week shortcuts for weeks that have posts.
+  const weeks = {};
+  days.forEach(k => { const d = new Date(k); const mon = new Date(d);
+    mon.setDate(d.getDate() - ((d.getDay()+6)%7)); weeks[iso(mon)] = 1; });
+  const weekKeys = Object.keys(weeks).sort();
+  if (weekKeys.length) {
+    const row = document.createElement('div'); row.className = 'ag-export-row';
+    row.innerHTML = '<span class="lbl">Export a week:</span>';
+    weekKeys.forEach(mk => {
+      const mon = new Date(mk); const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+      const btn = document.createElement('button'); btn.className = 'ghost';
+      btn.textContent = `${mon.getDate()} ${mon.toLocaleDateString('en-GB',{month:'short'})}–${sun.getDate()} ⬇`;
+      btn.onclick = () => exportRange(iso(mon), iso(sun));
+      row.appendChild(btn);
+    });
+    ag.appendChild(row);
+  }
+
+  if (!days.length) {
+    const e = document.createElement('div'); e.className = 'ag-empty';
+    e.innerHTML = `Nothing scheduled in ${view.toLocaleDateString('en-GB',{month:'long'})}.<br>Tap ＋ Create a post to get started.`;
+    ag.appendChild(e);
+    return;
+  }
+
+  const todayIso = iso(new Date());
+  for (const key of days) {
+    const d = new Date(key); const cards = cal.days[key];
+    const grp = document.createElement('div'); grp.className = 'ag-day';
+    const head = document.createElement('div'); head.className = 'ag-date';
+    head.innerHTML =
+      `<span class="num">${d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}</span>`
+      + (key === todayIso ? '<span class="today-pill">Today</span>' : '')
+      + `<span class="cnt">${cards.length} post${cards.length>1?'s':''}</span>`
+      + `<a class="add" href="/create?day=${key}" title="create for this day">＋</a>`;
+    grp.appendChild(head);
+    for (const c of cards) grp.appendChild(agendaCardEl(c));
+    ag.appendChild(grp);
+  }
 }
 
 async function schedule(id, when){
