@@ -34,7 +34,7 @@ logo_path = ""           # drop in a PNG logo here to override the text wordmark
 handle = "@getchrgd"     # bottom-corner handle
 show_counter = true      # "1/5" slide counter
 scrim = true             # top+bottom legibility gradient over the photo
-footer_bar = true        # thin CHRGD-orange line along the bottom edge
+footer_bar = true        # thin CHRGD light-blue line along the bottom edge
 # Appended to every slide prompt so the five backgrounds read as ONE carousel.
 consistency_clause = "Part of a 5-image set: keep the same location, lighting, colour grade and photographic style across all images in this set."
 # Text is always overlaid in code — the model must never paint its own.
@@ -48,7 +48,7 @@ prompt = "Shot on a phone with harsh direct flash in a real UK commercial gym at
 
 [styles.editorial]
 label = "Clean editorial"
-prompt = "Premium editorial sports photography, controlled studio-grade lighting, deep blacks with a single warm orange accent, crisp detail, minimal composition with generous negative space."
+prompt = "Premium editorial sports photography, controlled studio-grade lighting, deep blacks with a single cool light-blue accent, crisp detail, minimal composition with generous negative space."
 
 [styles.meme]
 label = "Meme-adjacent"
@@ -56,7 +56,7 @@ prompt = "Deliberately mundane amateur photo look, awkward framing, fluorescent 
 
 [styles.cinematic]
 label = "Dark cinematic"
-prompt = "Cinematic film still, anamorphic depth, volumetric light cutting through chalk dust in a dark gym, teal-and-orange grade, high contrast, dramatic atmosphere."
+prompt = "Cinematic film still, anamorphic depth, volumetric light cutting through chalk dust in a dark gym, cool blue-and-black grade, icy light-blue highlights, high contrast, dramatic atmosphere."
 
 [safe_zones]          # fractions of the canvas kept clear of TikTok UI
 top = 0.10
@@ -65,11 +65,11 @@ bottom = 0.24
 left = 0.08
 
 [colors]
-background = "#0B0B0D"   # dark premium fallback / placeholder base
+background = "#0B0B0D"   # near-black brand base
 headline = "#FFFFFF"
 supporting = "#E6E6E6"
-accent = "#FF6A00"       # CHRGD orange
-accent_alt = "#FFC400"   # CHRGD yellow
+accent = "#4FC3F7"       # CHRGD light blue
+accent_alt = "#8FD9F7"   # lighter blue tint
 panel = "#000000"        # contrast panel behind text
 panel_opacity = 0.55     # 0 = none, 1 = solid
 

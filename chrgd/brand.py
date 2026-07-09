@@ -79,8 +79,8 @@ class Colors(BaseModel):
     background: str = "#0B0B0D"
     headline: str = "#FFFFFF"
     supporting: str = "#E6E6E6"
-    accent: str = "#FF6A00"
-    accent_alt: str = "#FFC400"
+    accent: str = "#4FC3F7"       # CHRGD light blue
+    accent_alt: str = "#8FD9F7"
     panel: str = "#000000"
     panel_opacity: float = 0.55
 

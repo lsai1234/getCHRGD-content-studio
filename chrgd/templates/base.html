@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CHRGD Content Studio{% endblock %}</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23FF6A00'/%3E%3Ctext x='8' y='12' font-size='10' font-weight='bold' text-anchor='middle' fill='%23111'%3EC%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%234FC3F7'/%3E%3Ctext x='8' y='12' font-size='10' font-weight='bold' text-anchor='middle' fill='%23111'%3EC%3C/text%3E%3C/svg%3E">
   <style>
     :root { --bg:#0B0B0D; --panel:#151519; --line:#26262c; --fg:#f2f2f2;
-            --muted:#9a9aa2; --accent:#FF6A00; --accent2:#FFC400; }
+            --muted:#9a9aa2; --accent:#4FC3F7; --accent2:#8FD9F7; }
     * { box-sizing:border-box; }
     body { margin:0; font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
            background:var(--bg); color:var(--fg); }
@@ -50,7 +50,7 @@
     input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent);
             box-shadow:0 0 0 3px rgba(255,106,0,.15); }
     textarea { min-height:80px; resize:vertical; }
-    button { background:linear-gradient(180deg, #ff7d1f, var(--accent)); color:#111;
+    button { background:linear-gradient(180deg, #7fd4fb, var(--accent)); color:#0a1520;
              border:0; border-radius:10px; padding:10px 18px; font-weight:600;
              cursor:pointer; margin-top:14px;
              transition:filter .15s, transform .1s; }
@@ -63,7 +63,7 @@
              font-size:14px; }
     th { color:var(--muted); font-weight:500; }
     .pill { font-size:12px; padding:2px 8px; border-radius:20px; border:1px solid var(--line); }
-    .flash { background:#2a1a0a; border:1px solid var(--accent); color:#ffcfa3;
+    .flash { background:#0c2230; border:1px solid var(--accent); color:#cfeeff;
              padding:10px 14px; border-radius:8px; margin-bottom:16px; }
     .muted { color:var(--muted); }
     a { color:var(--accent2); }
