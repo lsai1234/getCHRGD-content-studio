@@ -24,8 +24,26 @@ from .models import Idea
 # Fields the UI logs per post. Views is the anchor; the rest are optional.
 METRIC_FIELDS = ("views", "likes", "comments", "shares", "saves")
 
+# One-tap outcome — the low-friction signal that actually gets logged.
+RATINGS = {"hit", "meh", "flop"}
+
 # Need at least this many logged posts before we claim to know anything.
 MIN_POSTS_FOR_NOTES = 3
+# A trait needs at least this many rated posts before we'll call it a pattern
+# (small-n honesty — we don't pretend n=1 means anything).
+MIN_TRAIT_POSTS = 2
+
+# Categories whose wins are TOPICAL, not a repeatable formula — copying the
+# post won't work, you re-run the radar for the next one.
+_TOPICAL_CATEGORIES = {"moment", "trend"}
+
+
+def _rating(idea: Idea) -> str | None:
+    try:
+        r = json.loads(idea.metrics_json or "{}").get("rating")
+    except json.JSONDecodeError:
+        return None
+    return r if r in RATINGS else None
 
 
 def _metrics(idea: Idea) -> dict:
@@ -68,7 +86,8 @@ def insights(store: Store, top_n: int = 5) -> dict:
     ]
     logged = [(i, m) for i, m in logged if m.get("views", 0) > 0]
     if not logged:
-        return {"posts_logged": 0, "baseline_views": 0, "top": [], "traits": []}
+        return {"posts_logged": 0, "baseline_views": 0, "top": [], "traits": [],
+                **rating_summary(store)}
 
     views = [m["views"] for _, m in logged]
     baseline = int(median(views))
@@ -119,31 +138,112 @@ def insights(store: Store, top_n: int = 5) -> dict:
         "baseline_views": baseline,
         "top": top,
         "traits": traits,
+        **rating_summary(store),
     }
 
 
-def performance_notes(store: Store) -> str:
-    """The engine-facing block: '' until there's enough data to be honest."""
-    digest = insights(store, top_n=3)
-    if digest["posts_logged"] < MIN_POSTS_FOR_NOTES:
-        return ""
+def rating_summary(store: Store) -> dict:
+    """The honest, low-friction signal: 🔥/😐/💀 counts + which traits skew
+    toward hits vs flops. Coarser than view maths, but far more reliable at
+    small-account scale and it's what actually gets logged."""
+    rated = [(i, _rating(i)) for i in store.ideas_with_metrics()]
+    rated = [(i, r) for i, r in rated if r]
+    counts = {"hit": 0, "meh": 0, "flop": 0}
+    for _, r in rated:
+        counts[r] += 1
 
+    # Per trait-value: how many hits vs flops. Only report where we have enough
+    # rated posts to mean anything.
+    def _skew(key: str) -> list[dict]:
+        buckets: dict[str, dict] = {}
+        for idea, r in rated:
+            value = _traits(idea)[key]
+            if not value:
+                continue
+            b = buckets.setdefault(value, {"hit": 0, "meh": 0, "flop": 0})
+            b[r] += 1
+        out = []
+        for value, b in buckets.items():
+            total = b["hit"] + b["meh"] + b["flop"]
+            if total >= MIN_TRAIT_POSTS:
+                out.append({
+                    "trait": key, "value": value, "hits": b["hit"],
+                    "flops": b["flop"], "total": total,
+                })
+        return out
+
+    all_skew = _skew("category") + _skew("mechanic") + _skew("style")
+    hit_traits = sorted(
+        [t for t in all_skew if t["hits"] > t["flops"]],
+        key=lambda t: (t["hits"] - t["flops"], t["hits"]), reverse=True,
+    )
+    flop_traits = sorted(
+        [t for t in all_skew if t["flops"] > t["hits"]],
+        key=lambda t: (t["flops"] - t["hits"], t["flops"]), reverse=True,
+    )
+    return {
+        "rated_count": len(rated),
+        "ratings": counts,
+        "hit_traits": hit_traits,
+        "flop_traits": flop_traits,
+    }
+
+
+def _trait_phrase(t: dict) -> str:
+    return f"{t['value']} ({t['trait']})"
+
+
+def performance_notes(store: Store) -> str:
+    """The engine-facing block: '' until there's enough data to be honest.
+
+    Rating-first (the reliable signal), views only as backup. Deliberately
+    coarse — it nudges the engine toward the shapes that have hit and away
+    from those that flop, without pretending small-n stats are significant.
+    """
+    rs = rating_summary(store)
+    hit_traits, flop_traits = rs["hit_traits"], rs["flop_traits"]
+
+    if rs["rated_count"] >= MIN_POSTS_FOR_NOTES and (hit_traits or flop_traits):
+        lines = [
+            "WHAT WORKS FOR THIS ACCOUNT (from the editor's own hit/flop "
+            f"ratings on {rs['rated_count']} posts — lean this way where it "
+            "fits the idea, it's a nudge not a rule):",
+        ]
+        if hit_traits:
+            hits = ", ".join(
+                f"{_trait_phrase(t)} [{t['hits']}/{t['total']} hit]"
+                for t in hit_traits[:3]
+            )
+            lines.append(f"- Tends to HIT: {hits}. Favour these shapes.")
+        if flop_traits:
+            flops = ", ".join(
+                f"{_trait_phrase(t)} [{t['flops']}/{t['total']} flop]"
+                for t in flop_traits[:3]
+            )
+            lines.append(f"- Tends to FLOP: {flops}. Avoid or sharpen hard.")
+        # The honest caveat the editor flagged: topical wins aren't repeatable.
+        if any(t["value"] in _TOPICAL_CATEGORIES for t in hit_traits):
+            lines.append(
+                "- Note: 'moment'/'trend' wins came from a live cultural moment, "
+                "not a copyable formula — bring that energy, but the topic must "
+                "be its own fresh, currently-relevant moment."
+            )
+        return "\n".join(lines)
+
+    # Fallback: view-based top posts, only once enough have real numbers.
+    digest = insights(store, top_n=3)
+    viewed = [p for p in digest["top"] if p["views"] > 0]
+    if len(viewed) < MIN_POSTS_FOR_NOTES:
+        return ""
     lines = [
-        "PERFORMANCE NOTES — real results from THIS account (median "
-        f"{digest['baseline_views']} views across {digest['posts_logged']} logged posts). "
-        "Let what actually worked here outweigh generic best practice:",
+        "WHAT WORKS FOR THIS ACCOUNT (top posts by views — lean this way where "
+        "it fits, not a rule):",
     ]
-    for p in digest["top"]:
-        bits = [f"{p['views']} views ({p['multiple']}x baseline)"]
+    for p in viewed:
+        bits = [f"{p['multiple']}x average"]
         if p["category"]:
-            bits.append(f"category: {p['category']}")
+            bits.append(p["category"])
         if p["mechanic"]:
-            bits.append(f"mechanic: {p['mechanic']}")
+            bits.append(p["mechanic"])
         lines.append(f"- \"{p['hook']}\" — " + ", ".join(bits))
-    strong = [t for t in digest["traits"] if t["vs_baseline"] >= 1.5][:3]
-    for t in strong:
-        lines.append(
-            f"- {t['trait']} '{t['value']}' runs {t['vs_baseline']}x baseline "
-            f"over {t['posts']} posts — lean into it when it fits"
-        )
     return "\n".join(lines)

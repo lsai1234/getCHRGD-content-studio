@@ -1143,9 +1143,30 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         metrics = {f: values[f] for f in METRIC_FIELDS}
         metrics["logged_at"] = datetime.now(timezone.utc).isoformat()
         with _store(settings) as store:
-            _idea_or_404(store, idea_id)
+            idea = _idea_or_404(store, idea_id)
+            # Keep any one-tap rating already set.
+            existing = json.loads(idea.metrics_json) if idea.metrics_json else {}
+            if existing.get("rating"):
+                metrics["rating"] = existing["rating"]
             store.set_metrics(idea_id, metrics)
         return {"idea_id": idea_id, "metrics": metrics}
+
+    @app.post("/api/ideas/{idea_id}/rate")
+    def api_rate(idea_id: str, rating: str = Form(...), _: str = Depends(require_user)):
+        """One-tap result: 🔥 hit / 😐 meh / 💀 flop — near-zero friction so it
+        actually gets logged. Merges, so it never wipes any views entered."""
+        from .learning import RATINGS
+
+        rating = rating.strip().lower()
+        if rating not in RATINGS:
+            raise HTTPException(400, f"rating must be one of {sorted(RATINGS)}")
+        with _store(settings) as store:
+            _idea_or_404(store, idea_id)
+            store.merge_metrics(
+                idea_id,
+                {"rating": rating, "rated_at": datetime.now(timezone.utc).isoformat()},
+            )
+        return {"idea_id": idea_id, "rating": rating}
 
     @app.get("/api/insights")
     def api_insights(_: str = Depends(require_user)):
@@ -1186,9 +1207,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     created = created.replace(tzinfo=timezone.utc)
                 stale = datetime.now(timezone.utc) - created > timedelta(days=shelf)
         views = None
+        rating = None
         if idea.metrics_json:
             try:
-                views = int(json.loads(idea.metrics_json).get("views") or 0)
+                m = json.loads(idea.metrics_json)
+                views = int(m.get("views") or 0) or None
+                rating = m.get("rating")
             except (json.JSONDecodeError, TypeError, ValueError):
                 views = None
         return {
@@ -1202,6 +1226,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "stale": stale,
             "decay": idea.decay_speed.value if idea.decay_speed else None,
             "views": views,
+            "rating": rating,
             "scheduled_for": (
                 idea.scheduled_for.isoformat() if idea.scheduled_for else None
             ),

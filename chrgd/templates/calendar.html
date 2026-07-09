@@ -85,8 +85,8 @@
     <div class="tray" id="insights" style="margin-top:14px">
       <h2>📈 What's working</h2>
       <div id="insights-body" class="muted" style="font-size:12.5px">
-        Tap 📈 on a posted card to log its numbers — from 3 logged posts the
-        engine starts writing towards what actually performs for you.
+        Tap a posted card → rate it <b>🔥 / 😐 / 💀</b>. After a few, you'll see
+        which of your formats actually land — your judgement, made legible.
       </div>
     </div>
   </div>
@@ -210,8 +210,13 @@ function cardEl(c, inTray){
     tm.textContent = c.scheduled_for.slice(11,16);
     el.appendChild(tm);
   }
-  if (c.rendered) {
-    // A small camera badge signals "ready — tap for post options".
+  if (c.rating) {
+    // Logged outcome takes the badge slot — the signal you'll glance at most.
+    const rt = document.createElement('span'); rt.className = 'ready-dot';
+    rt.textContent = {hit:'🔥', meh:'😐', flop:'💀'}[c.rating] || '';
+    rt.title = 'rated ' + c.rating;
+    el.appendChild(rt);
+  } else if (c.rendered) {
     const r = document.createElement('span'); r.className = 'ready-dot'; r.textContent = '📤';
     el.appendChild(r);
   } else if (c.built) {
@@ -220,7 +225,7 @@ function cardEl(c, inTray){
     g.title = 'images generating — refresh in a moment';
     el.appendChild(g);
   }
-  if (c.exported && c.views !== null && c.views !== undefined) {
+  if (c.views !== null && c.views !== undefined) {
     const v = document.createElement('span'); v.className = 'views'; v.textContent = '▶' + fmtViews(c.views);
     el.appendChild(v);
   }
@@ -247,9 +252,33 @@ function openCardActions(c){
   };
   if (c.rendered) add('📤 Post it now — photos & caption', '', () => openManual(c));
   add('✏️ Open & edit', 'ghost', () => location.href = `/create?idea=${c.idea_id}`);
-  if (c.exported) add(c.views != null ? '📈 Update results' : '📈 Log how it performed', 'ghost', () => openMetrics(c));
+  // One-tap outcome — how did it do? (Shown for any ready post you've posted.)
+  if (c.rendered) {
+    const rateWrap = document.createElement('div');
+    rateWrap.style.cssText = 'margin:6px 0 10px';
+    const cur = c.rating ? ` — currently ${RATING_LABEL[c.rating]}` : '';
+    rateWrap.innerHTML = `<div class="muted" style="font-size:12px;margin-bottom:6px">How did it do?${cur}</div>`;
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:6px';
+    [['hit','🔥 Hit'],['meh','😐 Meh'],['flop','💀 Flop']].forEach(([r,label]) => {
+      const b = document.createElement('button');
+      b.className = c.rating === r ? '' : 'ghost';
+      b.style.cssText = 'flex:1;margin:0;padding:8px 4px;font-size:13px';
+      b.textContent = label;
+      b.onclick = () => rate(c.idea_id, r);
+      row.appendChild(b);
+    });
+    rateWrap.appendChild(row); box.appendChild(rateWrap);
+  }
+  if (c.exported || c.views != null) add(c.views != null ? '📊 Exact numbers (optional)' : '📊 Log exact numbers (optional)', 'ghost', () => openMetrics(c));
   if (!c.exported && c.scheduled_for) add('🗂 Move to tray (unschedule)', 'ghost', () => schedule(c.idea_id, ''));
   modal.style.display = 'flex';
+}
+const RATING_LABEL = {hit:'🔥 hit', meh:'😐 meh', flop:'💀 flop'};
+async function rate(id, r){
+  await fetch(`/api/ideas/${id}/rate`, {method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({rating:r})});
+  closeCard(); load(); loadInsights();
 }
 function closeCard(){ document.getElementById('card-modal').style.display = 'none'; }
 
@@ -388,24 +417,34 @@ async function loadInsights(){
   const r = await fetch('/api/insights');
   if (!r.ok) return;
   const d = await r.json();
-  if (!d.posts_logged) return;  // keep the how-to hint
+  const rated = d.rated_count || 0;
+  if (!rated && !d.posts_logged) return;  // keep the how-to hint
   const box = document.getElementById('insights-body');
-  let html = `<b>${d.posts_logged}</b> posts logged · baseline
-    <b>${fmtViews(d.baseline_views)}</b> views · `;
-  html += d.feeding_engine
-    ? `<span style="color:#5dd177">feeding the engine ✓</span>`
-    : `logs ${3 - d.posts_logged} more and the engine starts learning`;
-  for (const p of d.top.slice(0, 3)) {
-    html += `<div style="margin-top:8px; color:var(--fg)">
-      ▶${fmtViews(p.views)} <span class="muted">(${p.multiple}x)</span>
-      ${p.hook ? '“' + esc2(p.hook).slice(0, 60) + '”' : p.idea_id}</div>`;
+  let html = '';
+  if (rated) {
+    const c = d.ratings || {};
+    html += `<b>${rated}</b> rated · 🔥 ${c.hit||0} · 😐 ${c.meh||0} · 💀 ${c.flop||0}`;
+    (d.hit_traits || []).slice(0, 3).forEach(t => {
+      html += `<div style="margin-top:7px; color:#5dd177">🔥 ${esc2(t.value)}
+        <span class="muted">(${t.trait}) — ${t.hits}/${t.total} hit</span></div>`;
+    });
+    (d.flop_traits || []).slice(0, 2).forEach(t => {
+      html += `<div style="margin-top:5px; color:#ff8a8a">💀 ${esc2(t.value)}
+        <span class="muted">(${t.trait}) — ${t.flops}/${t.total} flop</span></div>`;
+    });
+    if (rated >= 3) html += `<div class="muted" style="margin-top:8px; font-size:11.5px">The engine now leans toward what hits when it fits the idea.</div>`;
   }
-  const strong = (d.traits || []).filter(t => t.vs_baseline >= 1.5).slice(0, 2);
-  for (const t of strong) {
-    html += `<div style="margin-top:6px">↑ ${esc2(t.trait)} <b>${esc2(t.value)}</b>
-      runs ${t.vs_baseline}x baseline (${t.posts} posts)</div>`;
+  // Exact view numbers, if any were logged, shown as a secondary detail.
+  const viewed = (d.top || []).filter(p => p.views > 0).slice(0, 2);
+  if (viewed.length) {
+    if (rated) html += `<div class="muted" style="margin-top:10px; font-size:11.5px">Top by views:</div>`;
+    else html += `<b>${d.posts_logged}</b> with views · baseline <b>${fmtViews(d.baseline_views)}</b>`;
+    viewed.forEach(p => {
+      html += `<div style="margin-top:5px; color:var(--fg)">▶${fmtViews(p.views)}
+        <span class="muted">(${p.multiple}x)</span> ${p.hook ? '“'+esc2(p.hook).slice(0,50)+'”' : p.idea_id}</div>`;
+    });
   }
-  box.innerHTML = html;
+  box.innerHTML = html || box.innerHTML;
 }
 const esc2 = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

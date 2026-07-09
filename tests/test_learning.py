@@ -82,9 +82,49 @@ def test_notes_need_enough_data(store):
     _logged_post(store, "G-0003", 9000, category="moment",
                  hook="the 2am kick-off survival guide")
     notes = performance_notes(store)
-    assert "PERFORMANCE NOTES" in notes
+    assert "WHAT WORKS FOR THIS ACCOUNT" in notes  # view-based fallback
     assert "2am kick-off" in notes
     assert MIN_POSTS_FOR_NOTES == 3
+
+
+def test_ratings_drive_notes_and_summary(store):
+    # Rating-first: two myth-bust hits, two product-tiein flops.
+    _logged_post(store, "G-0001", 0, category="myth", mechanic="myth_fight")
+    _logged_post(store, "G-0002", 0, category="myth", mechanic="myth_fight")
+    _logged_post(store, "G-0003", 0, category="tiein")
+    _logged_post(store, "G-0004", 0, category="tiein")
+    store.merge_metrics("G-0001", {"rating": "hit"})
+    store.merge_metrics("G-0002", {"rating": "hit"})
+    store.merge_metrics("G-0003", {"rating": "flop"})
+    store.merge_metrics("G-0004", {"rating": "flop"})
+
+    d = insights(store)
+    assert d["rated_count"] == 4
+    assert d["ratings"] == {"hit": 2, "meh": 0, "flop": 2}
+    hit_vals = {t["value"] for t in d["hit_traits"]}
+    flop_vals = {t["value"] for t in d["flop_traits"]}
+    assert "myth" in hit_vals and "myth_fight" in hit_vals
+    assert "tiein" in flop_vals
+
+    notes = performance_notes(store)
+    assert "WHAT WORKS FOR THIS ACCOUNT" in notes and "ratings" in notes
+    assert "Tends to HIT" in notes and "Tends to FLOP" in notes
+
+
+def test_rating_merge_keeps_views(store):
+    _logged_post(store, "G-0001", 5000)
+    store.merge_metrics("G-0001", {"rating": "hit"})
+    idea = store.get_idea("G-0001")
+    m = json.loads(idea.metrics_json)
+    assert m["views"] == 5000 and m["rating"] == "hit"
+
+
+def test_topical_win_caveat_in_notes(store):
+    for i in range(1, 4):
+        _logged_post(store, f"G-000{i}", 0, category="moment", mechanic="rage_agreement")
+        store.merge_metrics(f"G-000{i}", {"rating": "hit"})
+    notes = performance_notes(store)
+    assert "not a copyable formula" in notes  # moments don't repeat
 
 
 def test_zero_view_logs_are_ignored(store):
@@ -117,7 +157,7 @@ def test_notes_reach_the_engine(settings, store):
     chat = CapturingChat()
     result = build_single_idea(store, settings, "G-0100", client=chat)
     assert result.status is Status.done
-    assert "PERFORMANCE NOTES" in chat.user
+    assert "WHAT WORKS FOR THIS ACCOUNT" in chat.user
     assert "hook 12000" in chat.user
 
 

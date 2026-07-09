@@ -290,6 +290,28 @@ class Store:
         )
         self.conn.commit()
 
+    def merge_metrics(self, idea_id: str, patch: dict) -> None:
+        """Merge keys into metrics_json without clobbering the rest.
+
+        Used by one-tap rating so logging a 🔥/😐/💀 keeps any views already
+        entered, and vice versa.
+        """
+        row = self.conn.execute(
+            "SELECT metrics_json FROM ideas WHERE idea_id = ?", (idea_id,)
+        ).fetchone()
+        current = {}
+        if row and row["metrics_json"]:
+            try:
+                current = json.loads(row["metrics_json"])
+            except json.JSONDecodeError:
+                current = {}
+        current.update(patch)
+        self.conn.execute(
+            "UPDATE ideas SET metrics_json = ? WHERE idea_id = ?",
+            (json.dumps(current), idea_id),
+        )
+        self.conn.commit()
+
     def ideas_with_metrics(self) -> list[Idea]:
         """Posts with logged results, newest first — the learning corpus."""
         rows = self.conn.execute(
