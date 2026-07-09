@@ -10,7 +10,7 @@
   .cj-rail { height: 3px; background: #1a1a1f; border-radius: 2px; overflow: hidden; }
   .cj-rail > div { height: 100%; width: 0%; border-radius: 2px;
                    background: linear-gradient(90deg, var(--accent), var(--accent2));
-                   box-shadow: 0 0 12px rgba(255,106,0,.55);
+                   box-shadow: 0 0 14px var(--accent-glow);
                    transition: width .5s cubic-bezier(.22,1,.36,1); }
   .cj-top { display: flex; align-items: center; gap: 8px; margin: 12px 0 20px; min-height: 30px; }
   .cj-back { background: none; border: 0; color: var(--muted); padding: 2px 10px 4px;
@@ -36,13 +36,13 @@
 
   /* tappable option cards */
   .opt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
-         background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+         background: linear-gradient(180deg,var(--panel-2),var(--panel)); border: 1px solid var(--line); border-radius: 14px;
          color: var(--fg); padding: 15px 16px; margin: 0 0 10px; cursor: pointer;
-         font: inherit; font-weight: 400;
-         transition: border-color .15s, background .15s, transform .12s; }
-  .opt:hover { border-color: rgba(255,106,0,.55); background: #191316; filter: none; }
-  .opt:active { transform: scale(.985); }
-  .opt.sel { border-color: var(--accent); background: #0e1b24; }
+         font: inherit; font-weight: 400; box-shadow: var(--sh-1);
+         transition: border-color .16s var(--ease), transform .16s var(--ease), box-shadow .16s var(--ease); }
+  .opt:hover { border-color: var(--accent-line); transform: translateY(-2px); box-shadow: var(--sh-2); filter: none; }
+  .opt:active { transform: translateY(0) scale(.99); }
+  .opt.sel { border-color: var(--accent); background: var(--accent-tint); box-shadow: var(--sh-1), 0 0 0 1px var(--accent-line) inset; }
   .opt .ic { font-size: 20px; width: 26px; text-align: center; flex-shrink: 0; }
   .opt .tx { flex: 1; min-width: 0; }
   .opt .t { display: block; font-size: 15px; font-weight: 600; }
@@ -67,7 +67,7 @@
           border-radius: 20px; padding: 7px 14px; font-size: 13px; font-weight: 600;
           cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
   .chip:hover { border-color: var(--accent); color: var(--fg); filter: none; background: transparent; }
-  .chip.sel { border-color: var(--accent); color: var(--fg); background: #0e1b24; }
+  .chip.sel { border-color: var(--accent); color: var(--fg); background: var(--accent-tint); }
 
   /* primary / secondary CTA row pinned under each screen's content */
   .cta-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 22px; }
@@ -77,10 +77,10 @@
   .lane-tabs { display: flex; gap: 6px; margin-bottom: 4px; }
   .lane-meta { display: flex; align-items: center; gap: 10px; margin: 10px 0 4px; }
   .lane-meta .age { color: var(--muted); font-size: 12px; margin-left: auto; }
-  .moment { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-            padding: 14px 16px; margin-top: 10px; cursor: pointer;
-            transition: border-color .15s, transform .15s; }
-  .moment:hover { border-color: rgba(255,106,0,.55); transform: translateY(-1px); }
+  .moment { background: linear-gradient(180deg,var(--panel-2),var(--panel)); border: 1px solid var(--line); border-radius: 14px;
+            padding: 14px 16px; margin-top: 10px; cursor: pointer; box-shadow: var(--sh-1);
+            transition: border-color .16s var(--ease), transform .16s var(--ease), box-shadow .16s var(--ease); }
+  .moment:hover { border-color: var(--accent-line); transform: translateY(-2px); box-shadow: var(--sh-2); }
   .moment.open { border-color: var(--accent); }
   .moment .m-top { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
   .moment .m-title { font-weight: 600; }
@@ -89,7 +89,7 @@
   .moment .m-why { color: var(--muted); font-size: 13px; margin-top: 3px; }
   .moment .m-angles { display: none; margin-top: 10px; flex-direction: column; gap: 8px; }
   .moment.open .m-angles { display: flex; }
-  .angle-chip { text-align: left; background: #0d0d10; border: 1px solid var(--line);
+  .angle-chip { text-align: left; background: var(--bg-2); border: 1px solid var(--line);
                 border-radius: 12px; color: var(--fg); padding: 11px 13px;
                 transition: border-color .15s; }
   .angle-chip:hover { border-color: var(--accent2); }
@@ -105,9 +105,9 @@
   @keyframes shimmer { to { background-position: -200% 0; } }
 
   /* job wait panel */
-  .job-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-               padding: 16px 18px; }
-  .job-panel .bar { height: 6px; background: #0d0d10; border-radius: 3px; margin: 12px 0 8px; overflow: hidden; }
+  .job-panel { background: linear-gradient(180deg,var(--panel-2),var(--panel)); border: 1px solid var(--line); border-radius: 14px;
+               padding: 16px 18px; box-shadow: var(--sh-1); }
+  .job-panel .bar { height: 6px; background: var(--bg-2); border-radius: 3px; margin: 12px 0 8px; overflow: hidden; }
   .job-panel .bar > div { height: 100%; width: 5%; background: var(--accent);
                           border-radius: 3px; transition: width .6s; }
   .job-panel .note { font-size: 14px; }
@@ -117,7 +117,7 @@
 
   /* scorecard chips */
   .qa-strip { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 6px; }
-  .qa-chip { display: inline-flex; align-items: center; gap: 7px; background: #0d0d10;
+  .qa-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--bg-2);
              border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px 5px 7px;
              font-size: 12.5px; color: var(--muted); }
   .qa-chip .qv { font-weight: 700; font-size: 13px; width: 24px; height: 24px; border-radius: 50%;
@@ -128,11 +128,11 @@
 
   /* accordions — tap to amend, closed by default so the flow stays fast */
   .acc-item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-              margin-bottom: 8px; overflow: hidden; }
+              margin-bottom: 8px; overflow: hidden; box-shadow: var(--sh-1); }
   .acc-head { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
               background: none; border: 0; color: var(--fg); padding: 12px 14px;
               font: inherit; cursor: pointer; }
-  .acc-head:hover { background: #191316; filter: none; }
+  .acc-head:hover { background: var(--raise); filter: none; }
   .acc-head .acc-n { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
                      background: #17171c; color: var(--accent2); font-size: 11.5px; font-weight: 700;
                      display: inline-flex; align-items: center; justify-content: center; }
@@ -150,8 +150,8 @@
              background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
              color: var(--fg); padding: 12px 14px; margin: 0 0 8px; font-weight: 400;
              transition: border-color .15s, background .15s; }
-  .hookopt:hover { border-color: rgba(255,106,0,.55); filter: none; background: #191316; }
-  .hookopt.on { border-color: var(--accent); background: #0e1b24; }
+  .hookopt:hover { border-color: var(--accent-line); filter: none; background: var(--raise); }
+  .hookopt.on { border-color: var(--accent); background: var(--accent-tint); }
   .hookopt .ck { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
                  border: 1px solid #3a3a42; position: relative; }
   .hookopt.on .ck { border-color: var(--accent); background: var(--accent); }
@@ -166,8 +166,9 @@
   /* images step */
   .imgs { display: grid; grid-template-columns: 300px 1fr; gap: 18px; }
   @media (max-width: 820px) { .imgs { grid-template-columns: 1fr; } }
-  .phone { width: 280px; aspect-ratio: 1080/1350; border-radius: 18px; border: 2px solid var(--line);
-           position: relative; overflow: hidden; background: #0d0d10; margin: 0 auto; }
+  .phone { width: 280px; aspect-ratio: 1080/1350; border-radius: 22px; border: 3px solid #23272e;
+           position: relative; overflow: hidden; background: var(--bg-2); margin: 0 auto;
+           box-shadow: var(--sh-pop), 0 0 0 1px rgba(255,255,255,.04) inset; }
   .phone img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .phone .safe { position: absolute; inset: 10% 18% 24% 8%; border: 1px dashed rgba(255,196,0,.5);
                  pointer-events: none; display: none; }
@@ -186,8 +187,8 @@
   .mini-cal .c { text-align: center; padding: 9px 0; border-radius: 10px; border: 1px solid var(--line);
                  cursor: pointer; font-size: 13px; background: var(--panel); position: relative;
                  transition: border-color .15s, background .15s; }
-  .mini-cal .c:hover { border-color: rgba(255,106,0,.55); }
-  .mini-cal .c.on { border-color: var(--accent); background: #0e1b24; }
+  .mini-cal .c:hover { border-color: var(--accent-line); }
+  .mini-cal .c.on { border-color: var(--accent); background: var(--accent-tint); }
   .mini-cal .c.past { opacity: .3; pointer-events: none; }
   .mini-cal .c .dots { position: absolute; bottom: 2px; left: 0; right: 0; font-size: 8px;
                        color: var(--accent2); line-height: 1; }
@@ -552,7 +553,7 @@
 <!-- manual-post modal (shared with the calendar) -->
 <div id="manual-modal" style="display:none; position:fixed; inset:0; z-index:60;
      background:rgba(0,0,0,.7); align-items:center; justify-content:center; padding:16px">
-  <div style="background:var(--panel); border:1px solid var(--line); border-radius:14px;
+  <div class="pop" style="background:var(--panel); border:1px solid var(--line-2); border-radius:16px;
               padding:20px 22px; width:min(460px, 96vw); max-height:90vh; overflow:auto; text-align:left">
     <h2 style="font-size:16px; margin:0 0 2px">📤 Post it manually</h2>
     <p class="muted" id="manual-label" style="font-size:12.5px; margin:4px 0 12px"></p>
