@@ -843,8 +843,25 @@ def test_moments_api_and_use_flow(client, settings):
         job = store.get_job(body["job_id"])
         assert job["kind"] == "build_one" and job["idea_id"] == idea.idea_id
 
-    # Bad indices → 400, unknown job → 404.
+    # The editor's OWN angle on a moment overrides the preset angles.
+    r = client.post(
+        f"/api/moments/{job_id}/use",
+        data={"moment": 1, "custom": "how rare a World Cup upset like this really is — a did-you-know",
+              "develop": "true"},
+    )
+    body = r.json()
+    assert body["develop"] is True
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(body["idea_id"])
+        assert "World Cup" in idea.concept_note  # moment context kept
+        assert "how rare a World Cup upset" in idea.concept_note  # own angle used
+        assert idea.content_category == "moment"
+        # Develop-first → a concept job, not a straight build.
+        assert store.get_job(body["job_id"])["kind"] == "concept"
+
+    # Bad indices → 400 (no custom, bad angle), unknown job → 404.
     assert client.post(f"/api/moments/{job_id}/use", data={"moment": 9, "angle": 0}).status_code == 400
+    assert client.post(f"/api/moments/{job_id}/use", data={"moment": 1, "angle": 99}).status_code == 400
     assert client.post("/api/moments/99999/use", data={"moment": 0, "angle": 0}).status_code == 404
 
 

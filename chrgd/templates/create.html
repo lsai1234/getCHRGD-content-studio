@@ -97,6 +97,8 @@
   .angle-chip .a-hook { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .angle-actions { display: flex; gap: 6px; margin-top: 9px; }
   .angle-actions button { padding: 7px 13px; font-size: 12.5px; }
+  .custom-angle { border-style: dashed; }
+  .custom-angle input { margin-top: 7px; font-size: 13px; padding: 8px 10px; }
   .skel { height: 64px; border-radius: 14px; margin-top: 10px;
           background: linear-gradient(90deg, #101014 25%, #1a1a20 50%, #101014 75%);
           background-size: 200% 100%; animation: shimmer 1.4s infinite; }
@@ -743,6 +745,7 @@ function drawMoments(data){
     const anglesBox = el.querySelector('.m-angles');
     (m.angles || []).forEach((a, ai) =>
       anglesBox.appendChild(angleChip(laneJobs[lane], mi, ai, a)));
+    anglesBox.appendChild(customAngleRow(laneJobs[lane], mi));
     // "Happening now" moments can be dug into for specific current headlines.
     if (lane === 'moments') {
       const dig = document.createElement('button');
@@ -788,6 +791,41 @@ async function useMomentJob(jobId, mi, ai, develop){
   afterStart(r, develop);
 }
 
+// A "write your own take on this story" row for a moment or a dug headline.
+function customAngleRow(jobId, mi){
+  const wrap = document.createElement('div');
+  wrap.className = 'angle-chip custom-angle';
+  wrap.innerHTML = `<span class="a-type">✍️ your own angle</span>
+    <input type="text" placeholder="e.g. how rare a wildcard semi-final actually is — a 'did you know'">
+    <div class="angle-actions">
+      <button type="button">⚡ Build it now</button>
+      <button type="button" class="ghost">🧭 Shape it first</button>
+    </div>`;
+  wrap.onclick = ev => ev.stopPropagation();
+  const input = wrap.querySelector('input');
+  const [quick, dev] = wrap.querySelectorAll('button');
+  const go = (develop) => {
+    const text = input.value.trim();
+    if (!text) { input.focus(); return; }
+    useCustomMoment(jobId, mi, text, develop);
+  };
+  quick.onclick = () => go(false);
+  dev.onclick = () => go(true);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); go(false); }
+  });
+  return wrap;
+}
+
+async function useCustomMoment(jobId, mi, text, develop){
+  const body = baseParams(develop);
+  body.set('moment', mi);
+  body.set('custom', text);
+  const r = await post(`/api/moments/${jobId}/use`, body);
+  if (!r) return;
+  afterStart(r, develop);
+}
+
 async function digMoment(mi, cardEl){
   const anglesBox = cardEl.querySelector('.m-angles');
   let deep = cardEl.querySelector('.m-deep');
@@ -812,6 +850,7 @@ async function pollDig(jobId, deep){
     box.innerHTML = `<div style="font-weight:600; font-size:13.5px">${esc(sm.emoji||'•')} ${esc(sm.title)}</div>
       ${sm.why ? `<div class="muted" style="font-size:12px; margin:2px 0 6px">${esc(sm.why)}</div>` : ''}`;
     (sm.angles || []).forEach((a, ai) => box.appendChild(angleChip(jobId, si, ai, a)));
+    box.appendChild(customAngleRow(jobId, si));
     deep.appendChild(box);
   });
 }

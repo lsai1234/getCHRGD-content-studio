@@ -984,7 +984,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def api_moments_use(
         job_id: int,
         moment: int = Form(...),
-        angle: int = Form(...),
+        angle: int = Form(-1),
+        custom: str = Form(""),
         style: str = Form(""),
         render_mode: str = Form(""),
         length: str = Form(""),
@@ -992,7 +993,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         develop: bool = Form(False),
         _: str = Depends(require_user),
     ):
-        """Turn one angle into a post — quick build, or develop-first."""
+        """Build from a moment — a preset angle, or the editor's own take.
+
+        Pass `custom` with your own angle to override the preset `angle`.
+        """
         when = _parse_when(scheduled_for)
         with _store(settings) as store:
             job = store.get_job(job_id)
@@ -1002,13 +1006,17 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             if not 0 <= moment < len(moments):
                 raise HTTPException(400, "moment index out of range")
             m = moments[moment]
-            angles = m.get("angles", [])
-            if not 0 <= angle < len(angles):
-                raise HTTPException(400, "angle index out of range")
-            a = angles[angle]
-            note = a.get("concept_note", a.get("title", ""))
-            if a.get("hook"):
-                note += f" — open with: {a['hook']}"
+            if custom.strip():
+                # The editor's own angle on this moment.
+                note = custom.strip()
+            else:
+                angles = m.get("angles", [])
+                if not 0 <= angle < len(angles):
+                    raise HTTPException(400, "pick an angle or write your own")
+                a = angles[angle]
+                note = a.get("concept_note", a.get("title", ""))
+                if a.get("hook"):
+                    note += f" — open with: {a['hook']}"
             idea = _new_seed(
                 store,
                 concept_note=f"[{m.get('title', 'UK moment')}] {note}",
