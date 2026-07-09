@@ -1,10 +1,22 @@
 # CHRGD post-analysis prompt (use in a normal Claude chat)
 
-Paste the **SETUP PROMPT** below into a fresh Claude chat. Then feed your posts
-in **one at a time** using the POST FORMAT. When you've added them all, type
-`ANALYSE`. The chat will give you a deep analysis and — at the end — an
-**ENGINE CHANGE BRIEF**. Copy that brief back into the code window and I'll turn
-it into real changes to the engine.
+Paste the **SETUP PROMPT** below into a fresh Claude chat, then get your posts in
+**either** way:
+
+- **Fastest — attach an export file.** Export your TikTok data and attach the
+  file(s): (1) the **analytics CSV** from desktop TikTok Analytics → Content tab
+  → Download data (per-video views/likes/shares/watch time, ~last 60 days), and
+  (2) your **captions/hashtags** from Settings → Account → Download your data
+  (JSON). Or a single **Metricool** per-post export if that's easier. The chat
+  reads the file(s) and analyses every post at once.
+  *(No export includes the text written on the carousel slides — that lives in
+  the images, not as data. Add the slide wording for your top few posts if you
+  can; caption + hashtags + numbers is still enough for a strong analysis.)*
+- **Manual — paste posts one at a time** using the POST FORMAT below.
+
+When everything's in, type `ANALYSE`. The chat gives a deep analysis and — at the
+end — an **ENGINE CHANGE BRIEF**. Copy that brief back into the code window and
+I'll turn it into real changes to the engine.
 
 Tips for a good result:
 - Feed a **spread**: your 4-8 best posts AND 2-3 of your worst/flops. The
@@ -26,10 +38,16 @@ Tips for a good result:
 > flop — then output a precise brief that can be fed into the brand's automated
 > content engine to make it produce better posts.
 >
-> I'll give you posts **one at a time** in the format below. For each one, just
-> reply with a one-line acknowledgement and a first read (2-3 sentences max) —
-> **do not do the full analysis yet.** If I've only given you winners, ask me for
-> a couple of flops before the final analysis, because the contrast matters.
+> I'll give you my posts either as **an attached export file** (a TikTok
+> analytics CSV and/or a data-download JSON, or a Metricool export) or pasted
+> **one at a time** in the format below. If I attach a file, parse every post
+> from it (match the numbers to the captions/hashtags on the video link or date),
+> tell me how many posts and what metrics you found, and flag anything missing
+> (e.g. the on-slide text isn't in exports — ask me to add it for the top few).
+> If I paste posts one at a time, just reply with a one-line acknowledgement and a
+> 2-3 sentence first read — **don't do the full analysis yet.** Either way, if I've
+> only given you winners, ask for a couple of flops before the final analysis,
+> because the contrast matters.
 >
 > When I type **ANALYSE**, do the following, rigorously and specifically (quote
 > real lines from the posts, don't speak in generic content-marketing platitudes):
