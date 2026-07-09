@@ -712,6 +712,7 @@ class FakeSearch:
 
     def search(self, system, user):
         self.system = system
+        self.user = user
         return json.dumps(self.payload)
 
 
@@ -725,6 +726,42 @@ def test_scout_moments_parses_and_ranks(settings):
     assert result.moments[1].scope == "global"
     assert "COLLECTIVELY" in fake.system  # the radar brief, not the gym scout
     assert "global" in fake.system.lower()  # global moments now in scope
+
+
+def test_scout_moment_detail_digs_specific_headlines(settings):
+    from chrgd.trends import scout_moment_detail
+
+    fake = FakeSearch(MOMENTS_PAYLOAD)
+    result = scout_moment_detail(settings, "Wimbledon", client=fake)
+    assert len(result.moments) >= 1
+    # The dig brief asks for specific, current sub-stories; topic in the ask.
+    assert "DEEPER" in fake.system
+    assert "Wimbledon" in fake.user
+
+
+def test_dig_endpoint_and_build_from_subheadline(client, settings):
+    # Complete a moments scan, then dig into moment 0.
+    job_id = client.post("/api/jobs/moments").json()["job_id"]
+    with Store(settings.db_path) as store:
+        store.update_job(job_id, status="COMPLETED", result_json=json.dumps(MOMENTS_PAYLOAD))
+    r = client.post(f"/api/moments/{job_id}/dig", data={"moment": 0})
+    body = r.json()
+    assert body["kind"] == "moment_detail"
+    assert body["topic"] == MOMENTS_PAYLOAD["moments"][0]["title"]
+    with Store(settings.db_path) as store:
+        dig = store.get_job(body["job_id"])
+        assert dig["kind"] == "moment_detail"
+        assert json.loads(dig["params_json"])["topic"] == body["topic"]
+        # Simulate the dig completing with specific sub-stories.
+        store.update_job(dig["job_id"], status="COMPLETED", result_json=json.dumps(MOMENTS_PAYLOAD))
+    # Building from a sub-headline uses the same /use endpoint on the dig job.
+    r2 = client.post(f"/api/moments/{body['job_id']}/use", data={"moment": 1, "angle": 0})
+    assert r2.status_code == 200
+    with Store(settings.db_path) as store:
+        assert store.get_idea(r2.json()["idea_id"]) is not None
+    # Bad indices + non-discovery jobs are rejected.
+    assert client.post(f"/api/moments/{job_id}/dig", data={"moment": 99}).status_code == 400
+    assert client.post("/api/moments/99999/dig", data={"moment": 0}).status_code == 404
 
 
 def test_evergreen_scout_requires_brand_tie(settings):

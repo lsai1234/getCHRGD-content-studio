@@ -962,6 +962,24 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             job_id = enqueue_discover(store, kind, count=count)
         return {"job_id": job_id, "kind": kind}
 
+    @app.post("/api/moments/{job_id}/dig")
+    def api_moment_dig(
+        job_id: int, moment: int = Form(...), _: str = Depends(require_user)
+    ):
+        """Dig into one broad moment → a job scouting its specific headlines."""
+        from .worker import enqueue_moment_detail
+
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+            if job is None or job["kind"] not in ("moments", "evergreen"):
+                raise HTTPException(404, "no such discovery scan")
+            moments = json.loads(job["result_json"] or "{}").get("moments", [])
+            if not 0 <= moment < len(moments):
+                raise HTTPException(400, "moment index out of range")
+            topic = moments[moment].get("title", "")
+            dig_job = enqueue_moment_detail(store, topic=topic)
+        return {"job_id": dig_job, "kind": "moment_detail", "topic": topic}
+
     @app.post("/api/moments/{job_id}/use")
     def api_moments_use(
         job_id: int,
@@ -978,7 +996,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         when = _parse_when(scheduled_for)
         with _store(settings) as store:
             job = store.get_job(job_id)
-            if job is None or job["kind"] not in ("moments", "evergreen"):
+            if job is None or job["kind"] not in ("moments", "evergreen", "moment_detail"):
                 raise HTTPException(404, "no such discovery scan")
             moments = json.loads(job["result_json"] or "{}").get("moments", [])
             if not 0 <= moment < len(moments):

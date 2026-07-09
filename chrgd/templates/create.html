@@ -741,22 +741,17 @@ function drawMoments(data){
       <div class="m-why">${esc(m.why || '')}</div>
       <div class="m-angles"></div>`;
     const anglesBox = el.querySelector('.m-angles');
-    (m.angles || []).forEach((a, ai) => {
-      const chip = document.createElement('div');
-      chip.className = 'angle-chip';
-      chip.innerHTML = `<span class="a-type">${TYPE_LABEL[a.type] || esc(a.type || '')}</span>
-        <b>${esc(a.title)}</b>
-        <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>
-        <div class="angle-actions">
-          <button type="button">⚡ Build it now</button>
-          <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Shape it first</button>
-        </div>`;
-      chip.onclick = ev => ev.stopPropagation();
-      const [quick, dev] = chip.querySelectorAll('button');
-      quick.onclick = () => useMoment(mi, ai, false);
-      dev.onclick = () => useMoment(mi, ai, true);
-      anglesBox.appendChild(chip);
-    });
+    (m.angles || []).forEach((a, ai) =>
+      anglesBox.appendChild(angleChip(laneJobs[lane], mi, ai, a)));
+    // "Happening now" moments can be dug into for specific current headlines.
+    if (lane === 'moments') {
+      const dig = document.createElement('button');
+      dig.type = 'button'; dig.className = 'ghost'; dig.style.cssText = 'margin:2px 0 0; font-size:12px';
+      dig.textContent = '🔍 Dig into the latest headlines';
+      dig.title = 'find the specific, current stories inside this moment';
+      dig.onclick = ev => { ev.stopPropagation(); digMoment(mi, el); };
+      anglesBox.appendChild(dig);
+    }
     el.onclick = () => {
       const was = el.classList.contains('open');
       body.querySelectorAll('.moment').forEach(x => x.classList.remove('open'));
@@ -766,13 +761,59 @@ function drawMoments(data){
   });
 }
 
-async function useMoment(mi, ai, develop){
+// One tappable angle (build now / shape first) bound to a specific scan job.
+function angleChip(jobId, mi, ai, a){
+  const chip = document.createElement('div');
+  chip.className = 'angle-chip';
+  chip.innerHTML = `<span class="a-type">${TYPE_LABEL[a.type] || esc(a.type || '')}</span>
+    <b>${esc(a.title)}</b>
+    <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>
+    <div class="angle-actions">
+      <button type="button">⚡ Build it now</button>
+      <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Shape it first</button>
+    </div>`;
+  chip.onclick = ev => ev.stopPropagation();
+  const [quick, dev] = chip.querySelectorAll('button');
+  quick.onclick = () => useMomentJob(jobId, mi, ai, false);
+  dev.onclick = () => useMomentJob(jobId, mi, ai, true);
+  return chip;
+}
+
+async function useMomentJob(jobId, mi, ai, develop){
   const body = baseParams(develop);
   body.set('moment', mi);
   body.set('angle', ai);
-  const r = await post(`/api/moments/${laneJobs[lane]}/use`, body);
+  const r = await post(`/api/moments/${jobId}/use`, body);
   if (!r) return;
   afterStart(r, develop);
+}
+
+async function digMoment(mi, cardEl){
+  const anglesBox = cardEl.querySelector('.m-angles');
+  let deep = cardEl.querySelector('.m-deep');
+  if (!deep) { deep = document.createElement('div'); deep.className = 'm-deep';
+    deep.style.cssText = 'margin-top:10px; border-top:1px solid var(--line); padding-top:10px'; anglesBox.appendChild(deep); }
+  deep.innerHTML = '<p class="muted" style="font-size:12.5px; margin:0"><span class="spin">🔍</span> Finding the specific stories happening right now…</p>';
+  const r = await post(`/api/moments/${laneJobs[lane]}/dig`, new URLSearchParams({moment: mi}));
+  if (!r) { deep.innerHTML = ''; return; }
+  pollDig(r.job_id, deep);
+}
+
+async function pollDig(jobId, deep){
+  const job = await (await fetch(`/api/jobs/${jobId}`)).json();
+  if (job.status === 'ERROR') { deep.innerHTML = `<p class="muted" style="font-size:12.5px">Couldn't dig in: ${esc(job.error||'failed')}. <a href="#" onclick="return false">try again</a></p>`; return; }
+  if (job.status !== 'COMPLETED') return setTimeout(() => pollDig(jobId, deep), 2000);
+  const subs = (JSON.parse(job.result_json || '{}').moments) || [];
+  deep.innerHTML = subs.length ? '<p class="muted" style="font-size:11.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.6px">Specific headlines right now</p>'
+                              : '<p class="muted" style="font-size:12.5px">No specific headlines found — the broad angles above are your best bet.</p>';
+  subs.forEach((sm, si) => {
+    const box = document.createElement('div');
+    box.style.cssText = 'margin-bottom:10px';
+    box.innerHTML = `<div style="font-weight:600; font-size:13.5px">${esc(sm.emoji||'•')} ${esc(sm.title)}</div>
+      ${sm.why ? `<div class="muted" style="font-size:12px; margin:2px 0 6px">${esc(sm.why)}</div>` : ''}`;
+    (sm.angles || []).forEach((a, ai) => box.appendChild(angleChip(jobId, si, ai, a)));
+    deep.appendChild(box);
+  });
 }
 
 /* ---------- idea / facts / format / manual starts ---------- */

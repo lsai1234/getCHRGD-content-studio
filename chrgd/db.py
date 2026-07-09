@@ -447,7 +447,8 @@ class Store:
             "UPDATE jobs SET status = 'ERROR', error = 'interrupted — re-run', "
             "updated_at = ? WHERE status = 'PROCESSING' "
             "AND kind IN ('build','build_one','render','render_slide',"
-            "'angles','revise','trends','moments','evergreen','concept','run')",
+            "'angles','revise','trends','moments','evergreen','moment_detail',"
+            "'concept','run')",
             (datetime.now().astimezone().isoformat(),),
         )
         self.conn.commit()

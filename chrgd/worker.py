@@ -310,6 +310,21 @@ def _handle_discover(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_moment_detail(store: Store, settings: Settings, job: dict) -> dict:
+    """Dig into one broad moment → its specific current headlines."""
+    from .trends import scout_moment_detail
+
+    params = json.loads(job["params_json"] or "{}")
+    result = scout_moment_detail(
+        settings, str(params.get("topic", "")), int(params.get("count", 6))
+    )
+    return {
+        "limitation": result.limitation,
+        "topic": params.get("topic", ""),
+        "moments": [m.model_dump(mode="json") for m in result.moments],
+    }
+
+
 def _handle_run(store: Store, settings: Settings, job: dict) -> dict:
     from .orchestrate import run_chain
 
@@ -342,6 +357,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "trends": _handle_trends,
     "moments": _handle_discover,
     "evergreen": _handle_discover,
+    "moment_detail": _handle_moment_detail,
     "concept": _handle_concept,
     "run": _handle_run,
 }
@@ -377,6 +393,17 @@ def enqueue_discover(store: Store, kind: str = "moments", *, count: int = 6) -> 
     if row:
         return int(row["job_id"])
     return store.create_job(kind, params={"count": count})
+
+
+def enqueue_moment_detail(store: Store, *, topic: str, count: int = 6) -> int:
+    """Dig into one broad moment — dedupe an in-flight dig for the same topic."""
+    row = store.conn.execute(
+        "SELECT job_id, params_json FROM jobs WHERE kind = 'moment_detail' "
+        "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1"
+    ).fetchone()
+    if row and json.loads(row["params_json"] or "{}").get("topic") == topic:
+        return int(row["job_id"])
+    return store.create_job("moment_detail", params={"topic": topic, "count": count})
 
 
 def enqueue_concept(store: Store, idea_id: str, *, feedback: str = "") -> int:

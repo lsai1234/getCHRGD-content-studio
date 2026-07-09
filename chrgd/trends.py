@@ -368,6 +368,70 @@ def scout_moments(
     return scout_discover(settings, "moments", count, client=client)
 
 
+# Dig into ONE broad moment → the specific, current headlines inside it.
+MOMENT_DETAIL_PROMPT = """You are the Cultural Radar for CHRGD, a premium UK gym/supplement brand.
+
+The user picked one broad moment and wants to go DEEPER — the specific, current
+sub-stories, results, headlines and talking points INSIDE that moment RIGHT NOW.
+Use web search for the latest concrete developments (e.g. for "Wimbledon": a
+British wildcard reaching the semis, a shock result, a specific match tonight;
+for "the World Cup": a specific fixture, an upset, a viral incident, a standout
+player). Be specific and current — real results/headlines, not generic takes.
+
+For EACH specific sub-story, propose 2-3 ready-to-build content angles for a
+gym/supplement audience (one practical/advice, one funny/relatable, one natural
+tie-in where it fits). Claim-safe (no medical/guaranteed-outcome language),
+brand-safe, light-touch and non-partisan on anything political.
+
+Limitation you MUST respect: {limitation}
+
+Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape —
+each "moment" here is ONE specific headline/sub-story:
+{{
+  "moments": [
+    {{
+      "title": "the specific headline in one line",
+      "emoji": "one emoji",
+      "category": "the parent moment's area",
+      "when": "now | tonight | today",
+      "why": "why the UK audience cares about this specific thing, one line",
+      "decay_speed": "days",
+      "angles": [
+        {{
+          "type": "advice | funny | tiein",
+          "title": "short label",
+          "hook": "the slide-1 hook this would open with",
+          "concept_note": "1-2 sentence buildable brief"
+        }}
+      ]
+    }}
+  ]
+}}
+Only genuinely current, specific sub-stories. Strongest/most talked-about first.
+""".format(limitation=LIMITATION)
+
+
+def scout_moment_detail(
+    settings: Settings,
+    topic: str,
+    count: int = 6,
+    *,
+    client: TrendSearchClient | None = None,
+) -> MomentsResult:
+    """Dig into one broad moment → its specific current headlines/sub-stories."""
+    if not topic.strip():
+        raise TrendError("no topic to dig into")
+    client = client or OpenAITrendClient(settings)
+    user = (
+        f"Dig into this moment: \"{topic.strip()}\". Find up to {count} specific, "
+        "current sub-stories/headlines inside it right now, each with 2-3 ready "
+        "angles. Return the JSON object."
+    )
+    result = parse_moments(client.search(MOMENT_DETAIL_PROMPT, user))
+    result.moments = result.moments[:count]
+    return result
+
+
 # --- seeding ----------------------------------------------------------------
 
 # Faster-decaying trends jump the queue.
