@@ -82,6 +82,32 @@ def test_parse_bad_text_raises():
         parse_trends("no json here")
 
 
+def test_parse_moments_salvages_malformed_json():
+    from chrgd.trends import parse_moments
+
+    # Two good moment objects with a MISSING COMMA between them (the exact
+    # class of failure seen in production), plus a truncated third.
+    bad = (
+        '{"moments": ['
+        '{"title": "Wimbledon Finals", "why": "everyone watching", "angles": '
+        '[{"type": "advice", "title": "A", "concept_note": "n"}]}'
+        '{"title": "World Cup", "why": "huge", "angles": '
+        '[{"type": "funny", "title": "B", "concept_note": "n"}]}'
+        '{"title": "Truncated here", "why": "cut off mid'  # never closed
+    )
+    res = parse_moments(bad)
+    titles = [m.title for m in res.moments]
+    assert "Wimbledon Finals" in titles and "World Cup" in titles
+    assert "Truncated here" not in titles  # incomplete object dropped
+
+
+def test_parse_moments_all_broken_raises():
+    from chrgd.trends import parse_moments
+
+    with pytest.raises(TrendError):
+        parse_moments('{"moments": [ total garbage ]}')
+
+
 # --- scouting ---------------------------------------------------------------
 
 

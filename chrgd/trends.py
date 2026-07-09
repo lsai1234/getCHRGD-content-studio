@@ -151,6 +151,58 @@ def _extract_json(text: str) -> str:
     return text[start : end + 1]
 
 
+def _iter_json_objects(s: str):
+    """Yield each top-level ``{...}`` substring from `s`, string/escape aware."""
+    depth = 0
+    start = None
+    in_str = False
+    esc = False
+    for i, ch in enumerate(s):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start is not None:
+                    yield s[start : i + 1]
+                    start = None
+
+
+def _salvage_moments(text: str) -> list[dict]:
+    """Recover the good moment objects when the model's JSON is imperfect.
+
+    Real model output occasionally has a missing comma, an unescaped quote,
+    or is truncated mid-array. Rather than throw the whole scan away, walk the
+    ``"moments"`` array and keep every object that parses on its own.
+    """
+    key = text.rfind('"moments"')
+    region = text[key:] if key != -1 else text
+    lb = region.find("[")
+    if lb != -1:
+        region = region[lb + 1 :]
+    out: list[dict] = []
+    for obj in _iter_json_objects(region):
+        try:
+            parsed = json.loads(obj)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and parsed.get("title"):
+            out.append(parsed)
+    return out
+
+
 def parse_trends(text: str) -> TrendResult:
     try:
         return TrendResult.model_validate(json.loads(_extract_json(text)))
@@ -337,10 +389,21 @@ _DISCOVER_ASKS = {
 
 
 def parse_moments(text: str) -> MomentsResult:
+    # Strict parse first — the happy path.
     try:
         return MomentsResult.model_validate(json.loads(_extract_json(text)))
-    except (json.JSONDecodeError, ValidationError) as exc:
-        raise TrendError(f"could not parse moments: {exc}") from exc
+    except (json.JSONDecodeError, ValidationError, TrendError):
+        pass
+    # Salvage: keep every moment object that parses, drop the broken one.
+    salvaged = []
+    for m in _salvage_moments(text):
+        try:
+            salvaged.append(Moment.model_validate(m))
+        except ValidationError:
+            continue
+    if salvaged:
+        return MomentsResult(moments=salvaged)
+    raise TrendError("could not parse any moments from the response")
 
 
 def scout_discover(
