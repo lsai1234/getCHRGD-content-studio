@@ -20,11 +20,12 @@ quality_first = "medium"
 quality_rest = "low"
 # Options generated for slide 1 (paid per option). 1 = one image per slide.
 variants_first = 1
-# "branded":   model paints a photo background; the approved text AND the fixed
-#              CHRGD frame (wordmark, handle, counter, accent) are drawn in code.
-#              Consistent brand identity + always-crisp typography. DEFAULT.
-# "ai_design": gpt-image-2 designs the whole slide (looser one-off; no frame).
-render_mode = "branded"
+# "ai_design": gpt-image-2 designs the WHOLE slide — every word of text is
+#              generated and baked into the artwork by the image API, never
+#              overlaid in code. This is the only supported mode: all image
+#              text must come from the API. (Legacy "branded"/"overlay" hints
+#              are accepted by the API but ignored — see render_mode_for_idea.)
+render_mode = "ai_design"
 
 # --- Brand identity: the fixed CHRGD furniture on every branded slide ---------
 [identity]

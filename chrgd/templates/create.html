@@ -265,13 +265,6 @@
     <h2>Pick the visual style</h2>
     <p class="hint">Sets the mood for every slide — tap one to continue.</p>
 
-    <div class="chip-row" style="margin-bottom:12px">
-      <button type="button" class="chip sel" data-mode="branded" onclick="pickMode('branded', this)"
-              title="a photo background with the fixed CHRGD frame + your text laid over it in code — consistent brand, crisp type">🅒 Branded CHRGD template</button>
-      <button type="button" class="chip" data-mode="ai_design" onclick="pickMode('ai_design', this)"
-              title="the engine designs whole slides — looser one-off, no brand frame">✦ AI-designed (one-off)</button>
-    </div>
-
     <div class="chip-row" style="margin-bottom:16px">
       <span class="muted" style="font-size:12px; align-self:center">Length</span>
       <button type="button" class="chip sel" data-len="" onclick="pickLength('', this)"
@@ -579,7 +572,7 @@ const RESUME_IDEA = "{{ resume_idea }}";
 const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
-let state = { ideaId: null, source: null, style: null, mode: 'branded',
+let state = { ideaId: null, source: null, style: null, mode: 'ai_design',
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null };
 const MAX_SLIDES = 10, MIN_SLIDES = 1;
 

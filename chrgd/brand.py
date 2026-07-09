@@ -37,13 +37,13 @@ class Generation(BaseModel):
     quality_rest: str = "low"
     # Options generated for slide 1 (paid each). Default: one image per slide.
     variants_first: int = 1
-    # How slides are produced:
-    #   "branded"   — model paints a photo background; the approved text AND
-    #                 the fixed CHRGD frame (wordmark, handle, counter, accent)
-    #                 are drawn in code. Consistent brand + crisp type. DEFAULT.
-    #   "ai_design" — gpt-image-2 designs the WHOLE slide, typography included
-    #                 (looser one-off concept art; no brand frame).
-    render_mode: str = "branded"
+    # How slides are produced. Only "ai_design" is real:
+    #   "ai_design" — gpt-image-2 designs the WHOLE slide, every word of text
+    #                 baked into the artwork by the image API, never overlaid
+    #                 in code. All image text MUST be API-generated.
+    #   "branded"/"overlay" — legacy code-overlay modes; accepted as a stored
+    #                 hint but ignored (see images.render_mode_for_idea).
+    render_mode: str = "ai_design"
     # Composed into every image prompt (see images.compose_image_prompt).
     consistency_clause: str = (
         "Part of a 5-image set: keep the same location, lighting, colour "
