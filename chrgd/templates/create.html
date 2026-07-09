@@ -35,7 +35,7 @@
   .scr .hint { color: var(--muted); font-size: 14px; margin: 0 0 22px; }
 
   /* tappable option cards */
-  .opt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  .opt { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; overflow: hidden;
          background: linear-gradient(180deg,var(--panel-2),var(--panel)); border: 1px solid var(--line); border-radius: 14px;
          color: var(--fg); padding: 15px 16px; margin: 0 0 10px; cursor: pointer;
          font: inherit; font-weight: 400; box-shadow: var(--sh-1);
@@ -49,9 +49,9 @@
              transition: background .16s var(--ease), border-color .16s var(--ease); }
   .opt:hover .ic { border-color: var(--accent-line); }
   .opt.sel .ic { background: var(--accent-tint-2); border-color: var(--accent-line); }
-  .opt .tx { flex: 1; min-width: 0; }
-  .opt .t { display: block; font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
-  .opt .s { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.45; }
+  .opt .tx { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .opt .t { display: block; font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .opt .s { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.45; overflow-wrap: anywhere; }
   .opt .ck { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
              border: 1px solid #3a3a42; position: relative;
              transition: border-color .15s, background .15s; }

@@ -26,7 +26,11 @@
     }
     * { box-sizing:border-box; }
     ::selection { background:var(--accent-tint-2); }
-    html { -webkit-text-size-adjust:100%; }
+    /* overflow-x:hidden on the root clips any residual horizontal blowout
+       (iOS Safari -webkit-line-clamp/flex quirks) without breaking the
+       sticky header. */
+    html { -webkit-text-size-adjust:100%; overflow-x:hidden; }
+    img, svg, video { max-width:100%; }
     body { margin:0; color:var(--fg);
       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
       -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
