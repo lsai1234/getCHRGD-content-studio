@@ -172,14 +172,23 @@ _DESIGN_TEXT_RULES = (
 
 
 def compose_image_prompt(slide_prompt: str, brand: Brand, style: str | None) -> str:
-    """Background-only prompt (overlay mode): text is added in code, so the
-    model must never paint its own."""
+    """Background-only prompt (branded/overlay mode): a strong photo with room
+    for the CHRGD frame. Text + brand furniture are drawn in code, so the model
+    must never paint its own text."""
     parts = []
     style_block = brand.style_prompt(style)
     if style_block:
         parts.append(style_block)
     if slide_prompt.strip():
         parts.append(slide_prompt.strip())
+    # Composition: keep the subject clear of the centre band and leave the top
+    # and bottom edges cleaner/darker so the overlaid headline + wordmark read.
+    parts.append(
+        "Composition: one bold, unexpected subject with strong depth; place it "
+        "off-centre (lower or to one side) leaving generous clean, darker "
+        "negative space across the upper-middle and bottom for text overlay; "
+        "cinematic contrast, not a flat busy scene."
+    )
     if brand.generation.consistency_clause:
         parts.append(brand.generation.consistency_clause)
     if brand.generation.negative_clause:
@@ -221,10 +230,17 @@ def style_for_idea(idea: Idea) -> str | None:
     return _route_of(idea).get("style")
 
 
+# Modes that draw text (and the brand frame) in code over a photo background.
+_CODE_TEXT_MODES = ("branded", "overlay")
+
+
 def render_mode_for_idea(idea: Idea, brand: Brand) -> str:
-    """'ai_design' or 'overlay' — per-post choice, falling back to brand.toml."""
+    """'branded' | 'overlay' | 'ai_design' — per-post, falling back to brand.toml.
+
+    'overlay' is kept as a legacy alias that behaves like 'branded'.
+    """
     mode = _route_of(idea).get("render_mode") or brand.generation.render_mode
-    return mode if mode in ("ai_design", "overlay") else "ai_design"
+    return mode if mode in ("branded", "overlay", "ai_design") else "branded"
 
 
 # --- text overlay -----------------------------------------------------------
@@ -263,20 +279,111 @@ def _text_block_height(
     return line_h * len(lines)
 
 
+def _draw_scrim(base: Image.Image, brand: Brand) -> Image.Image:
+    """Darken the top and bottom edges so the brand furniture + text always
+    read cleanly over any photo. Returns a new RGB image."""
+    w, h = base.size
+    scrim = Image.new("L", (w, h), 0)
+    px = scrim.load()
+    top_end = int(h * 0.16)
+    bot_start = int(h * 0.80)
+    for y in range(h):
+        a = 0
+        if y < top_end:
+            a = int(150 * (1 - y / top_end))
+        elif y > bot_start:
+            a = int(190 * (y - bot_start) / (h - bot_start))
+        if a:
+            for x in range(0, w, 3):
+                px[x, y] = a
+                if x + 1 < w:
+                    px[x + 1, y] = a
+                if x + 2 < w:
+                    px[x + 2, y] = a
+    black = Image.new("RGB", (w, h), (0, 0, 0))
+    return Image.composite(black, base.convert("RGB"), scrim)
+
+
+def _draw_brand_furniture(
+    draw: ImageDraw.ImageDraw, brand: Brand, canvas: Image.Image,
+    slide_index: int, total: int | None,
+) -> int:
+    """Draw the fixed CHRGD frame (wordmark, counter, handle, footer bar).
+
+    Returns the y offset below the wordmark where slide text should start.
+    """
+    ident = brand.identity
+    x0, y0, x1, y1 = brand.safe_box()
+    accent = _hex(brand.colors.accent)
+    head_color = _hex(brand.colors.headline)
+    muted = _hex(brand.colors.supporting)
+
+    word_size = int(brand.fonts.supporting_size * 1.4)
+    word_font = _load_font(brand.resolve_font("headline"), word_size)
+    small_font = _load_font(brand.resolve_font("supporting"), int(brand.fonts.supporting_size * 0.85))
+
+    top_after = y0
+    # Logo image wins over the text wordmark when present.
+    logo = ident.logo_path
+    if logo and Path(logo).exists():
+        try:
+            lg = Image.open(logo).convert("RGBA")
+            target_h = word_size + 6
+            lg = lg.resize((max(1, round(lg.width * target_h / lg.height)), target_h))
+            canvas.paste(lg, (x0, y0), lg)
+            top_after = y0 + target_h
+        except OSError:
+            logo = ""
+    if not (logo and Path(logo).exists()) and ident.wordmark:
+        # Two-tone wordmark: first `split` chars in accent, rest in headline.
+        mark = ident.wordmark
+        split = max(0, min(ident.wordmark_split, len(mark)))
+        x = x0
+        for i, ch in enumerate(mark):
+            col = accent if i < split else head_color
+            draw.text((x, y0), ch, font=word_font, fill=(*col, 255))
+            x += int(draw.textlength(ch, font=word_font))
+        top_after = y0 + word_size + 4
+
+    # Slide counter, top-right.
+    if ident.show_counter and total:
+        label = f"{slide_index + 1}/{total}"
+        tw = draw.textlength(label, font=small_font)
+        draw.text((x1 - tw, y0 + 6), label, font=small_font, fill=(*muted, 235))
+
+    # Handle + footer accent bar, bottom-left of the safe zone.
+    a2, d2 = small_font.getmetrics()
+    handle_h = a2 + d2
+    if ident.footer_bar:
+        by = y1 - handle_h - 14
+        draw.rounded_rectangle([x0, by, x0 + int((x1 - x0) * 0.16), by + 5], radius=2,
+                               fill=(*accent, 255))
+    if ident.handle:
+        draw.text((x0, y1 - handle_h), ident.handle, font=small_font, fill=(*muted, 235))
+
+    return top_after
+
+
 def compose_slide(
     background: Image.Image,
     slide: Slide,
     brand: Brand,
     slide_index: int,
+    total: int | None = None,
 ) -> Image.Image:
-    """Overlay approved headline + supporting text onto a background."""
+    """Compose the branded slide: photo + fixed CHRGD frame + approved text."""
     w, h = brand.canvas.width, brand.canvas.height
     canvas = _fit_to_canvas(background, w, h)
+    if brand.identity.scrim:
+        canvas = _draw_scrim(canvas, brand)
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
     x0, y0, x1, y1 = brand.safe_box()
     max_width = x1 - x0
+
+    # Brand furniture first — it also tells us where the text may start.
+    brand_top = _draw_brand_furniture(draw, brand, canvas, slide_index, total)
 
     # Slide 1 leads with the strongest visual/text — bump the headline size.
     head_size = brand.fonts.headline_size
@@ -298,11 +405,11 @@ def compose_slide(
     bar_gap = 18 if brand.text.accent_bar else 0
     block_h = head_h + bar_gap + bar_h + gap + supp_h
 
-    # Headline sits in the upper-middle of the safe zone.
+    # Headline sits below the wordmark, in the upper-middle of the safe zone.
     safe_h = y1 - y0
-    block_top = y0 + int(safe_h * 0.10)
-    block_top = min(block_top, y1 - block_h)  # never spill past the safe bottom
-    block_top = max(block_top, y0)
+    text_top = brand_top + int(safe_h * 0.06)
+    block_top = min(text_top, y1 - block_h)  # never spill past the safe bottom
+    block_top = max(block_top, brand_top + 8)
 
     # Contrast panel behind the whole text block.
     if brand.colors.panel_opacity > 0:
@@ -458,9 +565,9 @@ def render_slide(
             # The model output IS the finished slide — no code overlay.
             composed = fitted
         else:
-            # Overlay mode always; ai_design dry-run gets an approximate
-            # overlay so test mode still previews the copy on the slide.
-            composed = compose_slide(fitted, slide, brand, slide_index)
+            # branded/overlay always; ai_design dry-run gets an approximate
+            # overlay so test mode still previews the copy + frame on the slide.
+            composed = compose_slide(fitted, slide, brand, slide_index, total=len(slides))
         key = _VARIANT_KEYS[v] if n > 1 else None
         _save(fitted, _bg_path(out_dir, slide_index, ext, key), pil_format, brand)
         _save(composed, _slide_path(out_dir, slide_index, ext, key), pil_format, brand)
@@ -516,7 +623,9 @@ def recompose_slide(
             targets.append((bg, _slide_path(out_dir, slide_index, ext, key), key))
 
     for bg, dest, key in targets:
-        composed = compose_slide(Image.open(bg), slide, brand, slide_index)
+        composed = compose_slide(
+            Image.open(bg), slide, brand, slide_index, total=len(slides)
+        )
         _save(composed, dest, pil_format, brand)
         if key:
             result.variant_paths.append(str(dest))

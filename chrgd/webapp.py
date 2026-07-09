@@ -610,7 +610,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         if style:
             route["style"] = style
         if render_mode:
-            if render_mode not in ("ai_design", "overlay"):
+            if render_mode not in ("branded", "overlay", "ai_design"):
                 raise HTTPException(400, f"unknown render mode '{render_mode}'")
             route["render_mode"] = render_mode
         if length:

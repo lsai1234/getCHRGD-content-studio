@@ -24,6 +24,10 @@ from .db import Store
 from .models import Idea, Post, Status
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "content_engine_prompt.md"
+# Persona + gold-standard examples — the single biggest quality lever. Optional:
+# if present it's injected into the system prompt so the engine imitates a
+# specific voice and specific winners instead of reasoning from rules alone.
+BRAND_BIBLE_FILE = Path(__file__).resolve().parent.parent / "brand_bible.md"
 
 # Appended to the loaded instructions so the engine returns machine-readable
 # JSON instead of its default paste-ready text. Mirrors the Post model.
@@ -173,10 +177,30 @@ class OpenAIChatClient:
         )
 
 
-def load_system_prompt() -> str:
-    """The content engine instructions plus the strict JSON output contract."""
+def load_brand_bible() -> str:
+    """The persona + gold-standard examples, if the file exists ('' otherwise)."""
+    if BRAND_BIBLE_FILE.exists():
+        return BRAND_BIBLE_FILE.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def engine_base() -> str:
+    """The engine instructions + brand bible — shared by every reasoning call
+    (build, angles, concept development) so the voice is consistent everywhere."""
     base = PROMPT_FILE.read_text(encoding="utf-8")
-    return base + "\n" + JSON_CONTRACT
+    bible = load_brand_bible()
+    if bible:
+        base += (
+            "\n---\n\n# BRAND BIBLE — voice + gold-standard examples "
+            "(match this level; imitate the voice and structure, not the topics)\n\n"
+            + bible
+        )
+    return base
+
+
+def load_system_prompt() -> str:
+    """Content engine instructions + brand bible + the strict JSON contract."""
+    return engine_base() + "\n" + JSON_CONTRACT
 
 
 # The editor's optional up-front length nudge → the instruction the engine
@@ -615,8 +639,7 @@ def develop_concept(
     """One development round: seed (+ current brief + editor feedback) → brief."""
     if client is None:
         client = OpenAIChatClient(settings)
-    base = PROMPT_FILE.read_text(encoding="utf-8")
-    system = base + "\n" + BRIEF_CONTRACT
+    system = engine_base() + "\n" + BRIEF_CONTRACT
 
     lines = ["Develop the concept for this backlog row (do NOT write the full post):", ""]
     for key in ("content_category", "target_viewer", "pain_point", "core_tension",
@@ -700,8 +723,7 @@ def generate_angles(
     """Turn pasted facts/research into pickable carousel angles."""
     if client is None:
         client = OpenAIChatClient(settings)
-    base = PROMPT_FILE.read_text(encoding="utf-8")
-    system = base + "\n" + ANGLES_CONTRACT.format(count=per_fact)
+    system = engine_base() + "\n" + ANGLES_CONTRACT.format(count=per_fact)
     user = "Here are the facts/research to turn into angles:\n\n" + facts.strip()
     result = client.complete(system, user)
     spend = estimate_cost(

@@ -411,7 +411,7 @@ def test_recompose_without_background_errors(settings):
 def test_recompose_refused_for_ai_designed_slides(settings):
     from chrgd.images import ImageError, recompose_slide, render_carousel
 
-    idea = make_built_idea()  # default mode: ai_design
+    idea = make_built_idea(render_mode="ai_design")
     render_carousel(idea, settings, dry_run=True)
     with pytest.raises(ImageError, match="regenerate"):
         recompose_slide(idea, 0, settings)
@@ -421,10 +421,11 @@ def test_render_mode_default_and_override():
     from chrgd.images import render_mode_for_idea
 
     brand = load_brand()
-    assert render_mode_for_idea(make_built_idea(), brand) == "ai_design"
+    # Branded CHRGD template is the default now.
+    assert render_mode_for_idea(make_built_idea(), brand) == "branded"
     assert (
-        render_mode_for_idea(make_built_idea(render_mode="overlay"), brand)
-        == "overlay"
+        render_mode_for_idea(make_built_idea(render_mode="ai_design"), brand)
+        == "ai_design"
     )
 
 
@@ -465,7 +466,7 @@ def test_ai_design_render_uses_model_output_verbatim(settings, monkeypatch):
         return marker.copy()
 
     monkeypatch.setattr(images, "_generate_background", fake_generate)
-    idea = make_built_idea()  # ai_design default
+    idea = make_built_idea(render_mode="ai_design")
     result = images.render_slide(idea, 2, settings, dry_run=False)
     # Prompt was a full design prompt with the copy in it…
     assert "TEXT TO PLACE ON IMAGE:" in prompts[0]
@@ -1103,3 +1104,15 @@ def test_export_range_respects_window_and_user_schedule(client, settings, tmp_pa
         # The user's chosen slot is what lands in the CSV.
         csv_text = open(body["csv_path"], encoding="utf-8").read()
         assert "02/03/2027 18:00" in csv_text
+
+
+def test_brand_bible_reaches_the_engine(settings, store):
+    """The persona + examples must be injected into every reasoning call."""
+    from chrgd.pipeline import engine_base, load_system_prompt
+
+    base = engine_base()
+    assert "BRAND BIBLE" in base and "CHRGD is not a faceless brand" in base
+    # Build, angles and concept-development all share engine_base(), and the
+    # full build prompt still carries the strict JSON contract.
+    sp = load_system_prompt()
+    assert "BRAND BIBLE" in sp and "Output contract" in sp

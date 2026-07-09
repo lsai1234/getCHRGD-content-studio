@@ -38,12 +38,12 @@ class Generation(BaseModel):
     # Options generated for slide 1 (paid each). Default: one image per slide.
     variants_first: int = 1
     # How slides are produced:
+    #   "branded"   — model paints a photo background; the approved text AND
+    #                 the fixed CHRGD frame (wordmark, handle, counter, accent)
+    #                 are drawn in code. Consistent brand + crisp type. DEFAULT.
     #   "ai_design" — gpt-image-2 designs the WHOLE slide, typography included
-    #                 (concept art / graphic-design energy; text is part of
-    #                 the artwork). Copy changes need a regeneration.
-    #   "overlay"   — model paints a background only; approved text is
-    #                 overlaid in code (free to re-lay after copy edits).
-    render_mode: str = "ai_design"
+    #                 (looser one-off concept art; no brand frame).
+    render_mode: str = "branded"
     # Composed into every image prompt (see images.compose_image_prompt).
     consistency_clause: str = (
         "Part of a 5-image set: keep the same location, lighting, colour "
@@ -98,6 +98,22 @@ class TextOpts(BaseModel):
     accent_bar: bool = True
 
 
+class Identity(BaseModel):
+    """The fixed CHRGD furniture drawn on every branded slide.
+
+    This is what makes every post unmistakably CHRGD without making them
+    identical: a consistent wordmark/logo, handle, slide counter and accent.
+    """
+
+    wordmark: str = "CHRGD"          # two-tone text wordmark (see wordmark_split)
+    wordmark_split: int = 3          # first N chars use the accent colour
+    logo_path: str = ""              # optional PNG; overrides the text wordmark
+    handle: str = "@getchrgd"        # bottom-corner handle
+    show_counter: bool = True        # "1/5" slide counter
+    scrim: bool = True               # top+bottom legibility gradient
+    footer_bar: bool = True          # thin accent line along the bottom edge
+
+
 class Brand(BaseModel):
     canvas: Canvas = Field(default_factory=Canvas)
     generation: Generation = Field(default_factory=Generation)
@@ -105,6 +121,7 @@ class Brand(BaseModel):
     colors: Colors = Field(default_factory=Colors)
     fonts: Fonts = Field(default_factory=Fonts)
     text: TextOpts = Field(default_factory=TextOpts)
+    identity: Identity = Field(default_factory=Identity)
     styles: dict[str, StylePreset] = Field(default_factory=dict)
 
     def style_prompt(self, name: str | None) -> str:

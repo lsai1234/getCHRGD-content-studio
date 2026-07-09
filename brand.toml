@@ -20,9 +20,21 @@ quality_first = "medium"
 quality_rest = "low"
 # Options generated for slide 1 (paid per option). 1 = one image per slide.
 variants_first = 1
-# "ai_design": gpt-image-2 designs the whole slide, typography included.
-# "overlay":   model paints a background; text is overlaid in code (free re-lay).
-render_mode = "ai_design"
+# "branded":   model paints a photo background; the approved text AND the fixed
+#              CHRGD frame (wordmark, handle, counter, accent) are drawn in code.
+#              Consistent brand identity + always-crisp typography. DEFAULT.
+# "ai_design": gpt-image-2 designs the whole slide (looser one-off; no frame).
+render_mode = "branded"
+
+# --- Brand identity: the fixed CHRGD furniture on every branded slide ---------
+[identity]
+wordmark = "CHRGD"       # two-tone text wordmark
+wordmark_split = 3       # first 3 chars ("CHR") in the accent colour
+logo_path = ""           # drop in a PNG logo here to override the text wordmark
+handle = "@getchrgd"     # bottom-corner handle
+show_counter = true      # "1/5" slide counter
+scrim = true             # top+bottom legibility gradient over the photo
+footer_bar = true        # thin CHRGD-orange line along the bottom edge
 # Appended to every slide prompt so the five backgrounds read as ONE carousel.
 consistency_clause = "Part of a 5-image set: keep the same location, lighting, colour grade and photographic style across all images in this set."
 # Text is always overlaid in code — the model must never paint its own.
