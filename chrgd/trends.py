@@ -620,3 +620,152 @@ def seed_trends(store: Store, settings: Settings, trends: list[Trend]) -> SeedOu
         )
         created.append(store.add_idea(idea))
     return SeedOutcome(created=created, skipped=skipped)
+
+
+# --- the meta scan: self-updating "what bangs right now" evidence ---------------
+#
+# The playbook is curated and durable; the META is what's winning THIS month.
+# No legitimate raw TikTok firehose exists (no public API; scraping breaks
+# TOS), but public evidence does: TikTok Creative Center trend data, viral-post
+# breakdowns, creator-economy reporting, case studies with real numbers. This
+# scan mines those on a schedule so the concept stage always reasons from the
+# live meta — with zero input from the editor.
+
+META_MAX_AGE_DAYS = 7
+
+META_PROMPT = """You are the Meta Analyst for CHRGD, a premium UK gym/supplement brand on TikTok.
+
+Use web search to research what is CURRENTLY winning in short-form fitness/gym
+content — TikTok first, carousels especially. You are building the live
+evidence base a concept engine will reason from, so be concrete and grounded:
+
+- SPECIFIC winners: posts/creators/campaigns in or near the fitness space that
+  reporting, roundups or case studies say performed, WITH the numbers given
+  (views/likes/growth). Name them. If a claim has no number, say so.
+- HOOK FORMULAS visible across current winners — the actual opening-line
+  patterns, quoted or closely paraphrased.
+- FORMAT SHIFTS: what's rising and what's fading (carousel vs video, slide
+  counts, text density, photo-dump aesthetics, POV styles, audio-less posts).
+- TIKTOK CREATIVE CENTER signals for the Sports/Fitness and Health verticals:
+  trending hashtags/topics and what they imply for organic content.
+- PLATFORM CHANGES that affect reach (e.g. how the algorithm is treating
+  carousels, search-led discovery, watch-time weighting) — as reported, dated.
+
+HONESTY RULES (hard): report only what you actually found; NEVER invent
+numbers, names or studies. Prefer the last 4-8 weeks; date what you can.
+If the search comes back thin on a section, return fewer items — an empty
+list beats a made-up one.
+
+Limitation you MUST respect: {limitation}
+
+Return a SINGLE JSON object, no markdown, no commentary:
+{{
+  "winning_now": [
+    {{
+      "pattern": "the shape/approach in one line",
+      "evidence": "who/what performed with it + numbers as reported (or 'no numbers given')",
+      "example": "one named example, as specific as the source allows"
+    }}
+  ],
+  "hook_formulas": ["opening-line pattern seen across winners, quoted/paraphrased"],
+  "rising": ["format or behaviour gaining ground, with why"],
+  "fading": ["format or behaviour losing ground / overdone, with why"],
+  "platform_notes": ["reported platform/algorithm change affecting reach, dated where possible"]
+}}
+""".format(limitation=LIMITATION)
+
+
+class MetaFinding(BaseModel):
+    pattern: str
+    evidence: str = ""
+    example: str = ""
+
+
+class MetaReport(BaseModel):
+    as_of: str = ""  # ISO date, stamped by the scan
+    winning_now: list[MetaFinding] = Field(default_factory=list)
+    hook_formulas: list[str] = Field(default_factory=list)
+    rising: list[str] = Field(default_factory=list)
+    fading: list[str] = Field(default_factory=list)
+    platform_notes: list[str] = Field(default_factory=list)
+
+
+def scan_meta(
+    settings: Settings, *, client: TrendSearchClient | None = None
+) -> MetaReport:
+    """One research pass over public sources → the current meta report."""
+    from datetime import date
+
+    client = client or OpenAITrendClient(settings)
+    text = client.search(
+        META_PROMPT,
+        "Research the current fitness/gym short-form meta (last 4-8 weeks) "
+        "and return the JSON object. Grounded findings only — never invent "
+        "numbers or names.",
+    )
+    try:
+        report = MetaReport.model_validate(json.loads(_extract_json(text)))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise TrendError(f"could not parse meta report: {exc}") from exc
+    report.as_of = date.today().isoformat()
+    return report
+
+
+def _latest_meta_job(store: Store) -> dict | None:
+    row = store.conn.execute(
+        "SELECT * FROM jobs WHERE kind = 'meta_scan' AND status = 'COMPLETED' "
+        "ORDER BY job_id DESC LIMIT 1"
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def meta_is_stale(store: Store, max_age_days: int = META_MAX_AGE_DAYS) -> bool:
+    """True when there's no completed scan, or the newest one has aged out."""
+    from datetime import date, timedelta
+
+    job = _latest_meta_job(store)
+    if job is None:
+        return True
+    try:
+        report = json.loads(job["result_json"] or "{}").get("report", {})
+        as_of = date.fromisoformat(report.get("as_of", ""))
+    except (ValueError, json.JSONDecodeError):
+        return True
+    return date.today() - as_of > timedelta(days=max_age_days)
+
+
+def meta_notes(store: Store) -> str:
+    """The prompt block carrying the live meta ('' until a scan has run)."""
+    job = _latest_meta_job(store)
+    if job is None:
+        return ""
+    try:
+        data = json.loads(job["result_json"] or "{}").get("report", {})
+        report = MetaReport.model_validate(data)
+    except (json.JSONDecodeError, ValidationError):
+        return ""
+
+    lines = [
+        f"CURRENT TIKTOK META — auto-researched from public sources "
+        f"(Creative Center, viral breakdowns, reporting) on {report.as_of}. "
+        "This is the LIVE meta; weight it above generic instinct, and lean on "
+        "it wherever it fits the seed:"
+    ]
+    for f in report.winning_now[:5]:
+        bits = [f.pattern]
+        if f.evidence:
+            bits.append(f.evidence)
+        if f.example:
+            bits.append(f"e.g. {f.example}")
+        lines.append("- WINNING: " + " — ".join(bits))
+    if report.hook_formulas:
+        lines.append("- HOOK FORMULAS seen across winners: "
+                     + " · ".join(report.hook_formulas[:5]))
+    if report.rising:
+        lines.append("- RISING: " + " · ".join(report.rising[:4]))
+    if report.fading:
+        lines.append("- FADING (avoid leaning on these): "
+                     + " · ".join(report.fading[:4]))
+    if report.platform_notes:
+        lines.append("- PLATFORM: " + " · ".join(report.platform_notes[:3]))
+    return "\n".join(lines)

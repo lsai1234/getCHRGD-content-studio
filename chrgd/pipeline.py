@@ -575,8 +575,10 @@ def build_ideas(
     total_spend = 0.0
 
     from .learning import performance_notes as _perf_notes
+    from .trends import meta_notes as _meta_notes
 
-    notes = _perf_notes(store)
+    # The account's own history + the auto-researched live meta, together.
+    notes = "\n\n".join(x for x in (_perf_notes(store), _meta_notes(store)) if x)
 
     try:
         for idea in ideas:
@@ -682,6 +684,7 @@ def build_single_idea(
         2: (60, "QA gate missed — asking for a stronger rewrite"),
     }
     from .learning import performance_notes
+    from .trends import meta_notes as _build_meta_notes
 
     try:
         result = run_pipeline_for_idea(
@@ -689,7 +692,9 @@ def build_single_idea(
             client,
             settings.openai_model,
             on_attempt=lambda n: _prog(*_attempt_notes.get(n, (80, f"attempt {n}"))),
-            performance_notes=performance_notes(store),
+            performance_notes="\n\n".join(
+                x for x in (performance_notes(store), _build_meta_notes(store)) if x
+            ),
         )
     except LLMError as exc:
         store.set_status(idea_id, Status.queued)

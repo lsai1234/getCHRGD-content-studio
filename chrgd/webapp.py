@@ -1036,6 +1036,16 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             job_id = enqueue_discover(store, kind, count=count)
         return {"job_id": job_id, "kind": kind}
 
+    @app.post("/api/jobs/meta")
+    def api_job_meta(_: str = Depends(require_user)):
+        """Manually refresh the live-meta research (auto-refreshes weekly)."""
+        from .worker import _active_meta_scan
+
+        with _store(settings) as store:
+            active = _active_meta_scan(store)
+            job_id = active["job_id"] if active else store.create_job("meta_scan")
+        return {"job_id": job_id, "kind": "meta_scan"}
+
     @app.post("/api/moments/{job_id}/dig")
     def api_moment_dig(
         job_id: int, moment: int = Form(...), _: str = Depends(require_user)
@@ -1404,7 +1414,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         retryable = {
             "build", "build_one", "render", "render_slide",
             "angles", "revise", "concept", "trends", "moments", "evergreen",
-            "trending", "takes", "run",
+            "trending", "takes", "meta_scan", "run",
         }
         with _store(settings) as store:
             job = store.get_job(job_id)

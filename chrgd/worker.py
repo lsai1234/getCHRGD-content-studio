@@ -202,13 +202,22 @@ def _handle_takes(store: Store, settings: Settings, job: dict) -> dict:
         result_json=json.dumps({"note": "sketching genuinely different takes"}),
     )
     from .learning import performance_notes
+    from .trends import meta_is_stale, meta_notes
+
+    # Concepts reason from the live meta. If the last scan has aged out,
+    # queue a refresh in the background — this round still uses what's
+    # banked, the next one gets the fresh research.
+    if meta_is_stale(store) and not _active_meta_scan(store):
+        store.create_job("meta_scan")
 
     result = generate_takes(
         idea, settings,
         count=int(params.get("count", 5)),
         feedback=str(params.get("feedback", "")),
         prior=prior or None,
-        performance_notes=performance_notes(store),
+        performance_notes="\n\n".join(
+            x for x in (performance_notes(store), meta_notes(store)) if x
+        ),
     )
     run_id = store.start_run("takes")
     store.finish_run(run_id, spend_usd=round(result.spend_usd, 4), notes=idea.idea_id)
@@ -330,6 +339,30 @@ def _handle_video(store: Store, settings: Settings, job: dict) -> dict:
     return {}
 
 
+def _active_meta_scan(store: Store) -> dict | None:
+    row = store.conn.execute(
+        "SELECT job_id FROM jobs WHERE kind = 'meta_scan' "
+        "AND status IN ('QUEUED','PROCESSING') LIMIT 1"
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _handle_meta_scan(store: Store, settings: Settings, job: dict) -> dict:
+    """Research the live fitness short-form meta from public sources."""
+    from .trends import scan_meta
+
+    store.update_job(
+        job["job_id"], progress=20,
+        result_json=json.dumps(
+            {"note": "researching what's winning in fitness short-form right now"}
+        ),
+    )
+    report = scan_meta(settings)
+    run_id = store.start_run("meta_scan")
+    store.finish_run(run_id, notes=f"as_of={report.as_of}")
+    return {"report": report.model_dump(mode="json")}
+
+
 def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
     from .trends import scout_trends
 
@@ -402,6 +435,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "moments": _handle_discover,
     "evergreen": _handle_discover,
     "trending": _handle_discover,
+    "meta_scan": _handle_meta_scan,
     "moment_detail": _handle_moment_detail,
     "concept": _handle_concept,
     "run": _handle_run,

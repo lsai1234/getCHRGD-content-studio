@@ -1371,6 +1371,9 @@ def test_worker_takes_job_and_refan_carries_prior(settings, store, monkeypatch):
         )
 
     monkeypatch.setattr(pl, "generate_takes", fake_takes)
+    # Keep this test about re-fan divergence: stop the takes handler from
+    # auto-queuing a meta refresh (covered by its own test).
+    monkeypatch.setattr("chrgd.trends.meta_is_stale", lambda store: False)
     store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
     worker = Worker(settings)
 
@@ -1639,3 +1642,105 @@ def test_chosen_take_precedent_reaches_build_brief():
     )
     msg = build_user_message(idea)
     assert "precedent: absurd commitment bit" in msg
+
+
+# --- the meta scan: self-updating what-bangs-now evidence ------------------------
+
+META_PAYLOAD = {
+    "winning_now": [
+        {"pattern": "photo-dump carousels with handwritten text",
+         "evidence": "cited in roundup, 2-5M views range reported",
+         "example": "gymtok photo-dump wave"},
+    ],
+    "hook_formulas": ["'nobody's going to tell you this, but…'"],
+    "rising": ["carousel reach boost"],
+    "fading": ["over-produced motivational edits"],
+    "platform_notes": ["carousels reportedly favoured in search results (June)"],
+}
+
+
+def test_scan_meta_researches_grounded_findings(settings):
+    from chrgd.trends import scan_meta
+
+    fake = FakeSearch(META_PAYLOAD)
+    report = scan_meta(settings, client=fake)
+    assert report.winning_now[0].pattern.startswith("photo-dump")
+    assert report.as_of  # stamped with today
+    sys = fake.system
+    assert "CREATIVE CENTER" in sys.upper()
+    assert "NEVER invent" in sys           # grounded findings only
+    assert "beats a made-up one" in sys
+
+
+def test_meta_flows_into_takes_and_auto_refreshes(settings, store, monkeypatch):
+    import chrgd.pipeline as pl
+    from chrgd.pipeline import TakesResult
+    from chrgd.worker import Worker, enqueue_takes
+
+    seen = {}
+    monkeypatch.setattr(
+        pl, "generate_takes",
+        lambda idea, s, **kw: seen.update(kw) or TakesResult(),
+    )
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+
+    # No scan banked yet → the takes run queues one in the background.
+    enqueue_takes(store, "G-0001")
+    Worker(settings).run_once()
+    pending = store.conn.execute(
+        "SELECT COUNT(*) AS c FROM jobs WHERE kind = 'meta_scan'"
+    ).fetchone()["c"]
+    assert pending == 1
+
+    # Complete the queued refresh (as the worker would); the next fan-out
+    # then carries the live meta.
+    from datetime import date
+    meta_job = store.conn.execute(
+        "SELECT job_id FROM jobs WHERE kind = 'meta_scan'"
+    ).fetchone()["job_id"]
+    store.update_job(meta_job, status="COMPLETED", result_json=json.dumps(
+        {"report": {**META_PAYLOAD, "as_of": date.today().isoformat()}}))
+    enqueue_takes(store, "G-0001", feedback="again")
+    Worker(settings).run_once()
+    notes = seen["performance_notes"]
+    assert "CURRENT TIKTOK META" in notes
+    assert "photo-dump carousels" in notes
+    assert "FADING" in notes
+    # Fresh scan banked → the second fan-out queues no new refresh.
+    assert store.conn.execute(
+        "SELECT COUNT(*) AS c FROM jobs WHERE kind = 'meta_scan'"
+    ).fetchone()["c"] == 1
+
+
+def test_meta_reaches_the_full_build(settings, store):
+    from datetime import date
+    meta_job = store.create_job("meta_scan")
+    store.update_job(meta_job, status="COMPLETED", result_json=json.dumps(
+        {"report": {**META_PAYLOAD, "as_of": date.today().isoformat()}}))
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    fake = FakeChat([good_post()])
+    build_single_idea(store, settings, "G-0001", client=fake)
+    _, user = fake.calls[0]
+    assert "CURRENT TIKTOK META" in user
+
+
+def test_stale_meta_detection(settings, store):
+    from chrgd.trends import meta_is_stale
+
+    assert meta_is_stale(store)  # nothing banked
+    job = store.create_job("meta_scan")
+    store.update_job(job, status="COMPLETED", result_json=json.dumps(
+        {"report": {**META_PAYLOAD, "as_of": "2026-01-01"}}))
+    assert meta_is_stale(store)  # months old
+    from datetime import date
+    job2 = store.create_job("meta_scan")
+    store.update_job(job2, status="COMPLETED", result_json=json.dumps(
+        {"report": {**META_PAYLOAD, "as_of": date.today().isoformat()}}))
+    assert not meta_is_stale(store)
+
+
+def test_manual_meta_rescan_endpoint(client, settings):
+    r = client.post("/api/jobs/meta").json()
+    assert r["kind"] == "meta_scan"
+    # Idempotent while one is pending.
+    assert client.post("/api/jobs/meta").json()["job_id"] == r["job_id"]
