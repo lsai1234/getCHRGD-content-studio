@@ -1462,3 +1462,23 @@ def test_moments_use_can_fan_out_to_takes(client, settings):
         # The moment still rides the seed, so the fan-out sees it too.
         idea = store.get_idea(r["idea_id"])
     assert json.loads(idea.route_json)["moment"]["title"].startswith("Heatwave")
+
+
+def test_create_journey_has_no_style_step_and_meta_covers_every_screen(client):
+    """The look/style step is gone (the engine designs the branding per post),
+    and every screen in the stepper MUST have a META entry — show() crashes
+    on any screen that lacks one (the takes screen shipped with that bug)."""
+    import re
+
+    html = client.get("/create").text
+    assert "scr-look" not in html
+    assert "Pick the visual style" not in html
+    assert "pickStyle" not in html
+    # Length survives as an inline dial on each door (4 slots + JS selector).
+    assert html.count("data-len-slot") >= 4
+
+    screens = set(re.findall(r'id="scr-([a-z]+)"', html))
+    meta_src = re.search(r"const META = \{(.*?)\};", html, re.S).group(1)
+    meta_keys = set(re.findall(r"(\w+):\s*\[", meta_src))
+    missing = screens - meta_keys
+    assert not missing, f"screens without META entries (show() would crash): {missing}"

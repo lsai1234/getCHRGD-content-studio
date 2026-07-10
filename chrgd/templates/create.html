@@ -297,38 +297,9 @@
     </button>
   </section>
 
-  <!-- ═════════ 2 · LOOK — style preset + design mode ═════════ -->
-  <section class="scr" id="scr-look">
-    <p class="eyebrow">The look</p>
-    <h2>Pick the visual style</h2>
-    <p class="hint">Sets the mood for every slide — tap one to continue.</p>
-
-    <div class="chip-row" style="margin-bottom:16px">
-      <span class="muted" style="font-size:12px; align-self:center">Length</span>
-      <button type="button" class="chip sel" data-len="" onclick="pickLength('', this)"
-              title="the engine picks the slide count the idea deserves — a meme might be 1 slide, a deep-dive 10">Engine's call</button>
-      <button type="button" class="chip" data-len="quick" onclick="pickLength('quick', this)"
-              title="a single punch built for sharing — roughly 1–2 slides">Quick hit</button>
-      <button type="button" class="chip" data-len="standard" onclick="pickLength('standard', this)"
-              title="a classic carousel with a proper arc — roughly 4–6 slides">Classic</button>
-      <button type="button" class="chip" data-len="deep" onclick="pickLength('deep', this)"
-              title="a fuller story, roughly 7–10 slides — only as long as it stays good">Deep dive</button>
-    </div>
-
-    <div class="optgrid">
-      {% for s in styles %}
-      <button type="button" class="opt" data-style="{{ s.key }}" onclick="pickStyle('{{ s.key }}', this)">
-        <span class="tx"><span class="t">{{ s.label }}</span></span>
-        <span class="ck"></span>
-      </button>
-      {% endfor %}
-      <button type="button" class="opt" data-style="" onclick="pickStyle('', this)">
-        <span class="tx"><span class="t">No preset</span>
-          <span class="s">Let each slide brief speak for itself</span></span>
-        <span class="ck"></span>
-      </button>
-    </div>
-  </section>
+  <!-- The look step is gone — the engine designs a bespoke design_system per
+       post, so a hand-picked style preset would fight the automatic branding.
+       Length (the one remaining editorial dial) lives inline on each door. -->
 
   <!-- ═════════ 3a · RADAR — moments / evergreen ═════════ -->
   <section class="scr" id="scr-radar">
@@ -344,6 +315,7 @@
       <span class="age" id="radar-age"></span>
       <button type="button" class="chip" id="radar-refresh" onclick="refreshLane(true)">↻ Rescan</button>
     </div>
+    <div class="chip-row" data-len-slot style="margin:2px 0 8px"></div>
     <div id="radar-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
@@ -354,6 +326,7 @@
     <p class="hint">One rough line is plenty — press <b>Enter</b> to see five different takes on it.</p>
     <textarea id="idea-text" style="min-height:96px"
       placeholder="gym bros who hog the squat rack for 40 mins"></textarea>
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
     <div class="cta-row">
       <button type="button" onclick="startIdea(false, true)"
               title="five genuinely different takes on your idea — pick the one you believe in before anything is written">🎯 Show me the takes</button>
@@ -371,6 +344,7 @@
       placeholder="Caffeine peaks in the blood ~45 min after ingestion&#10;Most 'toning' advice is just fat loss in disguise"></textarea>
     <p class="muted" style="font-size:12.5px">Need topical material? Run the
       <a href="/trends" target="_blank">Trend Scout</a> and paste the hooks here.</p>
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
     <div class="cta-row">
       <button type="button" onclick="startFacts()">Find angles →</button>
     </div>
@@ -393,6 +367,7 @@
     </div>
     <label style="margin-top:16px">Optional: a note on the topic</label>
     <input id="blank-text" placeholder="leave empty and the engine picks a topic that fits the format">
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
     <div class="cta-row">
       <button type="button" onclick="startBlank(false, false, true)"
               title="five genuinely different takes in this format — pick the one you believe in before anything is written">🎯 Show me the takes</button>
@@ -659,13 +634,13 @@ const MAX_SLIDES = 10, MIN_SLIDES = 1;
 // stage number (of 5), label, and rail % per screen
 const META = {
   source:  [1, 'Start',     6],
-  look:    [1, 'The look', 16],
-  radar:   [1, 'Pick a story', 28],
-  idea:    [1, 'Your idea', 28],
-  facts:   [1, 'Your research', 28],
-  format:  [1, 'The format', 28],
-  angles:  [1, 'Pick an angle', 36],
-  develop: [2, 'Shape it',  48],
+  radar:   [1, 'Pick a story', 24],
+  idea:    [1, 'Your idea', 24],
+  facts:   [1, 'Your research', 24],
+  format:  [1, 'The format', 24],
+  angles:  [1, 'Pick an angle', 34],
+  takes:   [2, 'The takes', 42],
+  develop: [2, 'Shape it',  50],
   write:   [3, 'Words',     64],
   images:  [4, 'Images',    82],
   finish:  [5, 'Schedule',  94],
@@ -698,28 +673,21 @@ function tapThen(el, group, fn){
   setTimeout(fn, 240);
 }
 
-/* ---------- step 1: source ---------- */
+/* ---------- step 1: source → straight to the door ---------- */
+// The look step is gone: the engine designs a bespoke design_system per post
+// (palette, type, motif, evolution), so a hand-picked preset would only
+// fight the automatic branding. Length is the one editorial dial left —
+// its chips live inline on each door.
 function pickSource(src, el){
   state.source = src;
-  tapThen(el, '#scr-source .opt', () => show('look'));
-}
-
-/* ---------- step 2: the look ---------- */
-function pickMode(mode, el){
-  state.mode = mode;
-  document.querySelectorAll('[data-mode]').forEach(c =>
-    c.classList.toggle('sel', c.dataset.mode === mode));
+  tapThen(el, '#scr-source .opt', routeToDoor);
 }
 function pickLength(len, el){
   state.length = len;
   document.querySelectorAll('[data-len]').forEach(c =>
     c.classList.toggle('sel', c.dataset.len === len));
 }
-function pickStyle(key, el){
-  state.style = key;
-  tapThen(el, '#scr-look .optgrid .opt', afterLook);
-}
-function afterLook(){
+function routeToDoor(){
   const src = state.source;
   if (src === 'moments' || src === 'evergreen') { show('radar'); switchLane(src); }
   else if (src === 'idea')   { show('idea'); setTimeout(() => document.getElementById('idea-text').focus(), 350); }
@@ -1847,6 +1815,21 @@ function esc(s){ return String(s ?? '').replace(/[&<>"']/g,
 function fail(msg){ alert(msg); }
 
 /* ---------- boot ---------- */
+// The one editorial dial left after the look step went: length. Same chip
+// row on every door; pickLength keeps all copies in sync via [data-len].
+document.querySelectorAll('[data-len-slot]').forEach(slot => {
+  slot.innerHTML = `
+    <span class="muted" style="font-size:12px; align-self:center">Length</span>
+    <button type="button" class="chip${state.length === '' ? ' sel' : ''}" data-len="" onclick="pickLength('', this)"
+            title="the engine picks the slide count the idea deserves — a meme might be 1 slide, a deep-dive 10">Engine's call</button>
+    <button type="button" class="chip" data-len="quick" onclick="pickLength('quick', this)"
+            title="a single punch built for sharing — roughly 1–2 slides">Quick hit</button>
+    <button type="button" class="chip" data-len="standard" onclick="pickLength('standard', this)"
+            title="a classic carousel with a proper arc — roughly 4–6 slides">Classic</button>
+    <button type="button" class="chip" data-len="deep" onclick="pickLength('deep', this)"
+            title="a fuller story, roughly 7–10 slides — only as long as it stays good">Deep dive</button>`;
+});
+
 if (RESUME_IDEA) {
   state.ideaId = RESUME_IDEA;
   nav = ['source'];

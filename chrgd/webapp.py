@@ -230,17 +230,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         request: Request, idea: str | None = None, day: str | None = None,
         _: str = Depends(require_user_page),
     ):
-        from .brand import load_brand
         from .mechanics import load_mechanics
 
-        brand = load_brand()
+        # No style preset picker: the engine designs a bespoke design_system
+        # per post, so the journey goes source → door directly.
         return render_page(
             request, "create.html", "create",
             mechanics=[m.model_dump() for m in load_mechanics().values()],
-            styles=[
-                {"key": k, "label": s.label or k}
-                for k, s in brand.styles.items()
-            ],
             resume_idea=idea or "",
             preset_day=day or "",
         )
