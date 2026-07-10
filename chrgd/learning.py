@@ -35,7 +35,7 @@ MIN_TRAIT_POSTS = 2
 
 # Categories whose wins are TOPICAL, not a repeatable formula — copying the
 # post won't work, you re-run the radar for the next one.
-_TOPICAL_CATEGORIES = {"moment", "trend"}
+_TOPICAL_CATEGORIES = {"moment", "trend", "trending"}
 
 
 def _rating(idea: Idea) -> str | None:

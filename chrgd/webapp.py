@@ -984,7 +984,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     # --- discovery radar (moments = UK now · evergreen = worth knowing) --------
 
     def _discover_kind(kind: str) -> str:
-        if kind not in ("moments", "evergreen"):
+        if kind not in ("moments", "evergreen", "trending"):
             raise HTTPException(400, f"unknown discover kind '{kind}'")
         return kind
 
@@ -1045,7 +1045,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
         with _store(settings) as store:
             job = store.get_job(job_id)
-            if job is None or job["kind"] not in ("moments", "evergreen"):
+            if job is None or job["kind"] not in ("moments", "evergreen", "trending"):
                 raise HTTPException(404, "no such discovery scan")
             moments = json.loads(job["result_json"] or "{}").get("moments", [])
             if not 0 <= moment < len(moments):
@@ -1076,7 +1076,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         when = _parse_when(scheduled_for)
         with _store(settings) as store:
             job = store.get_job(job_id)
-            if job is None or job["kind"] not in ("moments", "evergreen", "moment_detail"):
+            if job is None or job["kind"] not in (
+                "moments", "evergreen", "trending", "moment_detail",
+            ):
                 raise HTTPException(404, "no such discovery scan")
             moments = json.loads(job["result_json"] or "{}").get("moments", [])
             if not 0 <= moment < len(moments):
@@ -1093,19 +1095,24 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 note = a.get("concept_note", a.get("title", ""))
                 if a.get("hook"):
                     note += f" — open with: {a['hook']}"
+            # Trends and moments seed differently for the learning loop and
+            # for the build framing (event = the moment is the star; trend =
+            # the format is the vehicle to follow faithfully).
+            kind_tag = "trending" if job["kind"] == "trending" else "moment"
             idea = _new_seed(
                 store,
                 concept_note=f"[{m.get('title', 'UK moment')}] {note}",
-                content_category="moment",
+                content_category=kind_tag,
                 style=style,
                 render_mode=render_mode,
                 length=length,
                 scheduled_for=when,
-                # The full moment travels with the seed so the build keeps the
-                # moment as the star instead of drifting back to product talk.
+                # The full moment/trend travels with the seed so the build
+                # keeps it central instead of drifting back to product talk.
                 moment={
                     k: v
                     for k, v in {
+                        "kind": kind_tag,
                         "title": m.get("title", ""),
                         "why": m.get("why", ""),
                         "when": m.get("when", ""),
@@ -1121,7 +1128,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 "UPDATE ideas SET decay_speed = ?, learning_tag = ? WHERE idea_id = ?",
                 (
                     m.get("decay_speed", "days"),
-                    f"moment:{m.get('category', 'news')}",
+                    f"{kind_tag}:{m.get('category', 'news')}",
                     idea.idea_id,
                 ),
             )
@@ -1396,7 +1403,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         """Re-enqueue a failed job with the same kind, idea and params."""
         retryable = {
             "build", "build_one", "render", "render_slide",
-            "angles", "revise", "concept", "trends", "moments", "evergreen", "run",
+            "angles", "revise", "concept", "trends", "moments", "evergreen",
+            "trending", "takes", "run",
         }
         with _store(settings) as store:
             job = store.get_job(job_id)

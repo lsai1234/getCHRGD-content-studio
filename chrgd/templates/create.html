@@ -261,8 +261,14 @@
 
     <button type="button" class="opt" onclick="pickSource('moments', this)">
       <span class="ic">🇬🇧</span>
-      <span class="tx"><span class="t">What the UK is talking about</span>
-        <span class="s">Fresh topical moments scanned this week — tap a story, pick an angle</span></span>
+      <span class="tx"><span class="t">Big moments happening now</span>
+        <span class="s">Matches, weather, telly, news — the events everyone's living through</span></span>
+      <span class="chev">›</span>
+    </button>
+    <button type="button" class="opt" onclick="pickSource('trending', this)">
+      <span class="ic">📈</span>
+      <span class="tx"><span class="t">What's trending</span>
+        <span class="s">TikTok formats, memes &amp; gym-tok discourse the 18–30 crowd is on — spikes and waves</span></span>
       <span class="chev">›</span>
     </button>
     <button type="button" class="opt" onclick="pickSource('evergreen', this)">
@@ -309,7 +315,8 @@
 
     <div class="lane-meta">
       <div class="lane-tabs">
-        <button type="button" class="chip sel" data-lane="moments" onclick="switchLane('moments')">🌍 Happening now</button>
+        <button type="button" class="chip sel" data-lane="moments" onclick="switchLane('moments')">🌍 Big moments</button>
+        <button type="button" class="chip" data-lane="trending" onclick="switchLane('trending')">📈 Trending</button>
         <button type="button" class="chip" data-lane="evergreen" onclick="switchLane('evergreen')">🤯 Worth knowing</button>
       </div>
       <span class="age" id="radar-age"></span>
@@ -689,7 +696,7 @@ function pickLength(len, el){
 }
 function routeToDoor(){
   const src = state.source;
-  if (src === 'moments' || src === 'evergreen') { show('radar'); switchLane(src); }
+  if (src === 'moments' || src === 'trending' || src === 'evergreen') { show('radar'); switchLane(src); }
   else if (src === 'idea')   { show('idea'); setTimeout(() => document.getElementById('idea-text').focus(), 350); }
   else if (src === 'facts')  { show('facts'); setTimeout(() => document.getElementById('facts-text').focus(), 350); }
   else if (src === 'format') { show('format'); }
@@ -801,17 +808,18 @@ async function skipTakes(){
   show('write'); showWriteWait('The engine is writing your carousel'); pollBuild();
 }
 
-/* ---------- radar (moments / evergreen lanes) ---------- */
+/* ---------- radar (moments / trending / evergreen lanes) ---------- */
 const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in'};
 const LANE_HINT = {
-  moments: 'The biggest UK & global moments this week — tap a story, pick your angle.',
+  moments: 'The biggest UK & global events this week — tap a story, pick your angle.',
+  trending: 'Formats, memes & gym-tok the 18–30 crowd is actually on — ⚡ spikes to ride this week, 🌊 waves you can reuse.',
   evergreen: 'Fascinating, shareable facts that work any week of the year.',
 };
-const LANE_EYEBROW = {moments: 'Happening now', evergreen: 'Worth knowing'};
-// Evergreen facts don't go stale like moments do — rescan far less often.
-const LANE_MAX_AGE_H = {moments: 12, evergreen: 24 * 7};
+const LANE_EYEBROW = {moments: 'Happening now', trending: 'Trending', evergreen: 'Worth knowing'};
+// Spikes go stale fast; evergreen facts barely age — rescan cadence per lane.
+const LANE_MAX_AGE_H = {moments: 12, trending: 24, evergreen: 24 * 7};
 let lane = 'moments';
-const laneJobs = {moments: null, evergreen: null};
+const laneJobs = {moments: null, trending: null, evergreen: null};
 
 function switchLane(l){
   lane = l;
@@ -841,7 +849,9 @@ async function refreshLane(showSkeleton = true){
     document.getElementById('radar-body').innerHTML =
       '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   document.getElementById('radar-age').textContent =
-    lane === 'moments' ? 'scanning what the UK is talking about…' : 'hunting fascinating facts…';
+    lane === 'moments' ? 'scanning what the UK is talking about…' :
+    lane === 'trending' ? 'scanning TikTok formats, memes & gym-tok…' :
+    'hunting fascinating facts…';
   await post('/api/jobs/moments', new URLSearchParams({kind: lane}));
   pollLane(lane);
 }
@@ -873,7 +883,7 @@ function drawMoments(data){
         <span>${esc(m.emoji || '📌')}</span>
         <span class="m-title">${esc(m.title)}</span>
         ${m.scope === 'global' ? '<span class="m-when" style="color:#7fb3ff;border-color:#2c4a7a">🌍 global</span>' : ''}
-        <span class="m-when">${esc(m.when || m.category || '')}</span>
+        <span class="m-when">${esc(m.when || m.category || '').replace(/^spike/i, '⚡ spike').replace(/^wave/i, '🌊 wave')}</span>
       </div>
       <div class="m-why">${esc(m.why || '')}</div>
       <div class="m-angles"></div>`;

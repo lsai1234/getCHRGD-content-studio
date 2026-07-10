@@ -387,7 +387,80 @@ Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape:
 Rank by expected reach. Strongest, most shareable facts first.
 """.format(limitation=LIMITATION)
 
-_DISCOVER_PROMPTS = {"moments": MOMENTS_PROMPT, "evergreen": EVERGREEN_PROMPT}
+# The third discovery lane: not events, not facts — what people are actually
+# PARTICIPATING in. Formats, memes, challenges, gym discourse: the trends an
+# 18-30 TikTok audience is living inside even when nothing is "happening".
+TRENDING_PROMPT = """You are the Trend Radar for CHRGD, a premium UK gym/supplement brand.
+
+Use web search to find what is actually TRENDING for a UK 18-30, TikTok-native
+audience right now. NOT news events, fixtures or weather (a different lane
+covers those) — you are hunting the things people are PARTICIPATING in:
+
+- TikTok-wide: viral formats, meme templates, POV/text-on-screen styles,
+  challenges and joke structures everyone is doing this week/month.
+- 18-30 culture: the phrases everyone is suddenly saying, in-jokes, aesthetic
+  waves (e.g. a 'core' or a character archetype), dating/work/money discourse
+  that generation is having.
+- Gym & fitness trends: training methods doing the rounds (the next 12-3-30 or
+  75-Hard-alike), gym-tok arguments and discourse waves, supplement
+  conversations, fitness-creator moments spawning copycat content.
+
+For EVERY trend call its HORIZON honestly:
+- "spike" — days-to-weeks. Ride it THIS week or skip it.
+- "wave" — a format/discourse with months of life. Reusable repeatedly.
+
+THE FEED TEST (hard filter): would a UK 18-30 TikTok user recognise this from
+their own For You feed or group chats THIS week? It does not need to be on
+front pages (that's the events lane) — but if only marketers and trend
+reports talk about it, it FAILS. No quota: three real trends beat six
+inventions.
+
+Limitation you MUST respect: {limitation}
+Because you cannot see the live For You feed: work from current reporting and
+roundups, never claim a specific sound/audio is trending, and describe each
+trend's format precisely enough that the editor can verify it in the app in
+30 seconds.
+
+For EACH trend, propose 2-3 ready-to-build angles that BEND THE TREND to
+CHRGD's world (gym, energy, training culture) — the trend's format is the
+vehicle and must be followed faithfully (that's what makes it land); the
+brand rides inside it. Usually: one straight execution of the format in gym
+terms, one funny/relatable twist, one light product tie-in ONLY where natural.
+Claim-safe as ever: nothing medical, no guaranteed outcomes, humour is social
+commentary.
+
+Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape:
+{{
+  "moments": [
+    {{
+      "title": "the trend in one line, named the way people say it",
+      "emoji": "one emoji",
+      "category": "format | meme | challenge | phrase | aesthetic | gym | discourse",
+      "scope": "global | uk",
+      "when": "spike — peaking now | wave — months of life left",
+      "peak": "when to post to catch it",
+      "why": "what participating in it signals + why this audience is on it, one line",
+      "decay_speed": "days | weeks",
+      "angles": [
+        {{
+          "type": "advice | funny | tiein",
+          "title": "short label",
+          "hook": "the slide-1 hook this would open with",
+          "concept_note": "1-2 sentence buildable brief INCLUDING how the trend's format is used"
+        }}
+      ]
+    }}
+  ]
+}}
+Rank by how live the trend is for this audience right now — spikes first when
+they're truly peaking, then the strongest waves.
+""".format(limitation=LIMITATION)
+
+_DISCOVER_PROMPTS = {
+    "moments": MOMENTS_PROMPT,
+    "evergreen": EVERGREEN_PROMPT,
+    "trending": TRENDING_PROMPT,
+}
 _DISCOVER_ASKS = {
     "moments": (
         "Find up to {count} shared UK moments for the coming week, each with "
@@ -396,6 +469,12 @@ _DISCOVER_ASKS = {
     "evergreen": (
         "Find up to {count} fascinating evergreen facts, each with 2-3 ready "
         "angles. Rank by shareability and return the JSON object."
+    ),
+    "trending": (
+        "Find up to {count} trends this audience is genuinely participating "
+        "in right now — a mix of spikes and waves, TikTok-wide, 18-30 culture "
+        "and gym-tok. Each with 2-3 ready angles that bend the trend to the "
+        "brand's world. Rank by how live each is and return the JSON object."
     ),
 }
 

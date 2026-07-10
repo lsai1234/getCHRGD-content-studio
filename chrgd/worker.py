@@ -398,6 +398,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "trends": _handle_trends,
     "moments": _handle_discover,
     "evergreen": _handle_discover,
+    "trending": _handle_discover,
     "moment_detail": _handle_moment_detail,
     "concept": _handle_concept,
     "run": _handle_run,
@@ -424,7 +425,7 @@ def enqueue_trends(store: Store, *, count: int) -> int:
 
 def enqueue_discover(store: Store, kind: str = "moments", *, count: int = 6) -> int:
     """One scan per lane at a time — reuse an in-flight scan, don't stack."""
-    if kind not in ("moments", "evergreen"):
+    if kind not in ("moments", "evergreen", "trending"):
         raise ValueError(f"unknown discover kind '{kind}'")
     row = store.conn.execute(
         "SELECT job_id FROM jobs WHERE kind = ? "

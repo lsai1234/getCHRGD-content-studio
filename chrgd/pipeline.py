@@ -326,11 +326,31 @@ def _seed_context(idea: Idea, prefs: dict) -> list[str]:
         if value:
             lines.append(f"- {key}: {value}")
 
-    # A moment-anchored seed carries the full cultural moment it rides. The
+    # A moment/trend-anchored seed carries the full context it rides. The
     # account's biggest win (the 2am England-game post) worked because the
     # moment was the star — so every stage must keep that inversion explicit.
     moment = prefs.get("moment")
-    if moment:
+    if moment and moment.get("kind") == "trending":
+        lines.append("")
+        lines.append(
+            "LIVE TREND — this post rides a format/meme/discourse the "
+            "audience is actively participating in. The trend's FORMAT is "
+            "the vehicle: follow it faithfully (that recognition is what "
+            "makes it land), and pour the brand's world into it:"
+        )
+        for key in ("title", "why", "when", "peak", "category", "angle"):
+            if moment.get(key):
+                lines.append(f"- {key}: {moment[key]}")
+        lines.append(
+            "Rules: the viewer must recognise the trend from their own feed "
+            "in the first frame — same structure, same rhythm, same joke "
+            "shape, gym/energy subject matter. Don't explain the trend, BE "
+            "the trend. Any product mention must fit inside the format "
+            "naturally and stay light; a sales post wearing a trend's "
+            "clothes gets clocked instantly. If the trend is a spike, lean "
+            "fully into right-now energy."
+        )
+    elif moment:
         lines.append("")
         lines.append(
             "SHARED CULTURAL MOMENT — this post rides a moment the audience "

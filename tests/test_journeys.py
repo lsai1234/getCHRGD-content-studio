@@ -1482,3 +1482,90 @@ def test_create_journey_has_no_style_step_and_meta_covers_every_screen(client):
     meta_keys = set(re.findall(r"(\w+):\s*\[", meta_src))
     missing = screens - meta_keys
     assert not missing, f"screens without META entries (show() would crash): {missing}"
+
+
+# --- the trending lane: participation trends, not events -------------------------
+
+TRENDING_PAYLOAD = {
+    "moments": [
+        {
+            "title": "'Of course' format", "emoji": "📈", "category": "format",
+            "when": "wave — months of life left", "decay_speed": "weeks",
+            "why": "everyone's doing the self-aware archetype joke",
+            "angles": [
+                {"type": "funny", "title": "Gym-bro of course",
+                 "hook": "I'm a gym bro — of course I…",
+                 "concept_note": "run the 'of course' format on gym archetypes"}
+            ],
+        },
+        {
+            "title": "75-Hard-alike challenge spike", "emoji": "🔥",
+            "category": "challenge", "when": "spike — peaking now",
+            "decay_speed": "days", "why": "gym-tok is arguing about it",
+            "angles": [
+                {"type": "advice", "title": "Honest review",
+                 "hook": "day 40 of the challenge nobody finishes",
+                 "concept_note": "honest take on the challenge wave"}
+            ],
+        },
+    ]
+}
+
+
+def test_trending_scout_hunts_participation_not_events(settings):
+    from chrgd.trends import scout_discover
+
+    fake = FakeSearch(TRENDING_PAYLOAD)
+    result = scout_discover(settings, "trending", client=fake)
+    assert [m.category for m in result.moments] == ["format", "challenge"]
+    sys = fake.system
+    assert "TRENDING" in sys and "18-30" in sys
+    assert "NOT news events" in sys          # events belong to the other lane
+    assert "THE FEED TEST" in sys            # recognisable from the FYP, not trade press
+    assert '"spike"' in sys and '"wave"' in sys  # horizon called on every trend
+    assert "gym" in sys.lower() and "meme" in sys.lower()
+    assert "never claim a specific sound" in sys  # the no-live-FYP limitation
+
+
+def test_trending_lane_seeds_trend_framed_ideas(client, settings):
+    job_id = client.post(
+        "/api/jobs/moments", data={"kind": "trending"}
+    ).json()["job_id"]
+    with Store(settings.db_path) as store:
+        assert store.get_job(job_id)["kind"] == "trending"
+        store.update_job(job_id, status="COMPLETED",
+                         result_json=json.dumps(TRENDING_PAYLOAD))
+    # The lane feed serves it back like any discovery scan.
+    feed = client.get("/api/moments?kind=trending").json()
+    assert feed["moments"][0]["title"] == "'Of course' format"
+
+    r = client.post(
+        f"/api/moments/{job_id}/use", data={"moment": "0", "angle": "0"}
+    ).json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(r["idea_id"])
+    assert idea.content_category == "trending"
+    assert idea.learning_tag == "trending:format"
+    route = json.loads(idea.route_json)
+    assert route["moment"]["kind"] == "trending"
+
+    # The build brief frames it as a format to follow, not an event to ride.
+    msg = build_user_message(idea)
+    assert "LIVE TREND" in msg
+    assert "BE the trend" in msg
+    assert "SHARED CULTURAL MOMENT" not in msg
+
+
+def test_moment_seeds_still_use_moment_framing(client, settings):
+    job_id = client.post("/api/jobs/moments").json()["job_id"]
+    with Store(settings.db_path) as store:
+        store.update_job(job_id, status="COMPLETED",
+                         result_json=json.dumps(MOMENTS_PAYLOAD))
+    r = client.post(
+        f"/api/moments/{job_id}/use", data={"moment": "0", "angle": "0"}
+    ).json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(r["idea_id"])
+    assert idea.content_category == "moment"
+    msg = build_user_message(idea)
+    assert "SHARED CULTURAL MOMENT" in msg and "LIVE TREND" not in msg
