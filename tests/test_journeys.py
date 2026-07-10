@@ -1267,3 +1267,46 @@ def test_edit_persists_body_and_new_slides_carry_it(client, settings):
         saved = json.loads(store.get_idea("G-0001").slides_json)
     assert saved[0]["body"] == "the full story, readable"
     assert saved[1]["body"] == ""  # new slides arrive with the field present
+
+
+# --- psychology round: stage-0 mechanisms, computed per post ---------------------
+
+
+def test_engine_prompt_teaches_the_psychology():
+    from chrgd.pipeline import load_system_prompt
+
+    sp = load_system_prompt()
+    # The stage-0 mechanisms the engine must run every decision through.
+    assert "### 0. The psychology" in sp
+    assert "~200ms" in sp
+    assert "Sharing is identity, not appreciation" in sp
+    assert "Only high-arousal emotion moves" in sp
+    assert "Peak-end" in sp
+    # …and the QA stage audits them instead of taking them on trust.
+    assert "psychology audit" in sp
+    # The contract forces the working to be shown, not vibed.
+    for field in ('"emotion"', '"hook_question"', '"share_identity"', '"named_unnamed"'):
+        assert field in sp
+    # Dead comment prompts are named and banned.
+    assert "Never 'what do you think?'" in sp
+
+
+def test_psych_block_survives_build_and_reaches_detail(client, settings):
+    post = good_post()
+    post["route"]["psych"] = {
+        "emotion": "recognition-shock",
+        "hook_question": "wait, is that why I'm knackered by 3pm?",
+        "share_identity": "I understand what our sessions are really like",
+        "named_unnamed": "the warm-up set you do so the guy waiting knows you're nearly done",
+    }
+    with Store(settings.db_path) as store:
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+        build_single_idea(store, settings, "G-0001", client=FakeChat([post]))
+    d = client.get("/api/ideas/G-0001/detail").json()
+    assert d["psych"]["emotion"] == "recognition-shock"
+    assert d["psych"]["hook_question"].startswith("wait, is that why")
+    # Old posts without a psych block degrade gracefully.
+    with Store(settings.db_path) as store:
+        store.add_idea(Idea(idea_id="G-0002", concept_note="y"))
+        build_single_idea(store, settings, "G-0002", client=FakeChat([good_post()]))
+    assert client.get("/api/ideas/G-0002/detail").json()["psych"] == {}

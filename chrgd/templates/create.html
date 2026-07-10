@@ -166,6 +166,8 @@
                  border: 1px solid var(--line); border-left: 2px solid var(--accent); }
   .throughline .tl-k { font-size: 10.5px; font-weight: 700; text-transform: uppercase;
                        letter-spacing: .05em; color: var(--accent); margin-right: 8px; }
+  /* the psychology readout: the engine's stage-0 answers, human-checkable */
+  .psych-line { background: none; border-left-color: var(--line); line-height: 1.75; }
 
   /* hook option cards */
   .hookopt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
@@ -435,6 +437,7 @@
       <h2>How does it read?</h2>
       <p class="meta-line" id="write-meta"></p>
       <p class="throughline" id="write-throughline" style="display:none"></p>
+      <p class="throughline psych-line" id="write-psych" style="display:none"></p>
 
       <div class="qa-strip" id="qa-grid"></div>
 
@@ -1281,6 +1284,20 @@ async function openWriteStep(autoJump = true){
     tl.innerHTML = `<span class="tl-k">The journey</span> ${esc(d.throughline)}`;
     tl.style.display = '';
   } else { tl.style.display = 'none'; }
+
+  // the psychology readout — the engine's own answers to the stage-0 tests.
+  // Weak answers here ('interested', a vague question) = a weak post: rework.
+  const py = document.getElementById('write-psych');
+  const p = d.psych || {};
+  if (p.emotion || p.hook_question || p.share_identity) {
+    py.innerHTML = [
+      p.emotion && `<span class="tl-k">Feels</span> ${esc(p.emotion)}`,
+      p.hook_question && `<span class="tl-k">Head question</span> “${esc(p.hook_question)}”`,
+      p.share_identity && `<span class="tl-k">Sharing it says</span> ${esc(p.share_identity)}`,
+      p.named_unnamed && `<span class="tl-k">Names the unnamed</span> ${esc(p.named_unnamed)}`,
+    ].filter(Boolean).join('<br>');
+    py.style.display = '';
+  } else { py.style.display = 'none'; }
 
   // scorecard chips
   const grid = document.getElementById('qa-grid');

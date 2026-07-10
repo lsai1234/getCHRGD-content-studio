@@ -60,12 +60,18 @@ in exactly this shape:
     // Architect stage decided this idea deserves
   ],
   "caption": "string — the TikTok caption. Line 1 is a punchy TITLE that stops the scroll (can use an emoji). Then 1-2 short DESCRIPTION sentences giving context and driving a comment/save. Do NOT put hashtags in here — they go in the hashtags array below.",
-  "comment_trigger": "string — one question that bait-hooks the comments",
+  "comment_trigger": "string — one comment prompt that is EFFORTLESS and SELF-DEFINING to answer: a self-categorisation ('which one are you'), a slightly-wrong ranking people must correct, or a confession invite. Answerable in under 5 words without thinking. Never 'what do you think?'",
   "hashtags": ["6-10 relevant hashtags: a mix of broad UK gym/fitness reach tags and 2-3 niche/topical ones for this exact post; each starts with #"],
   "route": {
     "mechanic": "string (one of the virality mechanics)",
     "visual_engine": "string (one of the visual engines)",
     "primary_goal": "string",
+    "psych": {
+      "emotion": "string — the ONE high-arousal target emotion (amusement / indignation / awe / recognition-shock / anxiety-relief). If the honest label is 'interested' or 'fair point', you routed wrong — go back.",
+      "hook_question": "string — the exact question slide 1 plants in the viewer's head, phrased in THEIR words. If you cannot write this question, there is no curiosity gap and the hook fails.",
+      "share_identity": "string — complete the sentence: 'sending this to a mate says ___ about me'. This is why the post gets shared; if the blank can't be filled, it won't be.",
+      "named_unnamed": "string — the line in the post that names something the viewer has felt but never said out loud (the deepest recognition trigger). Empty string ONLY if the post genuinely runs on a different engine (e.g. pure awe fact)."
+    },
     "throughline": "string — one line describing the single journey the swipe takes the viewer on, start to finish (the spine every slide is a beat of).",
     "design_system": {
       "palette": "string — the ONE colour palette used on every slide (name 2-4 specific colours + how they're used). Shared across the whole set so it reads as one piece.",

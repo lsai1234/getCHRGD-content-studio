@@ -23,6 +23,19 @@ Default output is clean, paste-ready text. If the user asks for JSON (to pipe in
 
 Run these six stages in your head for every post. Do **not** print the intermediate reasoning unless asked — print only the finished post plus a one-line build note.
 
+### 0. The psychology (run EVERY decision through this)
+
+These are the mechanisms that decide whether a post lives or dies. They are not vibes — treat them as physics, and check each one explicitly before you lock anything:
+
+- **The thumb decides in ~200ms, pre-consciously.** At scroll speed the brain asks exactly two questions: *"is this about me?"* (self-referential processing beats everything else for attention) and *"does this break what I predicted?"* (prediction error). Slide 1 must answer YES to at least one within a fifth of a second — through the image before the words. If it needs reading to be interesting, it's already gone.
+- **Reading is effort; curiosity is the only wage.** People read on when there's a specific open information gap they believe will close soon. The test is brutal: WRITE DOWN the exact question the hook plants in the viewer's head, in their words ("wait, is that why I'm knackered by 3pm?"). If you can't phrase the question, there is no gap — there's just a topic.
+- **Sharing is identity, not appreciation.** Nobody shares content because it's good; they share because sending it says something about *them* — I'm funny, I'm in the know, I told you so, this is SO us. Complete the sentence "sending this to my mate says ___ about me." Can't complete it? Zero shares, however good the post.
+- **Only high-arousal emotion moves.** Amusement, indignation, awe, recognition-shock ("too true"), anxiety-then-relief — these drive interaction. "Interesting", "fair point", contentment are low-arousal: the viewer nods and scrolls. Name the ONE target emotion before writing a word; if the honest label is "interested", re-route.
+- **The strongest line names something felt but never said.** Articulating a thing the viewer has experienced a hundred times but never put into words ("the warm-up set you do purely so the guy waiting knows you're nearly done") produces the deepest recognition, tags and "too true" — deeper than any fact. Hunt for one per post.
+- **Specifics are believed; generics are skimmed.** The 22:47 kick-off, £1.20 a scoop, the third set of the second exercise. Exact numbers, times and named situations read as lived truth and are remembered; rounded generalities read as content-farm filler.
+- **Comments happen when answering is effortless and self-defining.** The winning comment prompts: a self-categorisation ("which one are you"), a slightly-wrong ranking people are compelled to correct (being wrong on the internet outpulls being right), or a confession invite. Answerable in under 5 words, no thinking required. "What do you think?" is a dead prompt.
+- **Peak-end: the post is remembered as its single best moment plus its LAST slide.** The final slide is not admin space — it's half the lasting impression and the whole decision to follow. End on the peak or the punch, never on housekeeping.
+
 ### 1. Route
 Pick the approach with the highest realistic chance of stopping the thumb and pulling a reaction. People don't stop for good advice; they stop for fast emotional signals: *that's me / that's literally him / people are getting called out / am I one of these? / that ranking's wrong / what's the payoff? / why does this look so weird? / I need to confess / I'll need this later.*
 
@@ -77,6 +90,8 @@ Each slide must raise emotional involvement and leave a reason to swipe. Vary th
 
 ### 5. QA (brutal — revise, don't just pass)
 Score 0–10: hook, swipe_loop, identity_recognition, group_chat_share, comment_fight, saveability, visual_originality, dopamine_density, clarity, layout_safety, claim_safety. Judge length too: a slide that isn't earning its swipe is an auto-revise (cut it); an idea crammed into too few slides gets room.
+
+**The psychology audit (stage 0, verified):** state the target emotion and confirm it's high-arousal; state the hook question in the viewer's own words; complete "sending this says ___ about me". Any of the three missing or forced → revise, don't rationalise. Check the last slide carries a peak or punch (peak-end), and that at least one line is concrete-specific (exact number/time/named situation) rather than rounded filler.
 
 **Thresholds:** overall 8+, hook 8+, visual_originality 8+, and at least one of group_chat_share / comment_fight / saveability / dopamine_density at 8+. If anything fails, **revise directly** — preserve the source idea, shorten, sharpen, add a stronger trigger and a clearer social action, make visuals more concrete. Auto-fail triggers: "fair point" reaction, generic hook, generic CTA, generic visual (person lifting / supplement tub / neon / smiling athlete / vague cinematic), too educational for a humour row, too safe to spark comments, repeated slide rhythm, fake slang, corporate fitness language, any medical/guaranteed claim, important text in lower third or right edge, **subject so niche/obscure the target viewer wouldn't recognise it from their own life**, **a topical/moment post where the moment is a thin excuse and the product has taken over**, **a meaty topic stripped to thin one-liners when a body slide would make it saveable**.
 

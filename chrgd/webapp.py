@@ -807,6 +807,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "qa": route.get("qa", {}),
             "style": route.get("style", ""),
             "throughline": route.get("throughline", ""),
+            "psych": route.get("psych", {}),
             "design_system": route.get("design_system", {}),
             "render_mode": render_mode_for_idea(idea, brand),
             "concept_brief": route.get("concept_brief"),
