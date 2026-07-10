@@ -651,14 +651,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         scheduled_for: str = Form(""),
         manual: bool = Form(False),
         develop: bool = Form(False),
+        takes: bool = Form(False),
         _: str = Depends(require_user),
     ):
         """Open one of the three doors into the create journey."""
-        from .worker import enqueue_concept
+        from .worker import enqueue_concept, enqueue_takes
 
         when = _parse_when(scheduled_for)
 
+        # The default journey fans out to competing takes first; develop and
+        # straight-build remain as explicit choices.
         def _first_job(store: Store, idea_id: str) -> int:
+            if takes:
+                return enqueue_takes(store, idea_id)
             return (
                 enqueue_concept(store, idea_id)
                 if develop
@@ -682,7 +687,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 job_id = _first_job(store, idea.idea_id)
                 return {
                     "mode": mode, "idea_id": idea.idea_id,
-                    "job_id": job_id, "develop": develop,
+                    "job_id": job_id, "develop": develop, "takes": takes,
                 }
 
             if mode == "blank":
@@ -718,7 +723,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 job_id = _first_job(store, idea.idea_id)
                 return {
                     "mode": mode, "idea_id": idea.idea_id,
-                    "job_id": job_id, "develop": develop,
+                    "job_id": job_id, "develop": develop, "takes": takes,
                 }
 
         raise HTTPException(400, f"unknown mode '{mode}'")
@@ -764,6 +769,59 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 next_job = enqueue_build_one(store, idea.idea_id)
         return {"idea_id": idea.idea_id, "job_id": next_job, "develop": develop}
 
+    # --- the fan-out: competing takes before the expensive write ---------------
+
+    @app.post("/api/ideas/{idea_id}/takes")
+    def api_takes_start(
+        idea_id: str, feedback: str = Form(""), _: str = Depends(require_user)
+    ):
+        """Start (or re-fan with feedback) a round of competing takes."""
+        from .worker import enqueue_takes
+
+        with _store(settings) as store:
+            _idea_or_404(store, idea_id)
+            job_id = enqueue_takes(store, idea_id, feedback=feedback.strip())
+        return {"job_id": job_id, "kind": "takes", "idea_id": idea_id}
+
+    @app.post("/api/ideas/{idea_id}/takes/{job_id}/pick")
+    def api_takes_pick(
+        idea_id: str,
+        job_id: int,
+        index: int = Form(...),
+        tweak: str = Form(""),
+        develop: bool = Form(False),
+        _: str = Depends(require_user),
+    ):
+        """Lock one take as the agreed direction, then write (or develop) it."""
+        from .worker import enqueue_concept
+
+        with _store(settings) as store:
+            idea = _idea_or_404(store, idea_id)
+            job = store.get_job(job_id)
+            if job is None or job["kind"] != "takes" or job["idea_id"] != idea_id:
+                raise HTTPException(404, "no such takes round for this idea")
+            takes = json.loads(job["result_json"] or "{}").get("takes", [])
+            if not 0 <= index < len(takes):
+                raise HTTPException(400, "take index out of range")
+            chosen = dict(takes[index])
+            if tweak.strip():
+                chosen["tweak"] = tweak.strip()
+            # The chosen take rides route_json (like every creation pref) so it
+            # survives the build overwriting the route.
+            route = json.loads(idea.route_json) if idea.route_json else {}
+            route["take"] = chosen
+            store.conn.execute(
+                "UPDATE ideas SET route_json = ? WHERE idea_id = ?",
+                (json.dumps(route), idea_id),
+            )
+            store.conn.commit()
+            next_job = (
+                enqueue_concept(store, idea_id)
+                if develop
+                else enqueue_build_one(store, idea_id)
+            )
+        return {"idea_id": idea_id, "job_id": next_job, "develop": develop}
+
     @app.get("/api/ideas/{idea_id}/detail")
     def api_idea_detail(idea_id: str, _: str = Depends(require_user)):
         """Everything the create journey UI needs to draw one post."""
@@ -775,8 +833,18 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             idea = _idea_or_404(store, idea_id)
             jobs = {
                 kind: store.active_job_for(idea_id, kind)
-                for kind in ("build_one", "render", "render_slide", "revise", "concept")
+                for kind in (
+                    "build_one", "render", "render_slide", "revise",
+                    "concept", "takes",
+                )
             }
+            # The latest fan-out round (any status) so a resumed journey can
+            # land back on the takes screen with its options intact.
+            takes_row = store.conn.execute(
+                "SELECT job_id, status FROM jobs WHERE idea_id = ? AND "
+                "kind = 'takes' ORDER BY job_id DESC LIMIT 1",
+                (idea_id,),
+            ).fetchone()
             # Only report an error if the LATEST attempt failed — an old
             # failure that was retried successfully is not news.
             last_job = store.conn.execute(
@@ -808,6 +876,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "style": route.get("style", ""),
             "throughline": route.get("throughline", ""),
             "psych": route.get("psych", {}),
+            "take": route.get("take", {}),
+            "last_takes_job": dict(takes_row) if takes_row else None,
             "design_system": route.get("design_system", {}),
             "render_mode": render_mode_for_idea(idea, brand),
             "concept_brief": route.get("concept_brief"),
@@ -999,11 +1069,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         length: str = Form(""),
         scheduled_for: str = Form(""),
         develop: bool = Form(False),
+        takes: bool = Form(False),
         _: str = Depends(require_user),
     ):
         """Build from a moment — a preset angle, or the editor's own take.
 
         Pass `custom` with your own angle to override the preset `angle`.
+        Pass `takes` to fan out to competing takes before the full write.
         """
         when = _parse_when(scheduled_for)
         with _store(settings) as store:
@@ -1058,13 +1130,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 ),
             )
             store.conn.commit()
-            if develop:
+            if takes:
+                from .worker import enqueue_takes
+
+                next_job = enqueue_takes(store, idea.idea_id)
+            elif develop:
                 from .worker import enqueue_concept
 
                 next_job = enqueue_concept(store, idea.idea_id)
             else:
                 next_job = enqueue_build_one(store, idea.idea_id)
-        return {"idea_id": idea.idea_id, "job_id": next_job, "develop": develop}
+        return {
+            "idea_id": idea.idea_id, "job_id": next_job,
+            "develop": develop, "takes": takes,
+        }
 
     # --- concept development ("develop it with me") ----------------------------
 

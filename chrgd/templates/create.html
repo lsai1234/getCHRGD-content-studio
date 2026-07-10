@@ -104,6 +104,25 @@
   .angle-actions button { padding: 7px 13px; font-size: 12.5px; }
   .custom-angle { border-style: dashed; }
   .custom-angle input { margin-top: 7px; font-size: 13px; padding: 8px 10px; }
+
+  /* take cards — the fan-out picker */
+  .take-card { width: 100%; text-align: left; background: linear-gradient(180deg,var(--panel-2),var(--panel));
+               border: 1px solid var(--line); border-radius: 14px; color: var(--fg);
+               padding: 14px 16px; margin-top: 10px; cursor: pointer; display: block;
+               transition: border-color .15s, transform .1s; font: inherit; position: relative; }
+  .take-card:hover { border-color: var(--accent2); filter: none; }
+  .take-card.on { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2); }
+  .take-card.on::after { content: '✓'; position: absolute; top: 12px; right: 14px;
+                         color: var(--accent2); font-weight: 700; }
+  .take-card .t-title { font-weight: 700; font-size: 14px; padding-right: 22px; }
+  .take-card .t-hook { display: block; font-size: 15px; margin: 6px 0 7px; line-height: 1.35; }
+  .take-card .t-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 6px; }
+  .take-card .t-tag { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+                      background: var(--accent-tint); color: var(--accent2);
+                      border: 1px solid var(--accent-line); }
+  .take-card .t-share, .take-card .t-sketch { display: block; color: var(--muted);
+                      font-size: 12px; margin-top: 3px; line-height: 1.45; }
+  .take-card .t-share b { color: var(--fg); font-weight: 600; }
   .skel { height: 64px; border-radius: 14px; margin-top: 10px;
           background: linear-gradient(90deg, #101014 25%, #1a1a20 50%, #101014 75%);
           background-size: 200% 100%; animation: shimmer 1.4s infinite; }
@@ -332,13 +351,14 @@
   <section class="scr" id="scr-idea">
     <p class="eyebrow">Your idea</p>
     <h2>What's the idea?</h2>
-    <p class="hint">One rough line is plenty — press <b>Enter</b> to build it straight away.</p>
+    <p class="hint">One rough line is plenty — press <b>Enter</b> to see five different takes on it.</p>
     <textarea id="idea-text" style="min-height:96px"
       placeholder="gym bros who hog the squat rack for 40 mins"></textarea>
     <div class="cta-row">
-      <button type="button" onclick="startIdea(false)">⚡ Build it now</button>
-      <button type="button" class="ghost" onclick="startIdea(true)"
-              title="the engine sketches a concept brief you can edit and evolve before the full write">🧭 Shape it with me first</button>
+      <button type="button" onclick="startIdea(false, true)"
+              title="five genuinely different takes on your idea — pick the one you believe in before anything is written">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startIdea(false)"
+              title="skip the fan-out — one straight write from your line">⚡ Just build it</button>
     </div>
   </section>
 
@@ -374,9 +394,10 @@
     <label style="margin-top:16px">Optional: a note on the topic</label>
     <input id="blank-text" placeholder="leave empty and the engine picks a topic that fits the format">
     <div class="cta-row">
-      <button type="button" onclick="startBlank(false)">⚡ Build it now</button>
-      <button type="button" class="ghost" onclick="startBlank(true)"
-              title="the engine sketches a concept brief you can edit and evolve before the full write">🧭 Shape it with me first</button>
+      <button type="button" onclick="startBlank(false, false, true)"
+              title="five genuinely different takes in this format — pick the one you believe in before anything is written">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startBlank(false)"
+              title="skip the fan-out — one straight write in this format">⚡ Just build it</button>
     </div>
   </section>
 
@@ -386,6 +407,42 @@
     <h2>Pick your angle</h2>
     <p class="hint">Two or three takes per fact — tap the one with legs.</p>
     <div id="angles-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <!-- ═════════ 3f · TAKES — the fan-out, pick before you pay ═════════ -->
+  <section class="scr" id="scr-takes">
+    <p class="eyebrow">The takes</p>
+    <div id="takes-wait" style="display:none">
+      <h2>Working the idea from every angle</h2>
+      <p class="hint"><span class="spin">🎯</span> Five genuinely different takes on it — pick the one you believe in. Usually ~20s.</p>
+      <div class="skel"></div><div class="skel"></div><div class="skel"></div>
+    </div>
+    <div id="takes-done" style="display:none">
+      <h2>Which take do you believe in?</h2>
+      <p class="hint">Same idea, different engines — tap one. Nothing is written (or paid for) until you choose.</p>
+      <div id="takes-list"></div>
+
+      <div id="take-actions" style="display:none">
+        <label style="margin-top:14px">Optional tweak <small class="k">— adjust the chosen take in your own words</small></label>
+        <input id="take-tweak" placeholder="e.g. make it about morning sessions, not late ones">
+        <div class="cta-row" style="margin-top:10px">
+          <button type="button" onclick="writeTake(false)">✍️ Write this one</button>
+          <button type="button" class="ghost" onclick="writeTake(true)"
+                  title="sketch a concept brief from this take that you edit and evolve first">🧭 Shape it first</button>
+        </div>
+      </div>
+
+      <div class="job-panel" style="margin:18px 0 0">
+        <label style="margin-top:0">💬 None of these? Say what's missing</label>
+        <textarea id="takes-feedback" style="min-height:48px"
+          placeholder="e.g. all too jokey — I want one that makes people feel seen · nothing about women's training"></textarea>
+        <div class="cta-row" style="margin-top:10px">
+          <button type="button" class="ghost" onclick="refanTakes()">↻ Fresh takes</button>
+          <button type="button" class="ghost" onclick="skipTakes()"
+                  title="skip the fan-out — build straight from the seed">⚡ Skip — just build it</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- ═════════ 4 · DEVELOP (optional concept round) ═════════ -->
@@ -594,7 +651,8 @@ const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
 let state = { ideaId: null, source: null, style: null, mode: 'ai_design',
-              length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null };
+              length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
+              takesJob: null };
 const MAX_SLIDES = 10, MIN_SLIDES = 1;
 
 /* ---------- screen plumbing: one focused screen at a time ---------- */
@@ -671,19 +729,108 @@ function afterLook(){
 }
 
 /* ---------- shared create params ---------- */
-function baseParams(develop){
+function baseParams(develop, takes = false){
   return new URLSearchParams({
     style: state.style || '', render_mode: state.mode,
     length: state.length || '',
     scheduled_for: PRESET_DAY ? `${PRESET_DAY}T18:00` : '',
     develop: develop ? 'true' : '',
+    takes: takes ? 'true' : '',
   });
 }
-function afterStart(r, develop){
+function afterStart(r, develop, takes = false){
   state.ideaId = r.idea_id;
   history.replaceState(null, '', `/create?idea=${r.idea_id}`);
+  if (takes) goTakes(r.job_id);
+  else if (develop) goDevelop();
+  else { show('write'); showWriteWait('The engine is writing your carousel'); pollBuild(); }
+}
+
+/* ---------- the fan-out: competing takes before the expensive write ---------- */
+let takesSel = -1;
+
+function goTakes(jobId){
+  state.takesJob = jobId;
+  takesSel = -1;
+  show('takes');
+  document.getElementById('takes-wait').style.display = '';
+  document.getElementById('takes-done').style.display = 'none';
+  pollTakes(jobId);
+}
+
+async function pollTakes(jobId){
+  if (jobId !== state.takesJob) return;  // superseded by a re-fan
+  const job = await (await fetch(`/api/jobs/${jobId}`)).json();
+  if (job.status === 'ERROR') {
+    document.getElementById('takes-wait').style.display = 'none';
+    document.getElementById('takes-done').style.display = '';
+    document.getElementById('takes-list').innerHTML =
+      `<p class="muted">Couldn't fan out: ${esc(job.error || 'failed')} — try “Fresh takes” or “Skip — just build it”.</p>`;
+    return;
+  }
+  if (job.status !== 'COMPLETED') return setTimeout(() => pollTakes(jobId), 2000);
+  drawTakes((JSON.parse(job.result_json || '{}').takes) || []);
+}
+
+function drawTakes(takes){
+  document.getElementById('takes-wait').style.display = 'none';
+  document.getElementById('takes-done').style.display = '';
+  document.getElementById('take-actions').style.display = 'none';
+  const list = document.getElementById('takes-list');
+  list.innerHTML = '';
+  if (!takes.length) {
+    list.innerHTML = '<p class="muted">The fan-out came back empty — try “Fresh takes”.</p>';
+    return;
+  }
+  takes.forEach((t, i) => {
+    const el = document.createElement('button');
+    el.type = 'button'; el.className = 'take-card';
+    el.innerHTML = `
+      <span class="t-title">${esc(t.title || 'Take ' + (i + 1))}</span>
+      <span class="t-hook">“${esc(t.hook || t.angle || '')}”</span>
+      <span class="t-meta">
+        ${t.emotion ? `<span class="t-tag">${esc(t.emotion)}</span>` : ''}
+        ${t.mechanic ? `<span class="t-tag">${esc(t.mechanic.replaceAll('_', ' '))}</span>` : ''}
+      </span>
+      ${t.share_identity ? `<span class="t-share"><b>Sharing it says:</b> ${esc(t.share_identity)}</span>` : ''}
+      ${t.sketch ? `<span class="t-sketch">${esc(t.sketch)}</span>` : ''}`;
+    el.onclick = () => pickTakeCard(i);
+    list.appendChild(el);
+  });
+}
+
+function pickTakeCard(i){
+  takesSel = (takesSel === i) ? -1 : i;
+  document.querySelectorAll('#takes-list .take-card').forEach((c, j) =>
+    c.classList.toggle('on', j === takesSel));
+  document.getElementById('take-actions').style.display = takesSel >= 0 ? '' : 'none';
+}
+
+async function writeTake(develop){
+  if (takesSel < 0) return;
+  const body = new URLSearchParams({
+    index: takesSel,
+    tweak: document.getElementById('take-tweak').value.trim(),
+    develop: develop ? 'true' : '',
+  });
+  const r = await post(`/api/ideas/${state.ideaId}/takes/${state.takesJob}/pick`, body);
+  if (!r) return;
   if (develop) goDevelop();
   else { show('write'); showWriteWait('The engine is writing your carousel'); pollBuild(); }
+}
+
+async function refanTakes(){
+  const fb = document.getElementById('takes-feedback').value.trim();
+  const r = await post(`/api/ideas/${state.ideaId}/takes`, new URLSearchParams({feedback: fb}));
+  if (!r) return;
+  document.getElementById('takes-feedback').value = '';
+  goTakes(r.job_id);
+}
+
+async function skipTakes(){
+  const r = await post(`/api/ideas/${state.ideaId}/build`, new URLSearchParams());
+  if (!r) return;
+  show('write'); showWriteWait('The engine is writing your carousel'); pollBuild();
 }
 
 /* ---------- radar (moments / evergreen lanes) ---------- */
@@ -792,23 +939,23 @@ function angleChip(jobId, mi, ai, a){
     <b>${esc(a.title)}</b>
     <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>
     <div class="angle-actions">
-      <button type="button">⚡ Build it now</button>
-      <button type="button" class="ghost" title="sketch a concept brief you edit and evolve first">🧭 Shape it first</button>
+      <button type="button" title="five genuinely different takes on this angle — pick before anything is written">🎯 See the takes</button>
+      <button type="button" class="ghost" title="skip the fan-out — one straight write">⚡ Just build it</button>
     </div>`;
   chip.onclick = ev => ev.stopPropagation();
-  const [quick, dev] = chip.querySelectorAll('button');
+  const [fan, quick] = chip.querySelectorAll('button');
+  fan.onclick = () => useMomentJob(jobId, mi, ai, false, true);
   quick.onclick = () => useMomentJob(jobId, mi, ai, false);
-  dev.onclick = () => useMomentJob(jobId, mi, ai, true);
   return chip;
 }
 
-async function useMomentJob(jobId, mi, ai, develop){
-  const body = baseParams(develop);
+async function useMomentJob(jobId, mi, ai, develop, takes = false){
+  const body = baseParams(develop, takes);
   body.set('moment', mi);
   body.set('angle', ai);
   const r = await post(`/api/moments/${jobId}/use`, body);
   if (!r) return;
-  afterStart(r, develop);
+  afterStart(r, develop, takes);
 }
 
 // A "write your own take on this story" row for a moment or a dug headline.
@@ -818,32 +965,32 @@ function customAngleRow(jobId, mi){
   wrap.innerHTML = `<span class="a-type">✍️ your own angle</span>
     <input type="text" placeholder="e.g. how rare a wildcard semi-final actually is — a 'did you know'">
     <div class="angle-actions">
-      <button type="button">⚡ Build it now</button>
-      <button type="button" class="ghost">🧭 Shape it first</button>
+      <button type="button" title="five genuinely different takes on your angle — pick before anything is written">🎯 See the takes</button>
+      <button type="button" class="ghost" title="skip the fan-out — one straight write">⚡ Just build it</button>
     </div>`;
   wrap.onclick = ev => ev.stopPropagation();
   const input = wrap.querySelector('input');
-  const [quick, dev] = wrap.querySelectorAll('button');
-  const go = (develop) => {
+  const [fan, quick] = wrap.querySelectorAll('button');
+  const go = (takes) => {
     const text = input.value.trim();
     if (!text) { input.focus(); return; }
-    useCustomMoment(jobId, mi, text, develop);
+    useCustomMoment(jobId, mi, text, false, takes);
   };
+  fan.onclick = () => go(true);
   quick.onclick = () => go(false);
-  dev.onclick = () => go(true);
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); go(false); }
+    if (e.key === 'Enter') { e.preventDefault(); go(true); }
   });
   return wrap;
 }
 
-async function useCustomMoment(jobId, mi, text, develop){
-  const body = baseParams(develop);
+async function useCustomMoment(jobId, mi, text, develop, takes = false){
+  const body = baseParams(develop, takes);
   body.set('moment', mi);
   body.set('custom', text);
   const r = await post(`/api/moments/${jobId}/use`, body);
   if (!r) return;
-  afterStart(r, develop);
+  afterStart(r, develop, takes);
 }
 
 async function digMoment(mi, cardEl){
@@ -877,18 +1024,18 @@ async function pollDig(jobId, deep){
 
 /* ---------- idea / facts / format / manual starts ---------- */
 document.getElementById('idea-text').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startIdea(false); }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startIdea(false, true); }
 });
 
-async function startIdea(develop){
+async function startIdea(develop, takes = false){
   const text = document.getElementById('idea-text').value;
   if (!text.trim()) return alert('Give the idea a line of text first.');
-  const body = baseParams(develop);
+  const body = baseParams(develop, takes);
   body.set('mode', 'idea');
   body.set('text', text);
   const r = await post('/api/create/start', body);
   if (!r) return;
-  afterStart(r, develop);
+  afterStart(r, develop, takes);
 }
 
 async function startFacts(){
@@ -912,8 +1059,8 @@ function pickMech(key, el){
     m.classList.toggle('sel', m.dataset.key === state.mech));
 }
 
-async function startBlank(develop, manual = false){
-  const body = baseParams(develop);
+async function startBlank(develop, manual = false, takes = false){
+  const body = baseParams(develop, takes);
   body.set('mode', 'blank');
   body.set('text', manual ? '' : document.getElementById('blank-text').value);
   if (!manual && state.mech) body.set('mechanic', state.mech);
@@ -927,7 +1074,7 @@ async function startBlank(develop, manual = false){
     openWriteStep(false);
     return;
   }
-  afterStart(r, develop);
+  afterStart(r, develop, takes);
 }
 function startManual(){ startBlank(false, true); }
 
@@ -1276,7 +1423,8 @@ async function openWriteStep(autoJump = true){
   document.getElementById('write-done').style.display = '';
   document.getElementById('write-meta').textContent =
     `${d.idea_id} · ${d.status}` + (d.mechanic ? ` · ${d.mechanic}` : '') +
-    (d.style ? ` · style: ${d.style}` : '');
+    (d.style ? ` · style: ${d.style}` : '') +
+    (d.take && d.take.title ? ` · take: ${d.take.title}` : '');
 
   // the swipe journey — the spine every slide is a beat of
   const tl = document.getElementById('write-throughline');
@@ -1704,7 +1852,16 @@ if (RESUME_IDEA) {
   nav = ['source'];
   (async () => {
     const d = await detail();
-    if (!d.slides.length && (d.active_jobs.concept || d.concept_brief)) { goDevelop(); }
+    // An unfinished fan-out (running, or done but nothing picked yet) resumes
+    // on the takes screen with its options intact.
+    const takesJob = d.active_jobs.takes ||
+      (d.last_takes_job && d.last_takes_job.status === 'COMPLETED' ? d.last_takes_job : null);
+    const hasTake = d.take && Object.keys(d.take).length;
+    if (!d.slides.length && takesJob && !hasTake &&
+        !d.active_jobs.build_one && !d.active_jobs.concept && !d.concept_brief) {
+      goTakes(takesJob.job_id);
+    }
+    else if (!d.slides.length && (d.active_jobs.concept || d.concept_brief)) { goDevelop(); }
     else if (!d.slides.length) { show('write'); pollBuild(); }
     else { openWriteStep(); }  // autoJump carries it on to images if they exist
   })();

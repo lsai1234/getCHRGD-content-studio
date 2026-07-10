@@ -251,6 +251,67 @@ def build_user_message(
     if performance_notes:
         lines.append(performance_notes)
         lines.append("")
+    prefs = creation_prefs(idea)
+    lines.extend(_seed_context(idea, prefs))
+
+    # A take the editor chose from a fan-out is the agreed direction — the
+    # full write must BE that take, not a fresh interpretation of the seed.
+    take = prefs.get("take")
+    if take:
+        lines.append("")
+        lines.append(
+            "CHOSEN TAKE — the editor saw several competing takes and picked "
+            "THIS one; the post must be this take executed brilliantly, not "
+            "a different interpretation:"
+        )
+        for key in ("title", "angle", "hook", "mechanic", "emotion",
+                    "share_identity", "sketch"):
+            if take.get(key):
+                lines.append(f"- {key}: {take[key]}")
+        if take.get("tweak"):
+            lines.append(
+                f"- EDITOR'S TWEAK (apply faithfully): {take['tweak']}"
+            )
+
+    # A concept brief the human developed and approved outranks free choice —
+    # the full write must follow the agreed direction.
+    brief = prefs.get("concept_brief")
+    if brief:
+        lines.append("")
+        lines.append(
+            "CONCEPT BRIEF — a human editor developed and approved this "
+            "direction with you; the full post MUST follow it:"
+        )
+        for key in ("angle", "hook_direction", "tone", "visual_direction"):
+            if brief.get(key):
+                lines.append(f"- {key}: {brief[key]}")
+        for i, step in enumerate(brief.get("outline") or [], 1):
+            lines.append(f"  slide {i}: {step}")
+
+    # An up-front length nudge from the editor. Soft by design: the Architect
+    # stage still owns the final count, this just tells it where to aim.
+    length = LENGTH_PREFS.get(prefs.get("length_pref", ""))
+    if length:
+        lines.append("")
+        lines.append(f"LENGTH: {length}")
+
+    if retry_reasons:
+        lines.append("")
+        lines.append(
+            "Your previous attempt failed QA/validation for these reasons — "
+            "fix them and return a stronger post:"
+        )
+        for reason in retry_reasons:
+            lines.append(f"- {reason}")
+
+    return "\n".join(lines)
+
+
+def _seed_context(idea: Idea, prefs: dict) -> list[str]:
+    """The seed's full context, shared by the fan-out (takes) and the build
+    so every stage reasons from the same brief: row fields, the cultural
+    moment it rides, any locked format, and the blank-canvas subject rules."""
+    lines: list[str] = []
     fields = {
         "idea_id": idea.idea_id,
         "content_category": idea.content_category,
@@ -265,11 +326,9 @@ def build_user_message(
         if value:
             lines.append(f"- {key}: {value}")
 
-    prefs = creation_prefs(idea)
-
     # A moment-anchored seed carries the full cultural moment it rides. The
     # account's biggest win (the 2am England-game post) worked because the
-    # moment was the star — so the build must keep that inversion explicit.
+    # moment was the star — so every stage must keep that inversion explicit.
     moment = prefs.get("moment")
     if moment:
         lines.append("")
@@ -291,22 +350,7 @@ def build_user_message(
             "under brand talk."
         )
 
-    # A concept brief the human developed and approved outranks free choice —
-    # the full write must follow the agreed direction.
-    brief = prefs.get("concept_brief")
-    if brief:
-        lines.append("")
-        lines.append(
-            "CONCEPT BRIEF — a human editor developed and approved this "
-            "direction with you; the full post MUST follow it:"
-        )
-        for key in ("angle", "hook_direction", "tone", "visual_direction"):
-            if brief.get(key):
-                lines.append(f"- {key}: {brief[key]}")
-        for i, step in enumerate(brief.get("outline") or [], 1):
-            lines.append(f"  slide {i}: {step}")
-
-    # A mechanic chosen up-front (create journey "blank canvas" door) constrains
+    # A mechanic chosen up-front (create journey "format" door) constrains
     # Stage 2 instead of leaving format selection free.
     lock = prefs.get("mechanic_lock")
     if lock:
@@ -340,23 +384,7 @@ def build_user_message(
             "pick again."
         )
 
-    # An up-front length nudge from the editor. Soft by design: the Architect
-    # stage still owns the final count, this just tells it where to aim.
-    length = LENGTH_PREFS.get(prefs.get("length_pref", ""))
-    if length:
-        lines.append("")
-        lines.append(f"LENGTH: {length}")
-
-    if retry_reasons:
-        lines.append("")
-        lines.append(
-            "Your previous attempt failed QA/validation for these reasons — "
-            "fix them and return a stronger post:"
-        )
-        for reason in retry_reasons:
-            lines.append(f"- {reason}")
-
-    return "\n".join(lines)
+    return lines
 
 
 def creation_prefs(idea: Idea) -> dict:
@@ -375,7 +403,7 @@ def creation_prefs(idea: Idea) -> dict:
         k: route[k]
         for k in (
             "style", "mechanic_lock", "render_mode", "concept_brief",
-            "length_pref", "moment",
+            "length_pref", "moment", "take",
         )
         if k in route
     }
@@ -701,12 +729,14 @@ def develop_concept(
     system = engine_base() + "\n" + BRIEF_CONTRACT
 
     lines = ["Develop the concept for this backlog row (do NOT write the full post):", ""]
-    for key in ("content_category", "target_viewer", "pain_point", "core_tension",
-                "concept_note", "learning_tag"):
-        value = getattr(idea, key)
-        if value:
-            lines.append(f"- {key}: {value}")
-    current = creation_prefs(idea).get("concept_brief")
+    prefs = creation_prefs(idea)
+    lines.extend(_seed_context(idea, prefs))
+    take = prefs.get("take")
+    if take:
+        lines += ["", "CHOSEN TAKE — the editor picked this direction from a "
+                      "fan-out; the brief must develop THIS take, not drift:",
+                  json.dumps(take, indent=2)]
+    current = prefs.get("concept_brief")
     if current:
         lines += ["", "Current brief (evolve it, don't start over):",
                   json.dumps(current, indent=2)]
@@ -791,6 +821,108 @@ def generate_angles(
     data = json.loads(result.content)
     angles = [Angle.model_validate(a) for a in data.get("angles", [])]
     return AnglesResult(angles=angles, spend_usd=spend)
+
+
+# --- the fan-out: competing takes before the expensive write -------------------
+#
+# The moment of highest leverage is "which concept" — and confidence comes from
+# CHOOSING between visibly different takes, not receiving one. Every non-manual
+# door runs this cheap divergence stage before the full six-stage write: one
+# call, several genuinely different takes, the human picks/steers, THEN we pay
+# for the build.
+
+TAKES_CONTRACT = """
+---
+
+## Output contract (STRICT — this run only)
+
+You are NOT writing a post this run. You are the DIVERGENCE stage: from the
+seed below, propose exactly {count} genuinely different takes a human editor
+will choose between. Rules:
+
+- Each take must run on a DIFFERENT ENGINE: a different virality mechanic, a
+  different target emotion, or a different person whose story it is. Never
+  rewordings of one idea. Test: if two of your takes could open with the same
+  slide 1, replace one of them.
+- Spread the risk: at least one safe-banker take, at least one unhinged-but-
+  clear take, at least one built primarily for comments/debate.
+- Run stage 0 on every take: name its high-arousal emotion and complete its
+  'sending this says ___ about me' line honestly. A take whose emotion is
+  'interested' doesn't belong in the list — replace it.
+- Honour the seed's constraints (cultural moment as the star, format lock,
+  claim safety) in every take.
+
+Return a SINGLE JSON object, nothing else:
+
+{{
+  "takes": [
+    {{
+      "title": "3-6 word label for the picker",
+      "angle": "the take in one sharp line — what the post IS",
+      "hook": "the slide-1 line this take opens with (final-copy quality)",
+      "mechanic": "one of the virality mechanics",
+      "emotion": "the high-arousal target emotion",
+      "share_identity": "sending this to a mate says ___ about me — completed",
+      "sketch": "the arc in 2-3 short beats, ' → ' separated",
+      "concept_note": "1-2 sentence buildable brief for the full write"
+    }}
+  ]
+}}
+Order by your honest bet on performance, strongest first.
+"""
+
+
+class Take(BaseModel):
+    """One competing direction from the fan-out — pickable before the build."""
+
+    title: str
+    angle: str = ""
+    hook: str = ""
+    mechanic: str = ""
+    emotion: str = ""
+    share_identity: str = ""
+    sketch: str = ""
+    concept_note: str = ""
+
+
+@dataclass
+class TakesResult:
+    takes: list[Take] = field(default_factory=list)
+    spend_usd: float = 0.0
+
+
+def generate_takes(
+    idea: Idea,
+    settings: Settings,
+    *,
+    count: int = 5,
+    feedback: str = "",
+    prior: list[dict] | None = None,
+    client: ChatClient | None = None,
+) -> TakesResult:
+    """One divergence round: seed (+ prior takes + editor feedback) → takes."""
+    if client is None:
+        client = OpenAIChatClient(settings)
+    system = engine_base() + "\n" + TAKES_CONTRACT.format(count=count)
+
+    lines = ["Propose competing takes for this seed:", ""]
+    lines.extend(_seed_context(idea, creation_prefs(idea)))
+    if prior:
+        lines += ["", "TAKES ALREADY SHOWN (the editor passed on all of these "
+                      "— every new take must differ from them too):"]
+        for t in prior:
+            lines.append(f"- {t.get('title', '')}: {t.get('angle', '')}")
+    if feedback.strip():
+        lines += ["", "EDITOR FEEDBACK on what's missing — aim the new takes "
+                      "at this:", feedback.strip()]
+
+    result = client.complete(system, "\n".join(lines))
+    spend = estimate_cost(
+        settings.openai_model, result.prompt_tokens, result.completion_tokens
+    )
+    data = json.loads(result.content)
+    takes = [Take.model_validate(t) for t in data.get("takes", [])]
+    return TakesResult(takes=takes[:count], spend_usd=spend)
 
 
 # --- targeted revision (the scorecard's "punch it up") ------------------------

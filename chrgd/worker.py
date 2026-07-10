@@ -175,6 +175,46 @@ def _handle_angles(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_takes(store: Store, settings: Settings, job: dict) -> dict:
+    """Fan-out: competing takes on one seed, before the expensive write.
+
+    A re-fan (same idea, new round) automatically carries the takes the
+    editor already passed on, so fresh rounds diverge instead of repeating.
+    """
+    from .pipeline import generate_takes
+
+    params = json.loads(job["params_json"] or "{}")
+    idea = store.get_idea(job["idea_id"])
+    if idea is None:
+        raise ValueError(f"no such idea {job['idea_id']}")
+
+    prior: list[dict] = []
+    row = store.conn.execute(
+        "SELECT result_json FROM jobs WHERE idea_id = ? AND kind = 'takes' "
+        "AND status = 'COMPLETED' AND job_id != ? ORDER BY job_id DESC LIMIT 1",
+        (idea.idea_id, job["job_id"]),
+    ).fetchone()
+    if row and row["result_json"]:
+        prior = json.loads(row["result_json"]).get("takes", [])
+
+    store.update_job(
+        job["job_id"], progress=20,
+        result_json=json.dumps({"note": "sketching genuinely different takes"}),
+    )
+    result = generate_takes(
+        idea, settings,
+        count=int(params.get("count", 5)),
+        feedback=str(params.get("feedback", "")),
+        prior=prior or None,
+    )
+    run_id = store.start_run("takes")
+    store.finish_run(run_id, spend_usd=round(result.spend_usd, 4), notes=idea.idea_id)
+    return {
+        "takes": [t.model_dump(mode="json") for t in result.takes],
+        "spend_usd": result.spend_usd,
+    }
+
+
 def _handle_revise(store: Store, settings: Settings, job: dict) -> dict:
     """Targeted 'punch it up' revision on one QA metric."""
     from .pipeline import build_fields_from_post, creation_prefs, revise_post
@@ -352,6 +392,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "render": _handle_render,
     "render_slide": _handle_render_slide,
     "angles": _handle_angles,
+    "takes": _handle_takes,
     "revise": _handle_revise,
     "video": _handle_video,
     "trends": _handle_trends,
@@ -428,6 +469,17 @@ def enqueue_build_one(store: Store, idea_id: str) -> int:
 
 def enqueue_angles(store: Store, *, facts: str, per_fact: int = 3) -> int:
     return store.create_job("angles", params={"facts": facts, "per_fact": per_fact})
+
+
+def enqueue_takes(
+    store: Store, idea_id: str, *, feedback: str = "", count: int = 5
+) -> int:
+    existing = store.active_job_for(idea_id, "takes")
+    if existing and not feedback:
+        return existing["job_id"]
+    return store.create_job(
+        "takes", idea_id=idea_id, params={"feedback": feedback, "count": count}
+    )
 
 
 def enqueue_revise(store: Store, idea_id: str, *, focus: str) -> int:

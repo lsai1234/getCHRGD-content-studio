@@ -1310,3 +1310,155 @@ def test_psych_block_survives_build_and_reaches_detail(client, settings):
         store.add_idea(Idea(idea_id="G-0002", concept_note="y"))
         build_single_idea(store, settings, "G-0002", client=FakeChat([good_post()]))
     assert client.get("/api/ideas/G-0002/detail").json()["psych"] == {}
+
+
+# --- the fan-out: competing takes before the expensive write ---------------------
+
+TAKES_PAYLOAD = {
+    "takes": [
+        {"title": "The 40-min hogger exposed", "angle": "identity callout",
+         "hook": "you know exactly who this is", "mechanic": "identity_exposure",
+         "emotion": "recognition-shock",
+         "share_identity": "I notice what really goes on in our gym",
+         "sketch": "callout → the tell-tale signs → tag him",
+         "concept_note": "callout carousel about rack hoggers"},
+        {"title": "Rack economics", "angle": "absurd maths take",
+         "hook": "40 minutes × 3 sets = a mortgage on the rack",
+         "mechanic": "visual_mind_bend", "emotion": "amusement",
+         "share_identity": "I'm the funny one in the chat",
+         "sketch": "absurd premise → escalating maths → punchline",
+         "concept_note": "surreal maths of hogging the rack"},
+    ]
+}
+
+
+def test_generate_takes_carries_seed_and_prior(settings):
+    from chrgd.pipeline import generate_takes
+
+    idea = Idea(
+        idea_id="G-0001",
+        concept_note="gym bros who hog the squat rack",
+        route_json=json.dumps({"moment": {"title": "Heatwave", "why": "melting"}}),
+    )
+    fake = FakeChat([TAKES_PAYLOAD])
+    result = generate_takes(
+        idea, settings, feedback="less jokey",
+        prior=[{"title": "Old take", "angle": "already shown"}],
+        client=fake,
+    )
+    assert [t.title for t in result.takes][1] == "Rack economics"
+    assert result.spend_usd > 0
+    system, user = fake.calls[0]
+    assert "DIVERGENCE" in system            # the contract, not the build
+    assert "gym bros who hog" in user        # seed context
+    assert "SHARED CULTURAL MOMENT" in user  # moment travels into the fan-out
+    assert "Old take" in user                # prior takes excluded from repeats
+    assert "less jokey" in user              # editor steer
+
+
+def test_worker_takes_job_and_refan_carries_prior(settings, store, monkeypatch):
+    import chrgd.pipeline as pl
+    from chrgd.pipeline import Take, TakesResult
+    from chrgd.worker import Worker, enqueue_takes
+
+    seen = []
+
+    def fake_takes(idea, s, *, count=5, feedback="", prior=None, client=None):
+        seen.append({"feedback": feedback, "prior": prior})
+        return TakesResult(
+            takes=[Take.model_validate(t) for t in TAKES_PAYLOAD["takes"]],
+            spend_usd=0.01,
+        )
+
+    monkeypatch.setattr(pl, "generate_takes", fake_takes)
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    worker = Worker(settings)
+
+    job1 = enqueue_takes(store, "G-0001")
+    # Idempotent while the round is still pending.
+    assert enqueue_takes(store, "G-0001") == job1
+    worker.run_once()
+    job = store.get_job(job1)
+    assert job["status"] == "COMPLETED"
+    assert len(json.loads(job["result_json"])["takes"]) == 2
+    assert seen[0]["prior"] is None  # first round has nothing to avoid
+
+    job2 = enqueue_takes(store, "G-0001", feedback="something warmer")
+    assert job2 != job1
+    worker.run_once()
+    assert seen[1]["feedback"] == "something warmer"
+    # The re-fan carries round 1's takes so round 2 can't repeat them.
+    assert seen[1]["prior"][0]["title"] == "The 40-min hogger exposed"
+
+
+def test_takes_endpoints_pick_constrains_the_build(client, settings):
+    # Door opens with takes: seed + fan-out job, no build yet.
+    r = client.post(
+        "/api/create/start",
+        data={"mode": "idea", "text": "rack hoggers", "takes": "true"},
+    ).json()
+    assert r["takes"] is True
+    idea_id, takes_job = r["idea_id"], r["job_id"]
+    with Store(settings.db_path) as store:
+        job = store.get_job(takes_job)
+        assert job["kind"] == "takes"
+        # Simulate the worker completing the fan-out.
+        store.update_job(takes_job, status="COMPLETED",
+                         result_json=json.dumps(TAKES_PAYLOAD))
+
+    # Resume support: detail exposes the latest fan-out round.
+    d = client.get(f"/api/ideas/{idea_id}/detail").json()
+    assert d["last_takes_job"]["job_id"] == takes_job
+    assert d["last_takes_job"]["status"] == "COMPLETED"
+
+    # Pick take 2 with a tweak → stored on the idea + build queued.
+    r2 = client.post(
+        f"/api/ideas/{idea_id}/takes/{takes_job}/pick",
+        data={"index": "1", "tweak": "make it about leg day queues"},
+    ).json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(idea_id)
+        assert store.get_job(r2["job_id"])["kind"] == "build_one"
+    take = json.loads(idea.route_json)["take"]
+    assert take["title"] == "Rack economics"
+    assert take["tweak"] == "make it about leg day queues"
+
+    # The chosen take (and the editor's tweak) constrain the full write.
+    msg = build_user_message(idea)
+    assert "CHOSEN TAKE" in msg
+    assert "Rack economics" in msg
+    assert "make it about leg day queues" in msg
+
+    # Bad picks are rejected.
+    assert client.post(
+        f"/api/ideas/{idea_id}/takes/{takes_job}/pick", data={"index": "9"}
+    ).status_code == 400
+    assert client.post(
+        f"/api/ideas/{idea_id}/takes/999999/pick", data={"index": "0"}
+    ).status_code == 404
+
+
+def test_take_survives_build_route_overwrite(settings, store):
+    route = {"take": {"title": "Rack economics", "angle": "absurd maths"}}
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x",
+                        route_json=json.dumps(route)))
+    build_single_idea(store, settings, "G-0001", client=FakeChat([good_post()]))
+    saved = json.loads(store.get_idea("G-0001").route_json)
+    assert saved["take"]["title"] == "Rack economics"
+
+
+def test_moments_use_can_fan_out_to_takes(client, settings):
+    job_id = client.post("/api/jobs/moments").json()["job_id"]
+    with Store(settings.db_path) as store:
+        store.update_job(job_id, status="COMPLETED",
+                         result_json=json.dumps(MOMENTS_PAYLOAD))
+    r = client.post(
+        f"/api/moments/{job_id}/use",
+        data={"moment": "0", "angle": "0", "takes": "true"},
+    ).json()
+    assert r["takes"] is True
+    with Store(settings.db_path) as store:
+        assert store.get_job(r["job_id"])["kind"] == "takes"
+        # The moment still rides the seed, so the fan-out sees it too.
+        idea = store.get_idea(r["idea_id"])
+    assert json.loads(idea.route_json)["moment"]["title"].startswith("Heatwave")
