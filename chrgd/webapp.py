@@ -10,6 +10,7 @@ Run it:  `chrgd serve`  (installs: `pip install -e '.[web]'`).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 from contextlib import asynccontextmanager
@@ -81,13 +82,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     app.state.settings = settings
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+    secret_seed = settings.secret_key or secrets.token_hex(32)
     app.add_middleware(
         SessionMiddleware,
-        secret_key=settings.secret_key or secrets.token_hex(32),
+        secret_key=secret_seed,
         session_cookie="chrgd_session",
         same_site="lax",
         https_only=False,  # Caddy terminates TLS; set true if serving TLS direct
     )
+    # Unguessable path segment for the login-free /media/ route (Metricool's
+    # bulk import fetches images itself, so those URLs can't sit behind the
+    # session). Derived from the secret key so links survive restarts —
+    # production must set CHRGD_SECRET_KEY or exported URLs go stale.
+    media_token = hashlib.sha256(f"chrgd-media:{secret_seed}".encode()).hexdigest()[:24]
+    app.state.media_token = media_token
 
     # --- auth helpers -------------------------------------------------------
 
@@ -194,6 +202,35 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "assets": assets,
         }
 
+    # --- public media (Metricool URL-mode imports) ----------------------------
+
+    @app.get("/media-pub/{token}/{filename}")
+    def public_media(token: str, filename: str):
+        """Serve an exported ready/ image without a login.
+
+        Metricool's bulk importer fetches media itself, so these URLs must
+        work unauthenticated. Security: the unguessable token is compared in
+        constant time, only files inside output/ready are reachable (no
+        traversal), and only image types are served."""
+        if not secrets.compare_digest(token, media_token):
+            raise HTTPException(status_code=404, detail="not found")
+        target = _safe_output_path(settings, "ready", filename)
+        if target.suffix.lower() not in (".jpg", ".jpeg", ".webp", ".png"):
+            raise HTTPException(status_code=404, detail="not found")
+        return FileResponse(target)
+
+    def _metricool_publisher(request: Request):
+        """The CSV publisher, with URL-mode media auto-pointed at this
+        studio's public /media/ route when no external host is configured."""
+        from .publisher import get_publisher
+
+        publisher = get_publisher("metricool_csv")
+        fmt = publisher.cols.format
+        if fmt.media_reference == "url" and not fmt.media_base_url:
+            base = str(request.base_url).rstrip("/")
+            fmt.media_base_url = f"{base}/media-pub/{media_token}"
+        return publisher
+
     # --- pages (HTML) -------------------------------------------------------
 
     @app.get("/", response_class=HTMLResponse)
@@ -296,9 +333,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.get("/export", response_class=HTMLResponse)
     def export_page(request: Request, sample: int = 0, _: str = Depends(require_user_page)):
-        from .publisher import get_publisher
-
-        publisher = get_publisher("metricool_csv")
+        publisher = _metricool_publisher(request)
         if sample:
             publisher.write_sample(settings)
             return RedirectResponse("/export?flash=Sample+CSV+written+to+ready/", 303)
@@ -344,9 +379,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.post("/export")
     def export_run(request: Request, _: str = Depends(require_user_page)):
-        from .publisher import get_publisher
-
-        publisher = get_publisher("metricool_csv")
+        publisher = _metricool_publisher(request)
         limit = publisher.cols.schedule.per_day * 7
         with _store(settings) as store:
             result = publisher.export(store, settings, limit=limit)
@@ -1389,17 +1422,16 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.post("/api/export/range")
     def api_export_range(
+        request: Request,
         date_from: str = Form(...), date_to: str = Form(...), _: str = Depends(require_user)
     ):
         """Calendar 'export week': Metricool CSV for posts scheduled in-range."""
-        from .publisher import get_publisher
-
         try:
             start = datetime.fromisoformat(date_from)
             end = datetime.fromisoformat(date_to) + timedelta(days=1)  # inclusive
         except ValueError:
             raise HTTPException(400, "bad date range")
-        publisher = get_publisher("metricool_csv")
+        publisher = _metricool_publisher(request)
         with _store(settings) as store:
             result = publisher.export(store, settings, date_from=start, date_to=end)
         return {
@@ -1445,10 +1477,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         return job
 
     @app.post("/api/export")
-    def api_export(week: bool = True, limit: int | None = None, _: str = Depends(require_user)):
-        from .publisher import get_publisher
-
-        publisher = get_publisher("metricool_csv")
+    def api_export(
+        request: Request,
+        week: bool = True, limit: int | None = None, _: str = Depends(require_user),
+    ):
+        publisher = _metricool_publisher(request)
         if limit is None and week:
             limit = publisher.cols.schedule.per_day * 7
         with _store(settings) as store:

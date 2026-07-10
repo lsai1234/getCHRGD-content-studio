@@ -1744,3 +1744,86 @@ def test_manual_meta_rescan_endpoint(client, settings):
     assert r["kind"] == "meta_scan"
     # Idempotent while one is pending.
     assert client.post("/api/jobs/meta").json()["job_id"] == r["job_id"]
+
+
+# --- public media route: full-auto Metricool URL-mode imports --------------------
+
+
+def _make_rendered(settings, store, idea_id, when):
+    from PIL import Image as PILImage
+
+    slides = json.dumps(good_post()["slides"])
+    out = settings.output_dir / idea_id
+    out.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for i in range(5):
+        p = out / f"slide_{i + 1}.jpg"
+        PILImage.new("RGB", (10, 12)).save(p, "JPEG")
+        paths.append(str(p))
+    store.add_idea(Idea(idea_id=idea_id, concept_note=idea_id, slides_json=slides,
+                        caption="c", hashtags=json.dumps(["#g"])))
+    store.save_build(idea_id, {"slides_json": slides})
+    store.save_asset_paths(idea_id, paths)
+    if when:
+        store.set_schedule(idea_id, when)
+
+
+def test_public_media_route_serves_ready_images_without_login(settings):
+    from PIL import Image as PILImage
+
+    settings.ensure_dirs()
+    ready = settings.output_dir / "ready"
+    ready.mkdir(parents=True, exist_ok=True)
+    PILImage.new("RGB", (10, 12)).save(ready / "G-0001_slide_1.jpg", "JPEG")
+    (ready / "metricool_x.csv").write_text("secret,rows")
+
+    app = create_app(settings)
+    token = app.state.media_token
+    c = TestClient(app)  # deliberately NOT logged in
+
+    ok = c.get(f"/media-pub/{token}/G-0001_slide_1.jpg")
+    assert ok.status_code == 200
+    assert ok.headers["content-type"].startswith("image/")
+    # Wrong token, non-image files, and traversal all 404.
+    assert c.get(f"/media-pub/{'0' * 24}/G-0001_slide_1.jpg").status_code == 404
+    assert c.get(f"/media-pub/{token}/metricool_x.csv").status_code == 404
+    assert c.get(f"/media-pub/{token}/..%2Ft.db").status_code == 404
+    # Token is stable across restarts (same secret key → same links).
+    assert create_app(settings).state.media_token == token
+
+
+def test_url_mode_export_uses_studio_media_route(client, settings, monkeypatch):
+    import chrgd.publisher as pub
+
+    cols = pub.load_columns()
+    cols.format.media_reference = "url"
+    cols.format.media_base_url = ""  # empty → auto-fill from the studio host
+    monkeypatch.setattr(pub, "load_columns", lambda path=None: cols)
+
+    with Store(settings.db_path) as store:
+        _make_rendered(settings, store, "G-0001", datetime(2027, 3, 2, 18, 0))
+    r = client.post(
+        "/api/export/range", data={"date_from": "2027-03-01", "date_to": "2027-03-07"}
+    ).json()
+    assert r["exported"] == ["G-0001"]
+
+    token = client.app.state.media_token
+    csv_text = open(r["csv_path"], encoding="utf-8").read()
+    url = f"http://testserver/media-pub/{token}/G-0001_slide_1.jpg"
+    assert url in csv_text
+    # The URL in the CSV actually resolves, without a login, to the image.
+    fresh = TestClient(client.app)
+    got = fresh.get(f"/media-pub/{token}/G-0001_slide_1.jpg")
+    assert got.status_code == 200 and got.headers["content-type"].startswith("image/")
+
+
+def test_filename_mode_export_untouched_by_media_route(client, settings):
+    # Default config stays filename-mode: bare names, no URLs.
+    with Store(settings.db_path) as store:
+        _make_rendered(settings, store, "G-0001", datetime(2027, 3, 2, 18, 0))
+    r = client.post(
+        "/api/export/range", data={"date_from": "2027-03-01", "date_to": "2027-03-07"}
+    ).json()
+    csv_text = open(r["csv_path"], encoding="utf-8").read()
+    assert "G-0001_slide_1.jpg" in csv_text
+    assert "/media-pub/" not in csv_text

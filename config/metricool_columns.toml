@@ -12,7 +12,11 @@ datetime_format = "%d/%m/%Y %H:%M"
 caption_max_length = 2200
 # How media is referenced in the CSV:
 #   "filename" -> local file in ready/ (attach manually in Metricool), or
-#   "url"      -> public URL (set media_base_url below).
+#   "url"      -> public URL, so Metricool fetches every image itself and the
+#                 import is fully hands-off. Set media_base_url to your own
+#                 host, or LEAVE IT EMPTY and web exports automatically use
+#                 the studio's built-in login-free /media/ route (requires
+#                 CHRGD_SECRET_KEY to be set so the links survive restarts).
 media_reference = "filename"
 media_base_url = ""          # e.g. https://cdn.example.com/chrgd/  (url mode)
 # Value written into a network column when that network is targeted.
