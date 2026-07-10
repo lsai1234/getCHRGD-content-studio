@@ -441,6 +441,45 @@ def test_compose_design_prompt_places_copy_as_typography():
     assert "no text, no words" not in prompt.lower()
 
 
+def test_design_prompt_carries_shared_system_and_continuity():
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    brand = load_brand()
+    slides = [
+        Slide(headline=f"H{i}", supporting="s", image_prompt="scene",
+              visual_intent=f"frame {i} subject", role="hook" if i == 0 else "escalation")
+        for i in range(5)
+    ]
+    design_system = {
+        "palette": "acid yellow on charcoal",
+        "type_style": "condensed uppercase grotesk",
+        "motif": "the same gym bro in a yellow vest",
+        "layout": "headline top third, subject centred",
+        "evolution": "the palette heats toward red as it escalates",
+    }
+
+    # Middle frame: must restate the shared system, reference the previous
+    # frame for continuity, carry the evolution beat and a progress indicator.
+    mid = compose_design_prompt(
+        slides[2], brand, None, slides=slides, index=2, design_system=design_system
+    )
+    assert "SHARED CAROUSEL DESIGN SYSTEM" in mid
+    assert "acid yellow on charcoal" in mid
+    assert "the same gym bro in a yellow vest" in mid
+    assert "frame 3 of 5" in mid
+    assert "frame 1 subject" in mid  # continues from the previous slide (index 1)
+    assert "heats toward red" in mid  # evolution beat
+    assert "3 of 5" in mid or "dot 3" in mid or "5 dots" in mid or "progress" in mid.lower()
+
+    # Opening frame establishes the world instead of referencing a previous one.
+    first = compose_design_prompt(
+        slides[0], brand, None, slides=slides, index=0, design_system=design_system
+    )
+    assert "OPENING frame" in first
+    assert "frame 1 of 5" in first
+
+
 def test_ai_design_render_uses_model_output_verbatim(settings, monkeypatch):
     from PIL import Image as PILImage
 
@@ -465,6 +504,31 @@ def test_ai_design_render_uses_model_output_verbatim(settings, monkeypatch):
     out = PILImage.open(result.path)
     px = out.getpixel((540, 675))
     assert all(abs(a - b) <= 3 for a, b in zip(px, (12, 200, 34))), px
+
+
+def test_render_slide_threads_design_system_from_route(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    prompts = []
+    monkeypatch.setattr(
+        images, "_generate_background",
+        lambda prompt, *a, **k: (prompts.append(prompt), PILImage.new("RGB", (1080, 1350)))[1],
+    )
+    idea = make_built_idea(render_mode="ai_design")
+    route = json.loads(idea.route_json)
+    route["design_system"] = {"palette": "cobalt on bone", "motif": "one battered kettlebell"}
+    idea.route_json = json.dumps(route)
+
+    images.render_slide(idea, 3, settings, dry_run=False)
+    # The real image prompt carried the shared design system + sequence
+    # position, so every generated slide belongs to one continuous set.
+    assert "SHARED CAROUSEL DESIGN SYSTEM" in prompts[0]
+    assert "cobalt on bone" in prompts[0]
+    assert "one battered kettlebell" in prompts[0]
+    assert "frame 4 of 5" in prompts[0]
 
 
 def test_pick_variant_promotes_canonical(settings):

@@ -46,12 +46,22 @@ class DecaySpeed(str, Enum):
 
 
 class Slide(BaseModel):
-    """One carousel slide: approved copy plus its visual brief."""
+    """One carousel slide: approved copy plus its visual brief.
+
+    `role` and `swipe_trigger` carry the slide's place in the narrative arc so
+    the set reads as one journey rather than parallel restatements of a theme:
+      * ``role`` — what this beat does (hook / recognition / escalation /
+        payoff / cta). Drives both the copy and the visual treatment.
+      * ``swipe_trigger`` — the open loop this slide leaves dangling: the
+        specific reason the viewer swipes to the *next* slide.
+    """
 
     headline: str
     supporting: str = ""
     image_prompt: str = ""
     visual_intent: str = ""
+    role: str = ""
+    swipe_trigger: str = ""
 
 
 # Carousel length bounds. The engine picks the count per idea (a meme might

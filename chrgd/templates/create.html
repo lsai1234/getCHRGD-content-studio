@@ -149,6 +149,23 @@
   .acc-item.open .acc-head .acc-c { transform: rotate(180deg); }
   .acc-body { display: none; padding: 2px 14px 14px; border-top: 1px solid var(--line); }
   .acc-item.open .acc-body { display: block; }
+  /* slide-role tag: the beat this slide plays in the arc */
+  .role-tag { flex-shrink: 0; font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+              padding: 2px 8px; border-radius: 20px; vertical-align: middle;
+              background: var(--accent-tint); color: var(--accent2);
+              border: 1px solid var(--accent-line); }
+  .role-tag.role-hook { background: rgba(79,195,247,.18); }
+  .role-tag.role-payoff { color: var(--good); border-color: rgba(86,211,100,.5);
+                          background: rgba(86,211,100,.12); }
+  .role-tag.role-cta { color: var(--warn); border-color: rgba(227,179,65,.5);
+                       background: rgba(227,179,65,.12); }
+  /* the through-line: the single journey the swipe takes the viewer on */
+  .throughline { font-size: 13px; color: var(--fg); margin: -6px 0 14px;
+                 padding: 9px 13px; border-radius: 10px;
+                 background: linear-gradient(180deg, var(--accent-tint), transparent);
+                 border: 1px solid var(--line); border-left: 2px solid var(--accent); }
+  .throughline .tl-k { font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: .05em; color: var(--accent); margin-right: 8px; }
 
   /* hook option cards */
   .hookopt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
@@ -417,6 +434,7 @@
     <div id="write-done" style="display:none">
       <h2>How does it read?</h2>
       <p class="meta-line" id="write-meta"></p>
+      <p class="throughline" id="write-throughline" style="display:none"></p>
 
       <div class="qa-strip" id="qa-grid"></div>
 
@@ -1164,6 +1182,18 @@ function slidePreview(s, i){
   return h ? esc(h) : `<span class="dim">slide ${i+1} — tap to write it</span>`;
 }
 
+// The slide's beat in the arc (hook → recognition → escalation → payoff → cta),
+// shown as a small tag so the journey is visible at a glance.
+const ROLE_LABELS = {
+  hook: 'Hook', recognition: 'That’s me', escalation: 'Escalate',
+  payoff: 'Payoff', cta: 'Call to act',
+};
+function roleTag(role){
+  const r = (role || '').trim().toLowerCase();
+  if (!r) return '';
+  return ` <span class="role-tag role-${esc(r)}">${esc(ROLE_LABELS[r] || r)}</span>`;
+}
+
 /* The slide list is flexible — 1 to 10 slides, add and remove freely. The
    DOM is the source of truth; indexes renumber on every change and saveCopy
    sends slide_count so the server resizes to match. */
@@ -1174,6 +1204,7 @@ function slideAccItem(s, i){
     <button type="button" class="acc-head" onclick="toggleAcc(this)">
       <span class="acc-n">${i+1}</span>
       <span class="acc-p">${slidePreview(s, i)}</span>
+      ${roleTag(s.role)}
       <span class="acc-c">▾</span>
     </button>
     <div class="acc-body">
@@ -1240,6 +1271,13 @@ async function openWriteStep(autoJump = true){
   document.getElementById('write-meta').textContent =
     `${d.idea_id} · ${d.status}` + (d.mechanic ? ` · ${d.mechanic}` : '') +
     (d.style ? ` · style: ${d.style}` : '');
+
+  // the swipe journey — the spine every slide is a beat of
+  const tl = document.getElementById('write-throughline');
+  if (d.throughline) {
+    tl.innerHTML = `<span class="tl-k">The journey</span> ${esc(d.throughline)}`;
+    tl.style.display = '';
+  } else { tl.style.display = 'none'; }
 
   // scorecard chips
   const grid = document.getElementById('qa-grid');

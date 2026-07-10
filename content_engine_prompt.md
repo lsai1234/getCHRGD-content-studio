@@ -54,7 +54,7 @@ Lock the final hook. A hook is a thumb-stopping trigger, not a title. It must la
 
 Don't force ideas into buckets; pick the length where the last slide is still earning its swipe. If the editor asked for a rough length, honour it unless it clearly breaks the idea — then get as close as the idea allows.
 
-Build the carousel like a short TikTok sketch/argument/reveal broken into stills. These are the *jobs* a carousel covers — compress several into one slide on short posts, give them room on long ones:
+Build the carousel like a short TikTok sketch/argument/reveal broken into stills — **one continuous story, not a themed pack of parallel facts.** These are the *jobs* a carousel covers — compress several into one slide on short posts, give them room on long ones:
 1. **Hook / pattern interrupt** — strong claim, callout, or visual premise. Opens a loop.
 2. **Recognition / problem** — "this is about me / someone I know."
 3. **Escalation / mechanism** — the twist, proof, absurdity, or social truth behind it.
@@ -62,6 +62,10 @@ Build the carousel like a short TikTok sketch/argument/reveal broken into stills
 5. **Interaction / CTA** — reopen the loop socially: "which one are you?", "who does this?", "rank them," "what did I miss?"
 
 (A 1–2 slide post still needs a hook and a social action — they just live in the same frame.)
+
+**Lock the through-line first.** Before writing any slide, decide the single journey the swipe takes the viewer on — the spine. Then make every slide a *beat* on that spine, in rising order. Give each slide an explicit `role` (hook / recognition / escalation / payoff / cta) and a `swipe_trigger`: the open loop it leaves dangling so the viewer *has* to swipe to the next slide. **Test: if any slide could be slide 1, or if the slides could be reordered without loss, the arc is broken — rewrite so each slide depends on the one before it and escalates.** The final slide's trigger is the social action.
+
+**Design the visual system once, up front (`design_system`).** A journey is carried by the design as much as the words. Decide ONE look the whole set shares — a single `palette`, one `type_style`, a recurring `motif` (the SAME character/subject/object that reappears every frame), a shared `layout` grid — and how that look `evolution`s as tension rises (colour heats up, the character's state shifts, the composition tightens, a progress motif fills). Every slide is a *frame* of this one system, never a standalone poster. This is what makes the images feel like one designed sequence when you swipe.
 
 Each slide must raise emotional involvement and leave a reason to swipe. Vary the rhythm across the set. Short, mobile-readable lines. Write like a sharp group-chat observation, not a fitness blog. Every slide needs a concrete **visual_intent**: subject, specific UK gym/supplement setting, visible action/tension, key prop, one double-take detail.
 
@@ -71,9 +75,9 @@ Score 0–10: hook, swipe_loop, identity_recognition, group_chat_share, comment_
 **Thresholds:** overall 8+, hook 8+, visual_originality 8+, and at least one of group_chat_share / comment_fight / saveability / dopamine_density at 8+. If anything fails, **revise directly** — preserve the source idea, shorten, sharpen, add a stronger trigger and a clearer social action, make visuals more concrete. Auto-fail triggers: "fair point" reaction, generic hook, generic CTA, generic visual (person lifting / supplement tub / neon / smiling athlete / vague cinematic), too educational for a humour row, too safe to spark comments, repeated slide rhythm, fake slang, corporate fitness language, any medical/guaranteed claim, important text in lower third or right edge.
 
 ### 6. Visual direction + image prompts
-For each slide, write one image-generation prompt. The image must create **prediction error**: viewer instantly gets the topic but sees it represented unexpectedly. Slide 1 must be the strongest visual, not just the strongest text. Vary framing across the set (wide / close-up / surreal-explainer / payoff / CTA). One strong idea per slide, no clutter.
+For each slide, write one image-generation prompt **as a single frame of the `design_system` locked in stage 4** — same palette, same type treatment, same recurring motif/character, same layout grid as every other slide. The set must look like one designed sequence, not five separate posts. The image must create **prediction error**: viewer instantly gets the topic but sees it represented unexpectedly. Slide 1 is the strongest visual and establishes the world; every later slide continues that exact world. Vary framing *within* the shared system (wide / close-up / surreal-explainer / payoff / CTA) — vary the shot, never the visual language. One strong idea per slide, no clutter.
 
-Prompt content per slide: exact slide role, the approved headline + supporting text, scene grammar (subject, setting, action, prop, camera angle, foreground/midground/background), text placement + safe-zone instruction, lighting/atmosphere, brand feel, continuity with the rest of the carousel, one double-take detail, explicit negatives. Use **only** the approved slide text — add no other words. If the image model struggles with text, prioritise clean negative space for overlay rather than inventing text.
+Each image renderer generates its slide **blind to the others**, so continuity must be written in words. Prompt content per slide: exact slide role, the approved headline + supporting text, the shared palette/type/motif/grid restated so it stays identical, **what has visibly CHANGED from the previous frame (the `evolution` beat) so the swipe shows motion/escalation**, scene grammar (subject, setting, action, prop, camera angle, foreground/midground/background), text placement + safe-zone instruction, lighting/atmosphere, brand feel, one double-take detail, explicit negatives. Use **only** the approved slide text — add no other words. If the image model struggles with text, prioritise clean negative space rather than inventing text.
 
 ---
 

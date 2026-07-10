@@ -166,7 +166,8 @@ _DESIGN_TEXT_RULES = (
     "\n- Use EXACTLY the text provided above, spelled correctly, complete —"
     " never truncate, abbreviate or cut off a word."
     "\n- Do not add any extra words, labels, logos, captions, watermarks,"
-    " UI elements, page numbers or random text."
+    " numeric page numbers or random text. The ONLY non-copy graphic allowed"
+    " is the small progress-dot indicator described above (dots, not numbers)."
     "\n- Make the text large, high-contrast and readable at a glance on a phone."
 )
 
@@ -196,18 +197,113 @@ def compose_image_prompt(slide_prompt: str, brand: Brand, style: str | None) -> 
     return " ".join(parts)
 
 
-def compose_design_prompt(slide: Slide, brand: Brand, style: str | None) -> str:
+_DESIGN_SYSTEM_KEYS = (
+    ("palette", "Colour palette"),
+    ("type_style", "Typography"),
+    ("motif", "Recurring motif / character"),
+    ("layout", "Layout grid"),
+)
+
+
+def _design_system_block(design_system: dict | None) -> str:
+    """The shared visual language, restated on every slide's prompt.
+
+    gpt-image-2 generates each slide blind to the others, so the only way the
+    set reads as one designed sequence (rather than five unrelated posters) is
+    to describe the shared world in words on every single frame.
+    """
+    ds = design_system or {}
+    lines = [f"- {label}: {ds[key]}" for key, label in _DESIGN_SYSTEM_KEYS if ds.get(key)]
+    if not lines:
+        return ""
+    return (
+        "SHARED CAROUSEL DESIGN SYSTEM — IDENTICAL on every slide in this set so "
+        "the whole carousel reads as ONE cohesive piece, not separate posts. "
+        "Reproduce this exact visual language here:\n" + "\n".join(lines)
+    )
+
+
+def _sequence_block(
+    slide: Slide,
+    slides: list[Slide] | None,
+    index: int,
+    design_system: dict | None,
+) -> str:
+    """Where this frame sits in the swipe journey + how it continues/evolves."""
+    if not slides or len(slides) <= 1:
+        return ""
+    total = len(slides)
+    ds = design_system or {}
+    out = [f"SEQUENCE & CONTINUITY: this is frame {index + 1} of {total}."]
+    if slide.role:
+        out.append(f"Its role in the story is: {slide.role}.")
+    if index == 0:
+        out.append(
+            "This is the OPENING frame — it establishes the world, palette, "
+            "type treatment and recurring motif that every following slide will "
+            "continue exactly."
+        )
+    else:
+        prev = slides[index - 1]
+        prev_ref = (prev.visual_intent or prev.headline or "the previous frame").strip()
+        out.append(
+            f"The previous frame showed: {prev_ref}. Continue the SAME world, the "
+            "SAME recurring character/motif, the SAME palette and type treatment — "
+            "this must look like the very next frame of that sequence, never a new "
+            "design."
+        )
+    if ds.get("evolution"):
+        out.append(
+            "Show visible motion from the last frame — how the design escalates as "
+            f"the story builds: {ds['evolution']}"
+        )
+    if index + 1 < total:
+        out.append(
+            "Leave clear visual momentum pulling the viewer to swipe to the next "
+            "frame; do not resolve everything here."
+        )
+    out.append(
+        f"Include a small, consistent progress indicator in the same corner on "
+        f"every slide — a discreet row of {total} dots with dot {index + 1} "
+        "highlighted — so the viewer feels their place in the journey. Keep it "
+        "tiny and tasteful; it is the only extra graphic element allowed."
+    )
+    return " ".join(out)
+
+
+def compose_design_prompt(
+    slide: Slide,
+    brand: Brand,
+    style: str | None,
+    *,
+    slides: list[Slide] | None = None,
+    index: int = 0,
+    design_system: dict | None = None,
+) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
-    piece — concept, layout, and the approved copy rendered as typography."""
+    piece — concept, layout, and the approved copy rendered as typography.
+
+    When `slides` + `design_system` are supplied the prompt also carries the
+    carousel's shared visual language and this frame's place in the swipe
+    journey, so the set reads as one continuous story rather than isolated
+    slides (each image is generated blind to its siblings)."""
     parts = []
     if slide.image_prompt.strip():
         parts.append(slide.image_prompt.strip())
     style_block = brand.style_prompt(style)
     if style_block:
         parts.append(f"Art direction: {style_block}")
-    if brand.generation.consistency_clause:
+    ds_block = _design_system_block(design_system)
+    if ds_block:
+        parts.append(ds_block)
+    seq_block = _sequence_block(slide, slides, index, design_system)
+    if seq_block:
+        parts.append(seq_block)
+    # Fall back to the generic clause only when there's no real design system
+    # to carry continuity (e.g. legacy posts built before the spine existed).
+    if not ds_block and brand.generation.consistency_clause:
         parts.append(brand.generation.consistency_clause)
-    prompt = " ".join(parts)
+    prompt = "\n\n".join(parts)
     prompt += "\n\nTEXT TO PLACE ON IMAGE:"
     prompt += f"\nHeadline text: {slide.headline}"
     if slide.supporting:
@@ -547,7 +643,14 @@ def render_slide(
                     f"at slide {slide_index + 1} — aborting render"
                 )
             if mode == "ai_design":
-                prompt = compose_design_prompt(slide, brand, style)
+                prompt = compose_design_prompt(
+                    slide,
+                    brand,
+                    style,
+                    slides=slides,
+                    index=slide_index,
+                    design_system=_route_of(idea).get("design_system"),
+                )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
             _note(

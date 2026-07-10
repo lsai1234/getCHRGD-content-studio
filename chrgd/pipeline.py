@@ -50,7 +50,9 @@ in exactly this shape:
     {
       "headline": "string",
       "supporting": "string",
-      "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art: the visual concept (subject, setting, action, mood), the composition and layout, the art direction (photographic/illustrated/graphic style, colour, lighting), and how the typography should be treated as part of the design (placement, scale, energy). Think agency-level concept art for TikTok, not a stock photo description. Do NOT invent text beyond the approved slide copy.",
+      "role": "string — this slide's job in the arc: one of hook / recognition / escalation / payoff / cta. The slides in order must form a real story with rising tension, NOT parallel restatements of the theme.",
+      "swipe_trigger": "string — the OPEN LOOP this slide leaves dangling: the specific reason the viewer swipes to the NEXT slide (a question raised, a reveal promised, a tension unresolved). The last slide's trigger is the social action (rank/confess/tag/argue/save). Every non-final slide MUST hand off to the next one.",
+      "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art, written as ONE FRAME of the shared design_system below (same world, palette, type treatment and recurring motif as every other slide — never a standalone poster). Cover: the visual concept (subject, setting, action, mood), the composition/layout on the shared grid, and how the typography is treated. Then say what has CHANGED from the previous frame so the swipe shows visible motion/escalation. Think agency-level concept art for TikTok. Do NOT invent text beyond the approved slide copy.",
       "visual_intent": "string: subject, setting, action, prop, double-take"
     }
     // One object per slide, in order — 1 to 10 slides, however many the
@@ -63,6 +65,14 @@ in exactly this shape:
     "mechanic": "string (one of the virality mechanics)",
     "visual_engine": "string (one of the visual engines)",
     "primary_goal": "string",
+    "throughline": "string — one line describing the single journey the swipe takes the viewer on, start to finish (the spine every slide is a beat of).",
+    "design_system": {
+      "palette": "string — the ONE colour palette used on every slide (name 2-4 specific colours + how they're used). Shared across the whole set so it reads as one piece.",
+      "type_style": "string — the ONE typographic treatment for headlines + supporting text on every slide (font character, weight, case, how text sits in the layout).",
+      "motif": "string — a recurring visual anchor carried across all slides: the SAME character/subject, object, or graphic device that reappears frame to frame so the viewer feels continuity.",
+      "layout": "string — the shared layout grid every slide follows (where the headline sits, where the subject sits, consistent margins), so the set feels like one designed template, not random posters.",
+      "evolution": "string — how the shared design VISIBLY changes as the story escalates (e.g. palette heats up, the character's state shifts, the composition tightens, a progress motif fills). This is what makes swiping feel like motion."
+    },
     "build_note": "mechanic · visual engine · primary goal · QA overall",
     "qa": {
       "hook": 0, "swipe_loop": 0, "identity_recognition": 0,

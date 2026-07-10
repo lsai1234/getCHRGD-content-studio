@@ -801,6 +801,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "slides": slides,
             "qa": route.get("qa", {}),
             "style": route.get("style", ""),
+            "throughline": route.get("throughline", ""),
+            "design_system": route.get("design_system", {}),
             "render_mode": render_mode_for_idea(idea, brand),
             "concept_brief": route.get("concept_brief"),
             "mechanic": (route.get("mechanic_lock") or {}).get("name")
