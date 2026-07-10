@@ -50,6 +50,7 @@ in exactly this shape:
     {
       "headline": "string",
       "supporting": "string",
+      "body": "string — OPTIONAL detail block, empty string for most slides. Use it ONLY on a slide that genuinely earns density (usually the escalation or payoff): 2-5 tight sentences or a short list telling the full story/mechanism/details — the slide people stop and actually READ, then screenshot or save. Written to be read on a phone: short sentences, concrete specifics, no filler. Never pad a slide with a body just to look thorough.",
       "role": "string — this slide's job in the arc: one of hook / recognition / escalation / payoff / cta. The slides in order must form a real story with rising tension, NOT parallel restatements of the theme.",
       "swipe_trigger": "string — the OPEN LOOP this slide leaves dangling: the specific reason the viewer swipes to the NEXT slide (a question raised, a reveal promised, a tension unresolved). The last slide's trigger is the social action (rank/confess/tag/argue/save). Every non-final slide MUST hand off to the next one.",
       "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art, written as ONE FRAME of the shared design_system below (same world, palette, type treatment and recurring motif as every other slide — never a standalone poster). Cover: the visual concept (subject, setting, action, mood), the composition/layout on the shared grid, and how the typography is treated. Then say what has CHANGED from the previous frame so the swipe shows visible motion/escalation. Think agency-level concept art for TikTok. Do NOT invent text beyond the approved slide copy.",
@@ -258,9 +259,34 @@ def build_user_message(
         if value:
             lines.append(f"- {key}: {value}")
 
+    prefs = creation_prefs(idea)
+
+    # A moment-anchored seed carries the full cultural moment it rides. The
+    # account's biggest win (the 2am England-game post) worked because the
+    # moment was the star — so the build must keep that inversion explicit.
+    moment = prefs.get("moment")
+    if moment:
+        lines.append("")
+        lines.append(
+            "SHARED CULTURAL MOMENT — this post rides a moment the audience "
+            "is collectively living through. The MOMENT is the star of the "
+            "post; the brand is the sidekick that shows up inside it:"
+        )
+        for key in ("title", "why", "when", "peak", "category", "angle"):
+            if moment.get(key):
+                lines.append(f"- {key}: {moment[key]}")
+        lines.append(
+            "Rules: the viewer must instantly feel 'this is about the thing "
+            "I'm living through right now' — use the moment's real, specific "
+            "details (names, kick-off times, the 2am alarm, the episode). "
+            "Any product/supplement mention must arise naturally FROM the "
+            "moment (staying up late → energy) and stay light; if it feels "
+            "bolted on, leave it at brand voice only. Never bury the moment "
+            "under brand talk."
+        )
+
     # A concept brief the human developed and approved outranks free choice —
     # the full write must follow the agreed direction.
-    prefs = creation_prefs(idea)
     brief = prefs.get("concept_brief")
     if brief:
         lines.append("")
@@ -290,6 +316,23 @@ def build_user_message(
             )
             for i, step in enumerate(skeleton, 1):
                 lines.append(f"  {i}. {step}")
+
+    # Blank-canvas builds (mechanic picked, no subject given) are where the
+    # engine drifts into obscure trivia nobody holds — pin it to the middle
+    # of the audience's actual lived experience instead.
+    if idea.concept_note.strip().lower() in ("", "blank canvas"):
+        lines.append("")
+        lines.append(
+            "SUBJECT CHOICE (no concept was given): choose the subject "
+            "yourself, from the heart of this brand's world — training, gym "
+            "culture, energy/caffeine, protein, recovery, discipline. Pick "
+            "the most WIDELY-LIVED version you can: something most gym-goers "
+            "have personally believed, argued about in the group chat, or "
+            "done themselves this month. Reject obscure trivia, fringe "
+            "debates, and myths nobody actually holds — if a typical member "
+            "of the audience wouldn't recognise it from their own life, "
+            "pick again."
+        )
 
     # An up-front length nudge from the editor. Soft by design: the Architect
     # stage still owns the final count, this just tells it where to aim.
@@ -326,7 +369,7 @@ def creation_prefs(idea: Idea) -> dict:
         k: route[k]
         for k in (
             "style", "mechanic_lock", "render_mode", "concept_brief",
-            "length_pref",
+            "length_pref", "moment",
         )
         if k in route
     }

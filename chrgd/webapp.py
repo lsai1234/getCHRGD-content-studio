@@ -426,8 +426,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     )
                 while len(slides) < n:
                     slides.append(
-                        {"headline": "", "supporting": "", "image_prompt": "",
-                         "visual_intent": ""}
+                        {"headline": "", "supporting": "", "body": "",
+                         "image_prompt": "", "visual_intent": ""}
                     )
                 slides = slides[:n]
 
@@ -436,6 +436,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     slide["headline"] = form[f"slide_headline_{i}"]
                 if f"slide_supporting_{i}" in form:
                     slide["supporting"] = form[f"slide_supporting_{i}"]
+                if f"slide_body_{i}" in form:
+                    slide["body"] = form[f"slide_body_{i}"]
                 if f"slide_image_prompt_{i}" in form:
                     slide["image_prompt"] = form[f"slide_image_prompt_{i}"]
 
@@ -602,11 +604,14 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         render_mode: str = "",
         length: str = "",
         scheduled_for: datetime | None = None,
+        moment: dict | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
 
         route: dict = {}
+        if moment:
+            route["moment"] = moment
         if style:
             route["style"] = style
         if render_mode:
@@ -697,8 +702,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     # without an explicit approve.
                     n = {"quick": 2, "deep": 8}.get(length, 5)
                     empty = [
-                        {"headline": "", "supporting": "", "image_prompt": "",
-                         "visual_intent": ""}
+                        {"headline": "", "supporting": "", "body": "",
+                         "image_prompt": "", "visual_intent": ""}
                         for _i in range(n)
                     ]
                     store.mark_review(
@@ -1027,6 +1032,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 render_mode=render_mode,
                 length=length,
                 scheduled_for=when,
+                # The full moment travels with the seed so the build keeps the
+                # moment as the star instead of drifting back to product talk.
+                moment={
+                    k: v
+                    for k, v in {
+                        "title": m.get("title", ""),
+                        "why": m.get("why", ""),
+                        "when": m.get("when", ""),
+                        "peak": m.get("peak", ""),
+                        "category": m.get("category", ""),
+                        "angle": note,
+                    }.items()
+                    if v
+                },
             )
             # Moments decay fast — stamp it so the calendar can nag.
             store.conn.execute(

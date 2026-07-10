@@ -253,7 +253,17 @@ can show up inside:
 
 Aim for a MIX — include a couple of big global moments alongside the UK ones,
 ranked by how many people in the UK audience are actually aware of and engaged
-with them. A story only counts if the audience genuinely knows about it.
+with them.
+
+THE AWARENESS TEST (hard filter — apply to every candidate): would millions of
+ordinary people in the UK already know about this WITHOUT being told? It counts
+only if it's on front pages, all over group chats, or in office small-talk. If
+you'd have to explain that it's even happening, it FAILS — cut it. (An
+athletics meet in London that isn't making national headlines fails; an England
+knockout game, a heatwave, a Love Island final, a story everyone's arguing
+about passes.) There is NO quota: return three genuinely huge moments rather
+than six padded with niche events — every weak inclusion costs the editor a
+wasted post.
 
 For EACH moment, propose 2-3 ready-to-build content angles for a gym/supplement
 audience: usually one practical/advice angle (genuinely useful, e.g. "how to
@@ -261,7 +271,9 @@ survive the 3am kick-off"), one funny/relatable angle, and one natural product
 tie-in ONLY where it isn't forced (observational/educational, never medical or
 guaranteed-outcome claims; humour is social commentary; be light-touch and
 non-partisan on politics — never attack a named person, just play the shared
-cultural awareness).
+cultural awareness). In every angle the MOMENT stays the star — the angle is
+about the moment as people live it, with the brand riding along; never a
+product post wearing a topical hat.
 
 Limitation you MUST respect: {limitation}
 

@@ -58,6 +58,10 @@ class Slide(BaseModel):
 
     headline: str
     supporting: str = ""
+    # Optional detail block for slides that earn density: a short readable
+    # story/explanation (2-5 tight sentences or a mini-list) set smaller than
+    # the supporting line. Most slides don't have one — punchy stays default.
+    body: str = ""
     image_prompt: str = ""
     visual_intent: str = ""
     role: str = ""

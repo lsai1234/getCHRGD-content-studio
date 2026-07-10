@@ -1170,3 +1170,100 @@ def test_brand_bible_reaches_the_engine(settings, store):
     # full build prompt still carries the strict JSON contract.
     sp = load_system_prompt()
     assert "BRAND BIBLE" in sp and "Output contract" in sp
+
+
+# --- better posts round: moments as the star, relatability, body slides ---------
+
+
+def test_moments_use_carries_moment_into_build_brief(client, settings):
+    job_id = client.post("/api/jobs/moments").json()["job_id"]
+    with Store(settings.db_path) as store:
+        store.update_job(job_id, status="COMPLETED",
+                         result_json=json.dumps(MOMENTS_PAYLOAD))
+    r = client.post(f"/api/moments/{job_id}/use", data={"moment": 0, "angle": 0})
+    assert r.status_code == 200
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(r.json()["idea_id"])
+    moment = json.loads(idea.route_json)["moment"]
+    assert moment["title"] == "Heatwave hitting Sat-Sun, 32C"
+    assert moment["why"].startswith("whole country melting")
+
+    # The build brief inverts the usual framing: the moment is the star.
+    msg = build_user_message(idea)
+    assert "SHARED CULTURAL MOMENT" in msg
+    assert "Heatwave hitting Sat-Sun, 32C" in msg
+    assert "the brand is the sidekick" in msg.lower() or "sidekick" in msg
+
+
+def test_moment_survives_build_route_overwrite(settings, store):
+    route = {"moment": {"title": "World Cup semi", "why": "everyone's up at 2am"}}
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x",
+                        route_json=json.dumps(route)))
+    build_single_idea(store, settings, "G-0001", client=FakeChat([good_post()]))
+    saved = json.loads(store.get_idea("G-0001").route_json)
+    assert saved["moment"]["title"] == "World Cup semi"
+
+
+def test_blank_canvas_build_pins_subject_to_lived_experience():
+    blank = Idea(idea_id="G-1", concept_note="blank canvas")
+    msg = build_user_message(blank)
+    assert "SUBJECT CHOICE" in msg
+    assert "obscure trivia" in msg.lower()
+    # A real concept gets no such override.
+    real = Idea(idea_id="G-2", concept_note="creatine timing arguments")
+    assert "SUBJECT CHOICE" not in build_user_message(real)
+
+
+def test_moments_scout_has_hard_awareness_bar(settings):
+    from chrgd.trends import scout_moments
+
+    fake = FakeSearch(MOMENTS_PAYLOAD)
+    scout_moments(settings, client=fake)
+    assert "AWARENESS TEST" in fake.system
+    assert "NO quota" in fake.system
+    # angles must keep the moment as the star, not a product post in a hat
+    assert "the MOMENT stays the star" in fake.system
+
+
+def test_engine_prompt_gains_relatability_and_density_rules():
+    from chrgd.pipeline import load_system_prompt
+
+    sp = load_system_prompt()
+    assert "the moment is the STAR" in sp
+    assert "Recognition gate" in sp
+    assert "Vary the information density" in sp
+    assert '"body"' in sp  # the JSON contract offers the detail block
+
+
+def test_body_slide_flows_into_design_prompt():
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    brand = load_brand()
+    dense = Slide(headline="The 2am problem", supporting="s",
+                  body="Sentence one. Sentence two. Sentence three.",
+                  image_prompt="calm editorial frame")
+    prompt = compose_design_prompt(dense, brand, None)
+    assert "Detail text (the readable block): Sentence one." in prompt
+    assert "READER slide" in prompt
+    # No body → no reader-slide instructions polluting punchy slides.
+    punchy = Slide(headline="h", supporting="s", image_prompt="p")
+    assert "READER slide" not in compose_design_prompt(punchy, brand, None)
+
+
+def test_edit_persists_body_and_new_slides_carry_it(client, settings):
+    slides = [{"headline": "h", "supporting": "s", "image_prompt": "p",
+               "visual_intent": "v"}]
+    with Store(settings.db_path) as store:
+        store.add_idea(Idea(idea_id="G-0001", concept_note="x",
+                            slides_json=json.dumps(slides)))
+        store.mark_review("G-0001", {"hook": "h"})
+    r = client.post(
+        "/api/ideas/G-0001/edit",
+        data={"slide_count": "2", "slide_body_0": "the full story, readable"},
+    )
+    assert r.json()["saved"] is True
+    with Store(settings.db_path) as store:
+        saved = json.loads(store.get_idea("G-0001").slides_json)
+    assert saved[0]["body"] == "the full story, readable"
+    assert saved[1]["body"] == ""  # new slides arrive with the field present

@@ -308,6 +308,16 @@ def compose_design_prompt(
     prompt += f"\nHeadline text: {slide.headline}"
     if slide.supporting:
         prompt += f"\nSupporting text: {slide.supporting}"
+    if slide.body:
+        prompt += f"\nDetail text (the readable block): {slide.body}"
+        prompt += (
+            "\nThis is a READER slide: the detail text is the point. Set it as "
+            "a clean, well-spaced editorial text block below the supporting "
+            "line — smaller type but perfectly legible on a phone, generous "
+            "line spacing, high contrast, on a calm area of the design so "
+            "every word is easy to read. Simplify the imagery to serve the "
+            "text; render EVERY sentence, complete and correctly spelled."
+        )
     prompt += _DESIGN_TEXT_RULES
     return prompt
 

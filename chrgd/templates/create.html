@@ -1212,6 +1212,9 @@ function slideAccItem(s, i){
       <input name="slide_headline_${i}" value="${esc(s.headline || '')}">
       <label>Supporting</label>
       <input name="slide_supporting_${i}" value="${esc(s.supporting || '')}">
+      <label>Detail <small class="k">(optional — a readable story/detail block for a slide that earns it; most slides leave this empty)</small></label>
+      <textarea name="slide_body_${i}" style="min-height:60px"
+                placeholder="2-5 tight sentences or a short list — the slide people stop and read">${esc(s.body || '')}</textarea>
       <label>Image brief <small class="k">(what the background should show — no text in it)</small></label>
       <input name="slide_image_prompt_${i}" value="${esc(s.image_prompt || '')}">
       <button type="button" class="chip slide-rm" style="margin-top:10px"
@@ -1229,8 +1232,8 @@ function renumberSlides(){
   const sf = document.getElementById('slide-acc');
   [...sf.children].forEach((item, i) => {
     item.querySelector('.acc-n').textContent = i + 1;
-    for (const f of ['headline', 'supporting', 'image_prompt'])
-      item.querySelector(`input[name^=slide_${f}_]`).name = `slide_${f}_${i}`;
+    for (const f of ['headline', 'supporting', 'body', 'image_prompt'])
+      item.querySelector(`[name^=slide_${f}_]`).name = `slide_${f}_${i}`;
     const head = item.querySelector('input[name^=slide_headline_]');
     item.querySelector('.acc-p').innerHTML = slidePreview({headline: head.value}, i);
   });
