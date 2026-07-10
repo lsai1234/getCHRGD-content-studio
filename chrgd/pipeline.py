@@ -28,6 +28,9 @@ PROMPT_FILE = Path(__file__).resolve().parent.parent / "content_engine_prompt.md
 # if present it's injected into the system prompt so the engine imitates a
 # specific voice and specific winners instead of reasoning from rules alone.
 BRAND_BIBLE_FILE = Path(__file__).resolve().parent.parent / "brand_bible.md"
+# The evidence library: proven TikTok shapes the concept stage must anchor to.
+# A living file the editor extends whenever they see a carousel bang.
+PLAYBOOK_FILE = Path(__file__).resolve().parent.parent / "viral_playbook.md"
 
 # Appended to the loaded instructions so the engine returns machine-readable
 # JSON instead of its default paste-ready text. Mirrors the Post model.
@@ -201,9 +204,17 @@ def load_brand_bible() -> str:
     return ""
 
 
+def load_playbook() -> str:
+    """The proven-shapes library, if the file exists ('' otherwise)."""
+    if PLAYBOOK_FILE.exists():
+        return PLAYBOOK_FILE.read_text(encoding="utf-8").strip()
+    return ""
+
+
 def engine_base() -> str:
-    """The engine instructions + brand bible — shared by every reasoning call
-    (build, angles, concept development) so the voice is consistent everywhere."""
+    """The engine instructions + brand bible + viral playbook — shared by every
+    reasoning call (build, takes, angles, concept development) so the voice AND
+    the evidence base are consistent everywhere."""
     base = PROMPT_FILE.read_text(encoding="utf-8")
     bible = load_brand_bible()
     if bible:
@@ -211,6 +222,13 @@ def engine_base() -> str:
             "\n---\n\n# BRAND BIBLE — voice + gold-standard examples "
             "(match this level; imitate the voice and structure, not the topics)\n\n"
             + bible
+        )
+    playbook = load_playbook()
+    if playbook:
+        base += (
+            "\n---\n\n# VIRAL PLAYBOOK — proven shapes (anchor concepts in "
+            "these precedents, or in the live trend the seed carries)\n\n"
+            + playbook
         )
     return base
 
@@ -265,7 +283,7 @@ def build_user_message(
             "a different interpretation:"
         )
         for key in ("title", "angle", "hook", "mechanic", "emotion",
-                    "share_identity", "sketch"):
+                    "share_identity", "precedent", "sketch"):
             if take.get(key):
                 lines.append(f"- {key}: {take[key]}")
         if take.get("tweak"):
@@ -860,17 +878,25 @@ You are NOT writing a post this run. You are the DIVERGENCE stage: from the
 seed below, propose exactly {count} genuinely different takes a human editor
 will choose between. Rules:
 
-- Each take must run on a DIFFERENT ENGINE: a different virality mechanic, a
-  different target emotion, or a different person whose story it is. Never
-  rewordings of one idea. Test: if two of your takes could open with the same
-  slide 1, replace one of them.
+- EVIDENCE FIRST: every take must be anchored in something that has already
+  worked — a named shape from the VIRAL PLAYBOOK above, or the live trend the
+  seed carries. State the anchor in `precedent` and WHY that shape fits this
+  seed. A take with no precedent is a guess; you may include at most ONE
+  guess per fan-out, flagged as "no precedent — experimental" in its
+  precedent field, and only when it's genuinely worth the risk.
+- No two takes may run on the same playbook shape — competing takes means
+  competing engines, not one shape reworded. Test: if two of your takes
+  could open with the same slide 1, replace one of them.
 - Spread the risk: at least one safe-banker take, at least one unhinged-but-
   clear take, at least one built primarily for comments/debate.
 - Run stage 0 on every take: name its high-arousal emotion and complete its
   'sending this says ___ about me' line honestly. A take whose emotion is
   'interested' doesn't belong in the list — replace it.
-- Honour the seed's constraints (cultural moment as the star, format lock,
-  claim safety) in every take.
+- If WHAT WORKS FOR THIS ACCOUNT notes are provided, weight the fan-out
+  toward the shapes/categories that hit and away from the ones that flopped
+  — the account's own history outranks generic instinct.
+- Honour the seed's constraints (cultural moment as the star, trend format
+  followed faithfully, format lock, claim safety) in every take.
 
 Return a SINGLE JSON object, nothing else:
 
@@ -883,6 +909,7 @@ Return a SINGLE JSON object, nothing else:
       "mechanic": "one of the virality mechanics",
       "emotion": "the high-arousal target emotion",
       "share_identity": "sending this to a mate says ___ about me — completed",
+      "precedent": "the playbook shape or live trend this take runs on + one line on why it has banged before and fits here",
       "sketch": "the arc in 2-3 short beats, ' → ' separated",
       "concept_note": "1-2 sentence buildable brief for the full write"
     }}
@@ -901,6 +928,10 @@ class Take(BaseModel):
     mechanic: str = ""
     emotion: str = ""
     share_identity: str = ""
+    # The evidence anchor: the playbook shape or live trend this take runs on,
+    # plus why it has banged before. "no precedent — experimental" is allowed
+    # at most once per fan-out.
+    precedent: str = ""
     sketch: str = ""
     concept_note: str = ""
 
@@ -918,14 +949,20 @@ def generate_takes(
     count: int = 5,
     feedback: str = "",
     prior: list[dict] | None = None,
+    performance_notes: str = "",
     client: ChatClient | None = None,
 ) -> TakesResult:
-    """One divergence round: seed (+ prior takes + editor feedback) → takes."""
+    """One divergence round: seed (+ prior takes + editor feedback) → takes.
+
+    `performance_notes` carries the account's own hit/flop history so the
+    fan-out is weighted by what has actually worked HERE, not just broadly."""
     if client is None:
         client = OpenAIChatClient(settings)
     system = engine_base() + "\n" + TAKES_CONTRACT.format(count=count)
 
     lines = ["Propose competing takes for this seed:", ""]
+    if performance_notes:
+        lines += [performance_notes, ""]
     lines.extend(_seed_context(idea, creation_prefs(idea)))
     if prior:
         lines += ["", "TAKES ALREADY SHOWN (the editor passed on all of these "

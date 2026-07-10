@@ -201,11 +201,14 @@ def _handle_takes(store: Store, settings: Settings, job: dict) -> dict:
         job["job_id"], progress=20,
         result_json=json.dumps({"note": "sketching genuinely different takes"}),
     )
+    from .learning import performance_notes
+
     result = generate_takes(
         idea, settings,
         count=int(params.get("count", 5)),
         feedback=str(params.get("feedback", "")),
         prior=prior or None,
+        performance_notes=performance_notes(store),
     )
     run_id = store.start_run("takes")
     store.finish_run(run_id, spend_usd=round(result.spend_usd, 4), notes=idea.idea_id)

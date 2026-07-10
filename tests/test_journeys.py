@@ -1363,7 +1363,7 @@ def test_worker_takes_job_and_refan_carries_prior(settings, store, monkeypatch):
 
     seen = []
 
-    def fake_takes(idea, s, *, count=5, feedback="", prior=None, client=None):
+    def fake_takes(idea, s, *, count=5, feedback="", prior=None, client=None, **kw):
         seen.append({"feedback": feedback, "prior": prior})
         return TakesResult(
             takes=[Take.model_validate(t) for t in TAKES_PAYLOAD["takes"]],
@@ -1569,3 +1569,73 @@ def test_moment_seeds_still_use_moment_framing(client, settings):
     assert idea.content_category == "moment"
     msg = build_user_message(idea)
     assert "SHARED CULTURAL MOMENT" in msg and "LIVE TREND" not in msg
+
+
+# --- evidence-anchored concepts: playbook + precedent + account history ----------
+
+
+def test_playbook_reaches_every_reasoning_call():
+    from chrgd.pipeline import engine_base, load_playbook
+
+    pb = load_playbook()
+    assert "archetype taxonomy" in pb          # the library shipped
+    base = engine_base()
+    assert "VIRAL PLAYBOOK" in base            # ...and rides the shared base,
+    assert "The unsaid thing, said" in base    # so build/takes/angles/concept
+    assert "anchor concepts in these precedents" in base.lower() or \
+           "anchor concepts in" in base
+
+
+def test_takes_demand_precedent_and_account_history(settings):
+    from chrgd.pipeline import generate_takes
+
+    payload = {"takes": [dict(TAKES_PAYLOAD["takes"][0],
+                              precedent="archetype taxonomy — self-categorisation engine")]}
+    fake = FakeChat([payload])
+    idea = Idea(idea_id="G-0001", concept_note="rack hoggers")
+    result = generate_takes(
+        idea, settings, client=fake,
+        performance_notes="WHAT WORKS FOR THIS ACCOUNT: moment posts hit",
+    )
+    assert result.takes[0].precedent.startswith("archetype taxonomy")
+    system, user = fake.calls[0]
+    # The contract demands evidence per take and caps unproven guesses at one.
+    assert "EVIDENCE FIRST" in system
+    assert '"precedent"' in system
+    assert "no precedent — experimental" in system
+    # The account's own hit/flop history steers the fan-out.
+    assert "WHAT WORKS FOR THIS ACCOUNT: moment posts hit" in user
+
+
+def test_worker_takes_passes_performance_notes(settings, store, monkeypatch):
+    import chrgd.pipeline as pl
+    import chrgd.worker as wk
+    from chrgd.pipeline import TakesResult
+    from chrgd.worker import Worker, enqueue_takes
+
+    seen = {}
+
+    def fake_takes(idea, s, **kw):
+        seen.update(kw)
+        return TakesResult()
+
+    monkeypatch.setattr(pl, "generate_takes", fake_takes)
+    monkeypatch.setattr(
+        "chrgd.learning.performance_notes", lambda st: "NOTES SENTINEL"
+    )
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    enqueue_takes(store, "G-0001")
+    Worker(settings).run_once()
+    assert seen["performance_notes"] == "NOTES SENTINEL"
+
+
+def test_chosen_take_precedent_reaches_build_brief():
+    idea = Idea(
+        idea_id="G-0001", concept_note="x",
+        route_json=json.dumps({"take": {
+            "title": "Rack economics",
+            "precedent": "absurd commitment bit — committed absurdity travels",
+        }}),
+    )
+    msg = build_user_message(idea)
+    assert "precedent: absurd commitment bit" in msg

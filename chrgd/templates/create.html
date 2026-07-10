@@ -768,6 +768,7 @@ function drawTakes(takes){
         ${t.mechanic ? `<span class="t-tag">${esc(t.mechanic.replaceAll('_', ' '))}</span>` : ''}
       </span>
       ${t.share_identity ? `<span class="t-share"><b>Sharing it says:</b> ${esc(t.share_identity)}</span>` : ''}
+      ${t.precedent ? `<span class="t-share"><b>Why it'll bang:</b> ${esc(t.precedent)}</span>` : ''}
       ${t.sketch ? `<span class="t-sketch">${esc(t.sketch)}</span>` : ''}`;
     el.onclick = () => pickTakeCard(i);
     list.appendChild(el);
