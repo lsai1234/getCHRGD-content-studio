@@ -1817,8 +1817,13 @@ def test_url_mode_export_uses_studio_media_route(client, settings, monkeypatch):
     assert got.status_code == 200 and got.headers["content-type"].startswith("image/")
 
 
-def test_filename_mode_export_untouched_by_media_route(client, settings):
-    # Default config stays filename-mode: bare names, no URLs.
+def test_filename_mode_export_untouched_by_media_route(client, settings, monkeypatch):
+    # Filename mode (media_reference = "filename") keeps bare names, no URLs.
+    import chrgd.publisher as pub
+
+    cols = pub.load_columns()
+    cols.format.media_reference = "filename"
+    monkeypatch.setattr(pub, "load_columns", lambda path=None: cols)
     with Store(settings.db_path) as store:
         _make_rendered(settings, store, "G-0001", datetime(2027, 3, 2, 18, 0))
     r = client.post(

@@ -17,7 +17,7 @@ caption_max_length = 2200
 #                 host, or LEAVE IT EMPTY and web exports automatically use
 #                 the studio's built-in login-free /media/ route (requires
 #                 CHRGD_SECRET_KEY to be set so the links survive restarts).
-media_reference = "filename"
+media_reference = "url"
 media_base_url = ""          # e.g. https://cdn.example.com/chrgd/  (url mode)
 # Value written into a network column when that network is targeted.
 network_on_value = "TRUE"
