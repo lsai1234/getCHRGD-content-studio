@@ -110,6 +110,14 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_idea ON jobs(idea_id);
+
+-- Editable app settings (brand profile, visual style, ...): a tiny key→JSON
+-- store so the settings page can change behaviour without editing files.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 
@@ -174,6 +182,31 @@ class Store:
 
     def __exit__(self, *exc) -> None:
         self.close()
+
+    # --- editable app settings (key → JSON) --------------------------------
+
+    def get_setting(self, key: str, default=None):
+        """Return the stored JSON value for `key`, or `default` if unset."""
+        row = self.conn.execute(
+            "SELECT value FROM app_settings WHERE key = ?", (key,)
+        ).fetchone()
+        if row is None:
+            return default
+        try:
+            return json.loads(row["value"])
+        except json.JSONDecodeError:
+            return default
+
+    def set_setting(self, key: str, value) -> None:
+        """Upsert a JSON-serialisable value under `key`."""
+        now = datetime.now().astimezone().isoformat()
+        self.conn.execute(
+            "INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, "
+            "updated_at = excluded.updated_at",
+            (key, json.dumps(value), now),
+        )
+        self.conn.commit()
 
     # --- id minting ---------------------------------------------------------
 

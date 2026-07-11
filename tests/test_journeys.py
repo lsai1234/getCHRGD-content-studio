@@ -1832,3 +1832,81 @@ def test_filename_mode_export_untouched_by_media_route(client, settings, monkeyp
     csv_text = open(r["csv_path"], encoding="utf-8").read()
     assert "G-0001_slide_1.jpg" in csv_text
     assert "/media-pub/" not in csv_text
+
+
+# --- editable brand profile (settings page) --------------------------------------
+
+
+def test_settings_page_saves_and_reloads_profile(client, settings):
+    r = client.post("/settings", data={
+        "brand_name": "CHRGD", "one_liner": "premium UK gym brand",
+        "voice": "dry UK lifter, comedy first", "audience": "18-30 gymtok",
+        "dos": "hot takes", "donts": "medical claims",
+        "handle": "@getchrgd", "default_hashtags": "#gymtok",
+        "house_style": "gritty flash-photo realism",
+        "palette": "cobalt on black", "motif": "one battered kettlebell",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    from chrgd.profile import load_profile
+    with Store(settings.db_path) as store:
+        p = load_profile(store)
+    assert p.brand_name == "CHRGD"
+    assert p.house_style == "gritty flash-photo realism"
+    # Reloading the page shows the saved values.
+    assert "one battered kettlebell" in client.get("/settings").text
+
+
+def test_brand_profile_blocks_render_and_stay_inert_when_empty():
+    from chrgd.profile import (
+        BrandProfile, profile_engine_block, profile_style_block,
+    )
+
+    assert BrandProfile().is_empty()
+    assert profile_engine_block(BrandProfile()) == ""
+    assert profile_style_block(BrandProfile()) == ""
+
+    p = BrandProfile(brand_name="CHRGD", one_liner="gym brand",
+                     voice="dry", donts="no medical claims",
+                     house_style="flash-photo", palette="cobalt on black")
+    eng = profile_engine_block(p)
+    assert "BRAND PROFILE" in eng
+    assert "CHRGD — gym brand" in eng
+    assert "Never / avoid: no medical claims" in eng
+    sty = profile_style_block(p)
+    assert "HOUSE BRAND STYLE" in sty
+    assert "flash-photo" in sty and "cobalt on black" in sty
+
+
+def test_profile_reaches_takes_and_design_prompt(settings, store, monkeypatch):
+    import chrgd.pipeline as pl
+    from chrgd.pipeline import TakesResult
+    from chrgd.profile import BrandProfile, save_profile
+    from chrgd.worker import Worker, enqueue_takes
+
+    save_profile(store, BrandProfile(
+        brand_name="CHRGD", one_liner="premium gym brand",
+        voice="dry UK lifter", house_style="gritty flash-photo realism",
+    ))
+    seen = {}
+    monkeypatch.setattr(pl, "generate_takes",
+                        lambda idea, s, **kw: seen.update(kw) or TakesResult())
+    monkeypatch.setattr("chrgd.trends.meta_is_stale", lambda store: False)
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    enqueue_takes(store, "G-0001")
+    Worker(settings).run_once()
+    # Brand voice reaches the concept fan-out.
+    assert "BRAND PROFILE" in seen["performance_notes"]
+    assert "premium gym brand" in seen["performance_notes"]
+
+    # House style reaches the image design prompt.
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+    from chrgd.profile import brand_style_note
+    prompt = compose_design_prompt(
+        Slide(headline="h", image_prompt="a squat rack"),
+        load_brand(), None, house_style=brand_style_note(store),
+    )
+    assert "HOUSE BRAND STYLE" in prompt
+    assert "gritty flash-photo realism" in prompt

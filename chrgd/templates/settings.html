@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Settings — CHRGD{% endblock %}
+{% block body %}
+<style>
+  .set-wrap { max-width: 720px; }
+  .set-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+              padding: 18px 20px; margin: 0 0 18px; }
+  .set-card h2 { font-size: 15px; margin: 0 0 2px; }
+  .set-card .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 14px; }
+  .set-wrap label { display: block; font-size: 12.5px; font-weight: 600; margin: 12px 0 5px; }
+  .set-wrap label .k { font-weight: 400; color: var(--muted); }
+  .set-wrap input, .set-wrap textarea { width: 100%; font: inherit; font-size: 13.5px;
+              background: var(--bg-2, #0e0e12); color: var(--fg); border: 1px solid var(--line);
+              border-radius: 9px; padding: 9px 11px; }
+  .set-wrap textarea { min-height: 58px; resize: vertical; }
+  .row2 { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row2 > div { flex: 1; min-width: 200px; }
+  .save-row { position: sticky; bottom: 0; background: linear-gradient(0deg,var(--bg) 60%,transparent);
+              padding: 14px 0; display: flex; align-items: center; gap: 14px; }
+</style>
+
+<div class="set-wrap">
+  <h1>Settings</h1>
+  <p class="muted" style="margin:-4px 0 18px; font-size:13px">
+    Controls how the engine writes and how your slides look. Changes apply to your
+    <b>next</b> build — existing posts aren't touched. Leave anything blank to let the
+    engine decide.</p>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+  <form method="post" action="/settings">
+    <div class="set-card">
+      <h2>Brand &amp; voice</h2>
+      <p class="sub">Fed into every concept and every post — the biggest lever on what gets made.</p>
+
+      <div class="row2">
+        <div>
+          <label>Brand name</label>
+          <input name="brand_name" value="{{ profile.brand_name }}" placeholder="CHRGD">
+        </div>
+        <div>
+          <label>Handle <span class="k">— for captions</span></label>
+          <input name="handle" value="{{ profile.handle }}" placeholder="@getchrgd">
+        </div>
+      </div>
+
+      <label>What it is <span class="k">— one line</span></label>
+      <input name="one_liner" value="{{ profile.one_liner }}"
+             placeholder="a premium UK gym / supplement brand">
+
+      <label>Voice &amp; tone</label>
+      <textarea name="voice" placeholder="dry, observational UK lifter — mate-to-mate, comedy first, never corporate">{{ profile.voice }}</textarea>
+
+      <label>Audience <span class="k">— who it's for</span></label>
+      <textarea name="audience" placeholder="18–30 UK gym-goers, gym-tok native, sceptical of hype">{{ profile.audience }}</textarea>
+
+      <div class="row2">
+        <div>
+          <label>Always / lean into</label>
+          <textarea name="dos" placeholder="hot takes, confessions, specific gym moments">{{ profile.dos }}</textarea>
+        </div>
+        <div>
+          <label>Never / avoid</label>
+          <textarea name="donts" placeholder="medical claims, corporate hype, parody accents">{{ profile.donts }}</textarea>
+        </div>
+      </div>
+
+      <label>Default hashtags <span class="k">— always included on export</span></label>
+      <input name="default_hashtags" value="{{ profile.default_hashtags }}"
+             placeholder="#gymtok #ukfitness">
+    </div>
+
+    <div class="set-card">
+      <h2>Visual style</h2>
+      <p class="sub">Applied to every slide the image AI designs, so the whole account looks like one brand.</p>
+
+      <label>House art-direction <span class="k">— the look every slide shares</span></label>
+      <textarea name="house_style" placeholder="gritty flash-photo gym realism, high contrast, bold condensed type">{{ profile.house_style }}</textarea>
+
+      <label>Brand palette <span class="k">— colours + how they're used</span></label>
+      <input name="palette" value="{{ profile.palette }}"
+             placeholder="cobalt blue on near-black, bone-white text, one hot accent">
+
+      <label>Recurring motif <span class="k">— a visual anchor across posts</span></label>
+      <input name="motif" value="{{ profile.motif }}"
+             placeholder="one battered kettlebell that reappears each post">
+    </div>
+
+    <div class="save-row">
+      <button type="submit">Save settings</button>
+      <span class="muted" style="font-size:12.5px">Applies to your next build &amp; render.</span>
+    </div>
+  </form>
+</div>
+{% endblock %}

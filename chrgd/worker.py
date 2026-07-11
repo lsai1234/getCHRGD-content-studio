@@ -202,6 +202,7 @@ def _handle_takes(store: Store, settings: Settings, job: dict) -> dict:
         result_json=json.dumps({"note": "sketching genuinely different takes"}),
     )
     from .learning import performance_notes
+    from .profile import brand_profile_notes
     from .trends import meta_is_stale, meta_notes
 
     # Concepts reason from the live meta. If the last scan has aged out,
@@ -216,7 +217,11 @@ def _handle_takes(store: Store, settings: Settings, job: dict) -> dict:
         feedback=str(params.get("feedback", "")),
         prior=prior or None,
         performance_notes="\n\n".join(
-            x for x in (performance_notes(store), meta_notes(store)) if x
+            x for x in (
+                brand_profile_notes(store),
+                performance_notes(store),
+                meta_notes(store),
+            ) if x
         ),
     )
     run_id = store.start_run("takes")
@@ -298,6 +303,7 @@ def _handle_concept(store: Store, settings: Settings, job: dict) -> dict:
 def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
     """(Re)generate the background(s) for a single slide."""
     from .images import list_variants, render_slide
+    from .profile import brand_style_note
 
     params = json.loads(job["params_json"] or "{}")
     idea = store.get_idea(job["idea_id"])
@@ -313,6 +319,7 @@ def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
         dry_run=bool(params.get("dry_run", False)),
         variants=params.get("variants"),
         notify=notify,
+        house_style=brand_style_note(store),
     )
     # Keep asset_paths_json in step for posts rendered slide-by-slide.
     paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []

@@ -279,6 +279,7 @@ def compose_design_prompt(
     slides: list[Slide] | None = None,
     index: int = 0,
     design_system: dict | None = None,
+    house_style: str = "",
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -290,6 +291,10 @@ def compose_design_prompt(
     parts = []
     if slide.image_prompt.strip():
         parts.append(slide.image_prompt.strip())
+    # The editable house style (settings page) overrides generic art direction:
+    # it's the brand look every slide across every post must share.
+    if house_style.strip():
+        parts.append(house_style.strip())
     style_block = brand.style_prompt(style)
     if style_block:
         parts.append(f"Art direction: {style_block}")
@@ -604,6 +609,7 @@ def render_slide(
     variants: int | None = None,
     spent_so_far: float = 0.0,
     notify=None,
+    house_style: str = "",
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
@@ -660,6 +666,7 @@ def render_slide(
                     slides=slides,
                     index=slide_index,
                     design_system=_route_of(idea).get("design_system"),
+                    house_style=house_style,
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
@@ -798,6 +805,7 @@ def render_carousel(
     dry_run: bool = False,
     on_slide=None,
     notify=None,
+    house_style: str = "",
 ) -> RenderResult:
     """Render every slide for one idea to disk. Returns paths + spend.
 
@@ -818,6 +826,7 @@ def render_carousel(
             dry_run=dry_run,
             spent_so_far=result.spend_usd,
             notify=notify,
+            house_style=house_style,
         )
         result.spend_usd += slide_result.spend_usd
         result.generated += slide_result.generated

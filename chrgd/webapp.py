@@ -282,6 +282,46 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def queue_page(request: Request, _: str = Depends(require_user_page)):
         return render_page(request, "queue.html", "queue")
 
+    @app.get("/settings", response_class=HTMLResponse)
+    def settings_page(request: Request, _: str = Depends(require_user_page)):
+        from .profile import load_profile
+
+        with _store(settings) as store:
+            profile = load_profile(store)
+        return render_page(
+            request, "settings.html", "settings", profile=profile.model_dump()
+        )
+
+    @app.post("/settings")
+    def settings_save(
+        request: Request,
+        brand_name: str = Form(""),
+        one_liner: str = Form(""),
+        voice: str = Form(""),
+        audience: str = Form(""),
+        dos: str = Form(""),
+        donts: str = Form(""),
+        handle: str = Form(""),
+        default_hashtags: str = Form(""),
+        house_style: str = Form(""),
+        palette: str = Form(""),
+        motif: str = Form(""),
+        _: str = Depends(require_user_page),
+    ):
+        from .profile import BrandProfile, save_profile
+
+        profile = BrandProfile(
+            brand_name=brand_name, one_liner=one_liner, voice=voice,
+            audience=audience, dos=dos, donts=donts, handle=handle,
+            default_hashtags=default_hashtags, house_style=house_style,
+            palette=palette, motif=motif,
+        )
+        with _store(settings) as store:
+            save_profile(store, profile)
+        return RedirectResponse(
+            "/settings?flash=Saved+%E2%80%94+applies+to+your+next+build", 303
+        )
+
     @app.get("/calendar", response_class=HTMLResponse)
     def calendar_page(request: Request, _: str = Depends(require_user_page)):
         from .publisher import load_columns
