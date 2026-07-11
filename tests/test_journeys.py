@@ -1874,7 +1874,7 @@ def test_brand_profile_blocks_render_and_stay_inert_when_empty():
     assert "CHRGD — gym brand" in eng
     assert "Never / avoid: no medical claims" in eng
     sty = profile_style_block(p)
-    assert "HOUSE BRAND STYLE" in sty
+    assert "LOCKED BRAND LOOK" in sty
     assert "flash-photo" in sty and "cobalt on black" in sty
 
 
@@ -1908,5 +1908,71 @@ def test_profile_reaches_takes_and_design_prompt(settings, store, monkeypatch):
         Slide(headline="h", image_prompt="a squat rack"),
         load_brand(), None, house_style=brand_style_note(store),
     )
-    assert "HOUSE BRAND STYLE" in prompt
+    assert "LOCKED BRAND LOOK" in prompt
     assert "gritty flash-photo realism" in prompt
+
+
+# --- locked brand look: recurring character, consistent across posts -------------
+
+
+def test_locked_look_recurring_character_reaches_image_and_build(settings, store):
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+    from chrgd.pipeline import build_single_idea
+    from chrgd.profile import (
+        BrandProfile, brand_style_note, load_profile, profile_design_lock,
+        save_profile,
+    )
+
+    save_profile(store, BrandProfile(
+        house_style="loud dopamine pop-art",
+        palette="electric blue + hot magenta on cream",
+        type_style="chunky condensed all-caps",
+        character="a deadpan wiry UK gym bloke, buzz cut, grey hoodie",
+        motif="one battered kettlebell",
+    ))
+
+    # The image prompt carries the SAME character, framed as locked/identical.
+    prompt = compose_design_prompt(
+        Slide(headline="h", image_prompt="a squat rack"),
+        load_brand(), None, house_style=brand_style_note(store),
+    )
+    assert "LOCKED BRAND LOOK" in prompt
+    assert "IDENTICAL on every slide" in prompt
+    assert "deadpan wiry UK gym bloke" in prompt
+    assert "electric blue + hot magenta" in prompt
+
+    # The build call is told to fix its design_system to the locked look.
+    lock = profile_design_lock(load_profile(store))
+    assert "design_system" in lock and "match the locked values" in lock
+
+    store.add_idea(Idea(idea_id="G-0001", concept_note="rack hoggers"))
+    fake = FakeChat([good_post()])
+    build_single_idea(store, settings, "G-0001", client=fake)
+    _, user = fake.calls[0]
+    assert "LOCKED BRAND LOOK" in user
+    assert "one battered kettlebell" in user
+
+
+def test_visual_lock_absent_when_only_voice_set(store):
+    from chrgd.profile import BrandProfile, brand_style_note, profile_design_lock
+
+    save = BrandProfile(brand_name="CHRGD", voice="dry UK lifter")
+    assert not save.has_visual_lock()
+    assert profile_design_lock(save) == ""
+    # brand_style_note reads from the store, which is empty here → no look.
+    assert brand_style_note(store) == ""
+
+
+def test_settings_saves_character_field(client, settings):
+    client.post("/settings", data={
+        "brand_name": "CHRGD", "character": "deadpan gym bloke, grey hoodie",
+        "type_style": "chunky condensed caps",
+    }, follow_redirects=False)
+    from chrgd.profile import load_profile
+    with Store(settings.db_path) as store:
+        p = load_profile(store)
+    assert p.character == "deadpan gym bloke, grey hoodie"
+    assert p.type_style == "chunky condensed caps"
+    assert "deadpan gym bloke" in client.get("/settings").text

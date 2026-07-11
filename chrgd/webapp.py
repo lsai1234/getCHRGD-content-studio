@@ -305,6 +305,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         default_hashtags: str = Form(""),
         house_style: str = Form(""),
         palette: str = Form(""),
+        type_style: str = Form(""),
+        character: str = Form(""),
         motif: str = Form(""),
         _: str = Depends(require_user_page),
     ):
@@ -314,7 +316,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             brand_name=brand_name, one_liner=one_liner, voice=voice,
             audience=audience, dos=dos, donts=donts, handle=handle,
             default_hashtags=default_hashtags, house_style=house_style,
-            palette=palette, motif=motif,
+            palette=palette, type_style=type_style, character=character,
+            motif=motif,
         )
         with _store(settings) as store:
             save_profile(store, profile)

@@ -575,7 +575,7 @@ def build_ideas(
     total_spend = 0.0
 
     from .learning import performance_notes as _perf_notes
-    from .profile import brand_profile_notes as _brand_notes
+    from .profile import brand_build_notes as _brand_notes
     from .trends import meta_notes as _meta_notes
 
     # The brand profile + the account's own history + the live meta, together.
@@ -687,7 +687,7 @@ def build_single_idea(
         2: (60, "QA gate missed — asking for a stronger rewrite"),
     }
     from .learning import performance_notes
-    from .profile import brand_profile_notes as _brand_notes
+    from .profile import brand_build_notes as _brand_notes
     from .trends import meta_notes as _build_meta_notes
 
     try:

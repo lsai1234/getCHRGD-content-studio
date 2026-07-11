@@ -34,12 +34,22 @@ class BrandProfile(BaseModel):
     default_hashtags: str = ""  # space/comma separated, always-include tags
 
     # --- visual style (feeds image generation) ---
-    house_style: str = ""      # art-direction line applied to every slide
+    # These are treated as a LOCKED look, held identical on every post so the
+    # account is instantly recognisable instead of AI-random each time.
+    house_style: str = ""      # overall art-direction / aesthetic
     palette: str = ""          # brand colours + how they're used
-    motif: str = ""            # a recurring visual anchor/character/object
+    type_style: str = ""       # fixed typography treatment
+    character: str = ""        # a recurring character/mascot, same every post
+    motif: str = ""            # a recurring object/graphic device
 
     def is_empty(self) -> bool:
         return not any(v.strip() for v in self.model_dump().values())
+
+    def has_visual_lock(self) -> bool:
+        return any(v.strip() for v in (
+            self.house_style, self.palette, self.type_style,
+            self.character, self.motif,
+        ))
 
 
 def load_profile(store: Store) -> BrandProfile:
@@ -95,28 +105,68 @@ def profile_engine_block(profile: BrandProfile) -> str:
     )
 
 
-def profile_style_block(profile: BrandProfile) -> str:
-    """House art-direction for the image prompts. '' when nothing visual set."""
+def _visual_rows(profile: BrandProfile) -> list[str]:
     rows: list[str] = []
     if profile.house_style.strip():
-        rows.append(profile.house_style.strip())
+        rows.append(f"Aesthetic: {profile.house_style.strip()}")
     if profile.palette.strip():
-        rows.append(f"Brand palette: {profile.palette.strip()}")
+        rows.append(f"Palette: {profile.palette.strip()}")
+    if profile.type_style.strip():
+        rows.append(f"Typography: {profile.type_style.strip()}")
+    if profile.character.strip():
+        rows.append(f"Recurring character (SAME on every post): {profile.character.strip()}")
     if profile.motif.strip():
-        rows.append(f"Recurring brand motif: {profile.motif.strip()}")
+        rows.append(f"Recurring motif: {profile.motif.strip()}")
+    return rows
+
+
+def profile_style_block(profile: BrandProfile) -> str:
+    """The locked brand look for the IMAGE prompts. '' when nothing visual set.
+
+    Framed as identical-every-post so slides stop looking like random,
+    freshly-invented AI art and read as one brand."""
+    rows = _visual_rows(profile)
     if not rows:
         return ""
     return (
-        "HOUSE BRAND STYLE (apply to EVERY slide so the whole account looks "
-        "like one brand): " + " · ".join(rows)
+        "LOCKED BRAND LOOK — this is the account's fixed visual identity and "
+        "must be IDENTICAL on every slide of every post (same aesthetic, same "
+        "colours, same typography, same character). Do NOT reinvent it or drift "
+        "— only the specific scene changes post to post. If a recurring "
+        "character is named, that EXACT character (same face, build, clothing) "
+        "must appear, consistent frame to frame:\n" + _bullet(rows)
+    )
+
+
+def profile_design_lock(profile: BrandProfile) -> str:
+    """The locked look for the BUILD call, so the design_system it generates
+    adopts these fixed values instead of inventing a new look each post."""
+    rows = _visual_rows(profile)
+    if not rows:
+        return ""
+    return (
+        "LOCKED BRAND LOOK — the account has a FIXED visual identity. When you "
+        "produce the design_system for this post, its palette, type_style, "
+        "motif and any character MUST match the locked values below exactly "
+        "(do not invent new ones); only `layout`/`evolution` (the scene and "
+        "how it moves) may vary. This is what makes every post recognisably "
+        "the same brand rather than random AI art:\n" + _bullet(rows)
     )
 
 
 def brand_profile_notes(store: Store) -> str:
-    """Convenience: the engine block for the currently-saved profile."""
+    """Convenience: the engine (voice) block for the saved profile."""
     return profile_engine_block(load_profile(store))
 
 
+def brand_build_notes(store: Store) -> str:
+    """The voice block + the design lock, for the full build call."""
+    profile = load_profile(store)
+    return "\n\n".join(
+        x for x in (profile_engine_block(profile), profile_design_lock(profile)) if x
+    )
+
+
 def brand_style_note(store: Store) -> str:
-    """Convenience: the image-style block for the currently-saved profile."""
+    """Convenience: the locked-look image block for the saved profile."""
     return profile_style_block(load_profile(store))

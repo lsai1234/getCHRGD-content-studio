@@ -70,17 +70,26 @@
     </div>
 
     <div class="set-card">
-      <h2>Visual style</h2>
-      <p class="sub">Applied to every slide the image AI designs, so the whole account looks like one brand.</p>
+      <h2>Brand look <span class="k" style="font-weight:400;font-size:12px;color:var(--muted)">— locked across every post</span></h2>
+      <p class="sub">Held <b>identical on every post</b> so your account is instantly recognisable
+        instead of looking like fresh AI art each time. Fill in what you want fixed; the more you
+        set, the more consistent (and less "sloppy") every post looks. Only the scene changes post to post.</p>
 
-      <label>House art-direction <span class="k">— the look every slide shares</span></label>
-      <textarea name="house_style" placeholder="gritty flash-photo gym realism, high contrast, bold condensed type">{{ profile.house_style }}</textarea>
+      <label>Overall aesthetic <span class="k">— the vibe every slide shares</span></label>
+      <textarea name="house_style" placeholder="loud, high-saturation dopamine pop-art — bold flat shapes, thick outlines, playful energy">{{ profile.house_style }}</textarea>
 
-      <label>Brand palette <span class="k">— colours + how they're used</span></label>
+      <label>Brand palette <span class="k">— the exact colours, used the same way every time</span></label>
       <input name="palette" value="{{ profile.palette }}"
-             placeholder="cobalt blue on near-black, bone-white text, one hot accent">
+             placeholder="electric blue + hot magenta on cream, one lime accent">
 
-      <label>Recurring motif <span class="k">— a visual anchor across posts</span></label>
+      <label>Typography <span class="k">— the fixed type treatment</span></label>
+      <input name="type_style" value="{{ profile.type_style }}"
+             placeholder="chunky condensed all-caps sans, black weight, tight">
+
+      <label>Recurring character <span class="k">— the SAME character/mascot in every post</span></label>
+      <textarea name="character" placeholder="e.g. a deadpan wiry UK gym bloke, buzz cut, grey hoodie, always mid-eye-roll — same face every time">{{ profile.character }}</textarea>
+
+      <label>Recurring motif <span class="k">— a fixed object/graphic device</span></label>
       <input name="motif" value="{{ profile.motif }}"
              placeholder="one battered kettlebell that reappears each post">
     </div>
