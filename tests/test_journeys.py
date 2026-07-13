@@ -1976,3 +1976,77 @@ def test_settings_saves_character_field(client, settings):
     assert p.character == "deadpan gym bloke, grey hoodie"
     assert p.type_style == "chunky condensed caps"
     assert "deadpan gym bloke" in client.get("/settings").text
+
+
+# --- visual continuity: slide 1 anchors the rest of the carousel -----------------
+
+
+def test_reference_continuity_anchors_later_slides(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    calls = []
+
+    def fake_gen(prompt, s, brand, quality, anchor=None):
+        calls.append(anchor is not None)
+        return PILImage.new("RGB", (100, 150), (10, 20, 30))
+
+    monkeypatch.setattr(images, "_generate_background", fake_gen)
+    images.render_carousel(make_built_idea(), settings, dry_run=False)  # 5 slides
+    assert len(calls) == 5
+    assert calls[0] is False        # slide 1 is generated plain — it's the anchor
+    assert all(calls[1:])           # every later slide is generated FROM it
+
+
+def test_reference_continuity_can_be_disabled(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+    from chrgd.brand import load_brand
+
+    settings.openai_api_key = "sk-test"
+    brand = load_brand().model_copy(deep=True)
+    brand.generation.reference_continuity = False
+    calls = []
+    monkeypatch.setattr(
+        images, "_generate_background",
+        lambda p, s, b, q, anchor=None: calls.append(anchor is not None)
+        or PILImage.new("RGB", (100, 150)),
+    )
+    images.render_carousel(make_built_idea(), settings, dry_run=False, brand=brand)
+    assert calls and not any(calls)  # no slide references another
+
+
+def test_regen_single_slide_anchors_to_saved_first_slide(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    idea = make_built_idea()
+    # Render the full set first (dry) so slide_1 exists on disk.
+    images.render_carousel(idea, settings, dry_run=True)
+
+    seen = {}
+    monkeypatch.setattr(
+        images, "_generate_background",
+        lambda p, s, b, q, anchor=None: seen.update(got=anchor is not None)
+        or PILImage.new("RGB", (100, 150)),
+    )
+    images.render_slide(idea, 3, settings, dry_run=False)  # regen slide 4 alone
+    assert seen["got"] is True  # picked up the saved slide 1 as its anchor
+
+
+def test_anchored_prompt_tells_model_to_match_reference():
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    p = compose_design_prompt(
+        Slide(headline="h", image_prompt="a squat rack"),
+        load_brand(), None, index=2, anchored=True,
+    )
+    assert "reference image" in p.lower()
+    assert "identical character" in p.lower()

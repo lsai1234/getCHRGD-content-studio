@@ -110,9 +110,20 @@ def _placeholder_background(brand: Brand, seed: int) -> Image.Image:
 
 
 def _generate_background(
-    prompt: str, settings: Settings, brand: Brand, quality: str
+    prompt: str,
+    settings: Settings,
+    brand: Brand,
+    quality: str,
+    anchor: Image.Image | None = None,
 ) -> Image.Image:
-    """Call the image API for one background. Raises ImageError on failure."""
+    """Call the image API for one background. Raises ImageError on failure.
+
+    When `anchor` (slide 1's rendered image) is supplied, the slide is
+    generated with that image as a VISUAL reference via the edit endpoint, so
+    the same character, palette and style carry across as real pixels — the
+    text prompt alone can't hold a character consistent between separate
+    generations. Falls back to plain generation if the edit path is
+    unavailable."""
     key = settings.get_image_key()
     if not key:
         raise ImageError(
@@ -131,13 +142,27 @@ def _generate_background(
     # Explicit base_url: see Settings.get_openai_base_url.
     client = OpenAI(api_key=key, base_url=settings.get_openai_base_url())
     try:
-        resp = client.images.generate(
-            model=settings.image_model,
-            prompt=prompt,
-            size=brand.generation.size,
-            quality=quality,
-            n=1,
-        )
+        if anchor is not None:
+            buf = BytesIO()
+            anchor.convert("RGB").save(buf, "PNG")
+            buf.name = "anchor.png"
+            buf.seek(0)
+            resp = client.images.edit(
+                model=settings.image_model,
+                image=buf,
+                prompt=prompt,
+                size=brand.generation.size,
+                quality=quality,
+                n=1,
+            )
+        else:
+            resp = client.images.generate(
+                model=settings.image_model,
+                prompt=prompt,
+                size=brand.generation.size,
+                quality=quality,
+                n=1,
+            )
         b64 = resp.data[0].b64_json
     except Exception as exc:  # noqa: BLE001
         from .pipeline import _describe_llm_error
@@ -280,6 +305,7 @@ def compose_design_prompt(
     index: int = 0,
     design_system: dict | None = None,
     house_style: str = "",
+    anchored: bool = False,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -289,6 +315,18 @@ def compose_design_prompt(
     journey, so the set reads as one continuous story rather than isolated
     slides (each image is generated blind to its siblings)."""
     parts = []
+    # When a reference image is attached (this slide is generated FROM slide 1),
+    # the strongest instruction is to match it — lead with that.
+    if anchored:
+        parts.append(
+            "You are given the FIRST slide of this carousel as a reference "
+            "image. Produce the NEXT slide in the exact same visual world: keep "
+            "the identical character (same face, build, clothing), the identical "
+            "colour palette, lighting, art style and typography as the reference "
+            "— change only the scene/pose/composition for this slide's content. "
+            "It must look unmistakably like the same designer made both, seconds "
+            "apart."
+        )
     if slide.image_prompt.strip():
         parts.append(slide.image_prompt.strip())
     # The editable house style (settings page) overrides generic art direction:
@@ -610,6 +648,7 @@ def render_slide(
     spent_so_far: float = 0.0,
     notify=None,
     house_style: str = "",
+    anchor: Image.Image | None = None,
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
@@ -645,6 +684,22 @@ def render_slide(
         if notify:
             notify(f"slide {slide_index + 1}: {msg}")
 
+    # Regenerating a later slide on its own: anchor it to the saved slide 1 so
+    # it still matches the set (unless an anchor was passed in explicitly).
+    if (
+        anchor is None
+        and slide_index > 0
+        and not dry_run
+        and brand.generation.reference_continuity
+    ):
+        first = _slide_path(out_dir, 0, ext)
+        if first.exists():
+            try:
+                anchor = Image.open(first)
+                anchor.load()
+            except OSError:
+                anchor = None
+
     result = SlideRenderResult(
         idea_id=idea.idea_id, slide_index=slide_index, dry_run=dry_run
     )
@@ -658,6 +713,7 @@ def render_slide(
                     f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
                     f"at slide {slide_index + 1} — aborting render"
                 )
+            use_anchor = anchor if brand.generation.reference_continuity else None
             if mode == "ai_design":
                 prompt = compose_design_prompt(
                     slide,
@@ -667,14 +723,18 @@ def render_slide(
                     index=slide_index,
                     design_system=_route_of(idea).get("design_system"),
                     house_style=house_style,
+                    anchored=use_anchor is not None,
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
             _note(
                 f"request sent to {settings.image_model} ({quality} quality) — "
-                "waiting for the image, typically 20-60s"
+                + ("matching the first slide's look — " if use_anchor is not None else "")
+                + "waiting for the image, typically 20-60s"
             )
-            background = _generate_background(prompt, settings, brand, quality)
+            background = _generate_background(
+                prompt, settings, brand, quality, anchor=use_anchor
+            )
             _note("image received — fitting to canvas and saving")
             result.spend_usd += per_image
             result.generated += 1
@@ -817,6 +877,12 @@ def render_carousel(
     slides = _slides_from_idea(idea)
     result = RenderResult(idea_id=idea.idea_id, dry_run=dry_run)
 
+    # Slide 1 is rendered first and becomes the ANCHOR: every later slide is
+    # generated from it as a visual reference so the whole set shares one
+    # character/palette/look as real pixels, not just matching words.
+    anchor: Image.Image | None = None
+    use_ref = brand.generation.reference_continuity and not dry_run and len(slides) > 1
+
     for i in range(len(slides)):
         slide_result = render_slide(
             idea,
@@ -827,12 +893,20 @@ def render_carousel(
             spent_so_far=result.spend_usd,
             notify=notify,
             house_style=house_style,
+            anchor=anchor if i > 0 else None,
         )
         result.spend_usd += slide_result.spend_usd
         result.generated += slide_result.generated
         result.paths.append(slide_result.path)
         if slide_result.variant_paths:
             result.variants[i] = slide_result.variant_paths
+        # Capture slide 1's finished image to anchor the rest of the set.
+        if i == 0 and use_ref and slide_result.path:
+            try:
+                anchor = Image.open(slide_result.path)
+                anchor.load()
+            except OSError:
+                anchor = None
         if on_slide:
             on_slide(i + 1, len(slides))
 

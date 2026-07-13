@@ -53,6 +53,11 @@ class Generation(BaseModel):
         "Absolutely no text, no words, no letters, no numbers, no captions, "
         "no watermarks anywhere in the image."
     )
+    # Generate slides 2..N with slide 1 attached as a VISUAL reference (image
+    # edit), so the character/palette/style carry across as real pixels rather
+    # than just words. The single biggest lever on the swipe feeling like one
+    # connected piece. Costs a touch more per image; set false to disable.
+    reference_continuity: bool = True
 
     def quality_for(self, slide_index: int) -> str:
         return self.quality_first if slide_index == 0 else self.quality_rest
