@@ -303,7 +303,7 @@ def _handle_concept(store: Store, settings: Settings, job: dict) -> dict:
 def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
     """(Re)generate the background(s) for a single slide."""
     from .images import list_variants, render_slide
-    from .profile import brand_style_note
+    from .profile import brand_style_note, brand_swipe_style
 
     params = json.loads(job["params_json"] or "{}")
     idea = store.get_idea(job["idea_id"])
@@ -320,6 +320,7 @@ def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
         variants=params.get("variants"),
         notify=notify,
         house_style=brand_style_note(store),
+        swipe_style=brand_swipe_style(store),
     )
     # Keep asset_paths_json in step for posts rendered slide-by-slide.
     paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []

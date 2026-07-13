@@ -1989,8 +1989,8 @@ def test_reference_continuity_anchors_later_slides(settings, monkeypatch):
     settings.openai_api_key = "sk-test"
     calls = []
 
-    def fake_gen(prompt, s, brand, quality, anchor=None):
-        calls.append(anchor is not None)
+    def fake_gen(prompt, s, brand, quality, references=None):
+        calls.append(bool(references))
         return PILImage.new("RGB", (100, 150), (10, 20, 30))
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
@@ -2012,7 +2012,7 @@ def test_reference_continuity_can_be_disabled(settings, monkeypatch):
     calls = []
     monkeypatch.setattr(
         images, "_generate_background",
-        lambda p, s, b, q, anchor=None: calls.append(anchor is not None)
+        lambda p, s, b, q, references=None: calls.append(bool(references))
         or PILImage.new("RGB", (100, 150)),
     )
     images.render_carousel(make_built_idea(), settings, dry_run=False, brand=brand)
@@ -2032,7 +2032,7 @@ def test_regen_single_slide_anchors_to_saved_first_slide(settings, monkeypatch):
     seen = {}
     monkeypatch.setattr(
         images, "_generate_background",
-        lambda p, s, b, q, anchor=None: seen.update(got=anchor is not None)
+        lambda p, s, b, q, references=None: seen.update(got=bool(references))
         or PILImage.new("RGB", (100, 150)),
     )
     images.render_slide(idea, 3, settings, dry_run=False)  # regen slide 4 alone
@@ -2050,3 +2050,81 @@ def test_anchored_prompt_tells_model_to_match_reference():
     )
     assert "reference image" in p.lower()
     assert "identical character" in p.lower()
+
+
+# --- seamless-pan swipe experience -----------------------------------------------
+
+
+def test_pan_mode_passes_two_references_for_edge_continuity(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    ref_counts = []
+
+    def fake_gen(prompt, s, brand, quality, references=None):
+        ref_counts.append(len(references) if references else 0)
+        return PILImage.new("RGB", (100, 150), (5, 5, 5))
+
+    monkeypatch.setattr(images, "_generate_background", fake_gen)
+    images.render_carousel(
+        make_built_idea(), settings, dry_run=False, swipe_style="pan"
+    )
+    assert ref_counts[0] == 0        # slide 1: no reference, it's the anchor
+    assert ref_counts[1] == 2        # slide 2: anchor + previous slide
+    assert all(c == 2 for c in ref_counts[1:])  # every later slide pans
+
+
+def test_cohesive_mode_passes_only_the_anchor(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    ref_counts = []
+    monkeypatch.setattr(
+        images, "_generate_background",
+        lambda p, s, b, q, references=None: ref_counts.append(
+            len(references) if references else 0
+        ) or PILImage.new("RGB", (100, 150)),
+    )
+    images.render_carousel(
+        make_built_idea(), settings, dry_run=False, swipe_style="cohesive"
+    )
+    assert ref_counts[0] == 0
+    assert all(c == 1 for c in ref_counts[1:])  # anchor only, no pan
+
+
+def test_pan_prompt_demands_seamless_join():
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    p = compose_design_prompt(
+        Slide(headline="h", image_prompt="a gym"),
+        load_brand(), None, index=2, anchored=True, pan=True,
+    )
+    low = p.lower()
+    assert "two reference images" in low
+    assert "seamless" in low and "no visible seam" in low
+    assert "one continuous panoramic scene" in low
+
+
+def test_swipe_style_saves_and_flows_to_render(client, settings):
+    client.post("/settings", data={
+        "brand_name": "CHRGD", "swipe_style": "pan",
+    }, follow_redirects=False)
+    from chrgd.profile import brand_swipe_style, load_profile
+    with Store(settings.db_path) as store:
+        assert load_profile(store).swipe_style == "pan"
+        assert brand_swipe_style(store) == "pan"
+    assert "Seamless pan" in client.get("/settings").text
+
+
+def test_swipe_style_defaults_cohesive_and_profile_stays_empty(store):
+    from chrgd.profile import BrandProfile, brand_swipe_style
+
+    assert BrandProfile().swipe_style == "cohesive"
+    assert BrandProfile().is_empty()   # the default mode isn't "content"
+    assert brand_swipe_style(store) == "cohesive"  # unset store → default

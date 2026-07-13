@@ -114,16 +114,16 @@ def _generate_background(
     settings: Settings,
     brand: Brand,
     quality: str,
-    anchor: Image.Image | None = None,
+    references: list[Image.Image] | None = None,
 ) -> Image.Image:
     """Call the image API for one background. Raises ImageError on failure.
 
-    When `anchor` (slide 1's rendered image) is supplied, the slide is
-    generated with that image as a VISUAL reference via the edit endpoint, so
-    the same character, palette and style carry across as real pixels — the
-    text prompt alone can't hold a character consistent between separate
-    generations. Falls back to plain generation if the edit path is
-    unavailable."""
+    When `references` are supplied (slide 1 as the identity anchor, and/or the
+    previous slide for a seamless pan), the slide is generated with them as
+    VISUAL references via the edit endpoint, so the same character, palette and
+    style — and, in pan mode, the continuing composition — carry across as real
+    pixels. The text prompt alone can't hold a character or a continuous scene
+    consistent between separate generations."""
     key = settings.get_image_key()
     if not key:
         raise ImageError(
@@ -142,14 +142,17 @@ def _generate_background(
     # Explicit base_url: see Settings.get_openai_base_url.
     client = OpenAI(api_key=key, base_url=settings.get_openai_base_url())
     try:
-        if anchor is not None:
-            buf = BytesIO()
-            anchor.convert("RGB").save(buf, "PNG")
-            buf.name = "anchor.png"
-            buf.seek(0)
+        if references:
+            files = []
+            for i, ref in enumerate(references):
+                buf = BytesIO()
+                ref.convert("RGB").save(buf, "PNG")
+                buf.name = f"ref_{i}.png"
+                buf.seek(0)
+                files.append(buf)
             resp = client.images.edit(
                 model=settings.image_model,
-                image=buf,
+                image=files if len(files) > 1 else files[0],
                 prompt=prompt,
                 size=brand.generation.size,
                 quality=quality,
@@ -306,6 +309,7 @@ def compose_design_prompt(
     design_system: dict | None = None,
     house_style: str = "",
     anchored: bool = False,
+    pan: bool = False,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -313,11 +317,28 @@ def compose_design_prompt(
     When `slides` + `design_system` are supplied the prompt also carries the
     carousel's shared visual language and this frame's place in the swipe
     journey, so the set reads as one continuous story rather than isolated
-    slides (each image is generated blind to its siblings)."""
+    slides (each image is generated blind to its siblings). `pan` turns the
+    set into one seamless horizontal shot the viewer glides through."""
     parts = []
-    # When a reference image is attached (this slide is generated FROM slide 1),
-    # the strongest instruction is to match it — lead with that.
-    if anchored:
+    # When reference image(s) are attached, matching them is the strongest
+    # instruction — lead with it. Pan mode makes the swipe one continuous move.
+    if pan:
+        parts.append(
+            "You are given TWO reference images: the FIRST slide of this "
+            "carousel (the brand anchor) and the slide IMMEDIATELY BEFORE this "
+            "one. This carousel is ONE continuous panoramic scene the viewer "
+            "glides through by swiping — like a single camera slowly panning. "
+            "Your image is the very next section of that same unbroken scene: "
+            "keep the identical character (same face, build, clothing), palette, "
+            "lighting, art style and typography, and continue the composition "
+            "SEAMLESSLY from the right-hand edge of the previous slide so that, "
+            "placed side by side, they line up into one uninterrupted image "
+            "with no visible seam. Move the scene along — a new part of the "
+            "world, the character a step further through it — never repeat the "
+            "previous frame. This is a designed, scroll-stopping experience, "
+            "not five separate posters."
+        )
+    elif anchored:
         parts.append(
             "You are given the FIRST slide of this carousel as a reference "
             "image. Produce the NEXT slide in the exact same visual world: keep "
@@ -649,6 +670,8 @@ def render_slide(
     notify=None,
     house_style: str = "",
     anchor: Image.Image | None = None,
+    prev: Image.Image | None = None,
+    swipe_style: str = "cohesive",
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
@@ -685,7 +708,8 @@ def render_slide(
             notify(f"slide {slide_index + 1}: {msg}")
 
     # Regenerating a later slide on its own: anchor it to the saved slide 1 so
-    # it still matches the set (unless an anchor was passed in explicitly).
+    # it still matches the set (unless an anchor was passed in explicitly). In
+    # pan mode also pull the immediately-previous slide for edge continuity.
     if (
         anchor is None
         and slide_index > 0
@@ -699,6 +723,14 @@ def render_slide(
                 anchor.load()
             except OSError:
                 anchor = None
+        if swipe_style == "pan" and prev is None:
+            prior = _slide_path(out_dir, slide_index - 1, ext)
+            if prior.exists():
+                try:
+                    prev = Image.open(prior)
+                    prev.load()
+                except OSError:
+                    prev = None
 
     result = SlideRenderResult(
         idea_id=idea.idea_id, slide_index=slide_index, dry_run=dry_run
@@ -713,7 +745,15 @@ def render_slide(
                     f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
                     f"at slide {slide_index + 1} — aborting render"
                 )
-            use_anchor = anchor if brand.generation.reference_continuity else None
+            # Build the visual references: slide 1 (identity anchor) always;
+            # the previous slide too in pan mode (edge continuity / one shot).
+            refs: list[Image.Image] = []
+            panning = swipe_style == "pan" and prev is not None
+            if brand.generation.reference_continuity:
+                if anchor is not None:
+                    refs.append(anchor)
+                if panning:
+                    refs.append(prev)
             if mode == "ai_design":
                 prompt = compose_design_prompt(
                     slide,
@@ -723,17 +763,19 @@ def render_slide(
                     index=slide_index,
                     design_system=_route_of(idea).get("design_system"),
                     house_style=house_style,
-                    anchored=use_anchor is not None,
+                    anchored=bool(refs),
+                    pan=panning,
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
             _note(
                 f"request sent to {settings.image_model} ({quality} quality) — "
-                + ("matching the first slide's look — " if use_anchor is not None else "")
+                + ("continuing the pan from the last slide — " if panning
+                   else "matching the first slide's look — " if refs else "")
                 + "waiting for the image, typically 20-60s"
             )
             background = _generate_background(
-                prompt, settings, brand, quality, anchor=use_anchor
+                prompt, settings, brand, quality, references=refs or None
             )
             _note("image received — fitting to canvas and saving")
             result.spend_usd += per_image
@@ -866,12 +908,15 @@ def render_carousel(
     on_slide=None,
     notify=None,
     house_style: str = "",
+    swipe_style: str = "cohesive",
 ) -> RenderResult:
     """Render every slide for one idea to disk. Returns paths + spend.
 
     `on_slide(done, total)` fires after each slide for job progress;
     `notify(msg)` streams fine-grained step updates (request sent, waiting,
-    image received) for the queue page.
+    image received) for the queue page. `swipe_style` shapes the experience:
+    'cohesive' (same world, distinct scenes) or 'pan' (one seamless shot the
+    viewer glides through, each slide continuing the previous one's edge).
     """
     brand = brand or load_brand()
     slides = _slides_from_idea(idea)
@@ -879,8 +924,10 @@ def render_carousel(
 
     # Slide 1 is rendered first and becomes the ANCHOR: every later slide is
     # generated from it as a visual reference so the whole set shares one
-    # character/palette/look as real pixels, not just matching words.
+    # character/palette/look as real pixels, not just matching words. In pan
+    # mode each slide is also handed the previous one for a seamless join.
     anchor: Image.Image | None = None
+    prev: Image.Image | None = None
     use_ref = brand.generation.reference_continuity and not dry_run and len(slides) > 1
 
     for i in range(len(slides)):
@@ -894,19 +941,25 @@ def render_carousel(
             notify=notify,
             house_style=house_style,
             anchor=anchor if i > 0 else None,
+            prev=prev if i > 0 else None,
+            swipe_style=swipe_style,
         )
         result.spend_usd += slide_result.spend_usd
         result.generated += slide_result.generated
         result.paths.append(slide_result.path)
         if slide_result.variant_paths:
             result.variants[i] = slide_result.variant_paths
-        # Capture slide 1's finished image to anchor the rest of the set.
-        if i == 0 and use_ref and slide_result.path:
+        # Capture this slide's finished image: slide 1 becomes the anchor, and
+        # every slide becomes the `prev` for the next one (pan continuity).
+        if use_ref and slide_result.path:
             try:
-                anchor = Image.open(slide_result.path)
-                anchor.load()
+                img = Image.open(slide_result.path)
+                img.load()
+                if i == 0:
+                    anchor = img
+                prev = img
             except OSError:
-                anchor = None
+                prev = None
         if on_slide:
             on_slide(i + 1, len(slides))
 

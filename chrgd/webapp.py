@@ -308,6 +308,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         type_style: str = Form(""),
         character: str = Form(""),
         motif: str = Form(""),
+        swipe_style: str = Form("cohesive"),
         _: str = Depends(require_user_page),
     ):
         from .profile import BrandProfile, save_profile
@@ -318,6 +319,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             default_hashtags=default_hashtags, house_style=house_style,
             palette=palette, type_style=type_style, character=character,
             motif=motif,
+            swipe_style="pan" if swipe_style == "pan" else "cohesive",
         )
         with _store(settings) as store:
             save_profile(store, profile)

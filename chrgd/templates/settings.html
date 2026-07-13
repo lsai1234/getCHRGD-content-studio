@@ -94,6 +94,25 @@
              placeholder="one battered kettlebell that reappears each post">
     </div>
 
+    <div class="set-card">
+      <h2>Swipe experience <span class="k" style="font-weight:400;font-size:12px;color:var(--muted)">— how the carousel connects</span></h2>
+      <p class="sub">This is what makes your posts feel like a designed experience, not five separate
+        AI images. Each slide is generated from the one before it so the set holds together.</p>
+
+      <label style="margin-top:4px">
+        <input type="radio" name="swipe_style" value="cohesive" style="width:auto;margin-right:8px"
+               {{ 'checked' if profile.swipe_style != 'pan' }}>
+        <b>Cohesive set</b> <span class="k">— same world &amp; character, a distinct scene each slide (safe default)</span>
+      </label>
+      <label style="margin-top:8px">
+        <input type="radio" name="swipe_style" value="pan" style="width:auto;margin-right:8px"
+               {{ 'checked' if profile.swipe_style == 'pan' }}>
+        <b>Seamless pan</b> <span class="k">— one continuous scene the viewer glides through, like a single camera move across the whole post. Boldest, most distinctive; try it and see.</span>
+      </label>
+      <p class="muted" style="font-size:12px;margin:12px 0 0">Applies to newly rendered posts. Seamless pan is
+        leading-edge — results vary by topic, so build one and check the swipe before committing to it.</p>
+    </div>
+
     <div class="save-row">
       <button type="submit">Save settings</button>
       <span class="muted" style="font-size:12.5px">Applies to your next build &amp; render.</span>

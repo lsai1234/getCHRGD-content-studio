@@ -21,6 +21,10 @@ from .db import Store
 
 SETTINGS_KEY = "brand_profile"
 
+# Fields that carry a non-blank default (a mode, not user content) — excluded
+# from is_empty so a fresh profile still counts as blank.
+_MODE_FIELDS = ("swipe_style",)
+
 
 class BrandProfile(BaseModel):
     # --- brand & voice (feeds the engine) ---
@@ -41,9 +45,17 @@ class BrandProfile(BaseModel):
     type_style: str = ""       # fixed typography treatment
     character: str = ""        # a recurring character/mascot, same every post
     motif: str = ""            # a recurring object/graphic device
+    # How the carousel connects as a swipe experience:
+    #   'cohesive' — same world + character, distinct scene per slide (default)
+    #   'pan'      — one seamless panoramic shot the viewer glides through
+    swipe_style: str = "cohesive"
 
     def is_empty(self) -> bool:
-        return not any(v.strip() for v in self.model_dump().values())
+        return not any(
+            v.strip()
+            for k, v in self.model_dump().items()
+            if k not in _MODE_FIELDS
+        )
 
     def has_visual_lock(self) -> bool:
         return any(v.strip() for v in (
@@ -170,3 +182,9 @@ def brand_build_notes(store: Store) -> str:
 def brand_style_note(store: Store) -> str:
     """Convenience: the locked-look image block for the saved profile."""
     return profile_style_block(load_profile(store))
+
+
+def brand_swipe_style(store: Store) -> str:
+    """The chosen swipe experience ('cohesive' | 'pan') for the saved profile."""
+    style = load_profile(store).swipe_style.strip().lower()
+    return style if style in ("cohesive", "pan") else "cohesive"
