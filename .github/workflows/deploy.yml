@@ -14,10 +14,20 @@ jobs:
           host: 46.101.91.218
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Fail the step if any command fails, instead of silently masking a
+          # broken deploy behind a successful restart of stale code.
+          script_stop: true
           script: |
+            set -e
             git config --global --add safe.directory /opt/chrgd/app
             cd /opt/chrgd/app
-            git pull
+            # Hard-reset to the deployed branch rather than `git pull`: a pull
+            # jams permanently on "divergent branches" after any history
+            # rewrite and then every deploy restarts stale code. .env, the DB
+            # (data/*.db) and output/ are gitignored, so reset never touches
+            # them. This is the source of truth for what runs in production.
+            git fetch origin claude/milestone-1-build-7dvdla
+            git reset --hard origin/claude/milestone-1-build-7dvdla
             .venv/bin/pip install -e ".[web,llm,media]" -q
             # A blank OPENAI_BASE_URL= line becomes a real empty env var under
             # systemd EnvironmentFile and breaks the OpenAI SDK. Idempotent.
