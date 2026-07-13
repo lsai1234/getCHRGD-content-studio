@@ -57,6 +57,10 @@
     header nav a.on::after { content:''; position:absolute; left:13px; right:13px; bottom:3px;
       height:2px; border-radius:2px; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
     header form { margin-left:8px; }
+    /* Settings stands out from the text links so it's never lost in the nav. */
+    header nav a.nav-settings { color:var(--fg); background:var(--accent-tint);
+      border:1px solid var(--accent-line, rgba(79,195,247,.4)); font-weight:600; }
+    header nav a.nav-settings:hover { background:var(--accent-tint); filter:brightness(1.2); }
     @media(max-width:600px){
       header { padding:11px 14px; }
       header nav { gap:1px; }
@@ -155,7 +159,7 @@
       <a href="/calendar" class="{{ 'on' if active=='calendar' }}">Calendar</a>
       <a href="/queue" class="{{ 'on' if active=='queue' }}">Queue{% if queue_active %} <span style="color:var(--accent)">●{{ queue_active }}</span>{% endif %}</a>
       <a href="/backlog" class="{{ 'on' if active in ('backlog','build','trends','review','export','dashboard') }}">Library{% if review_count %} ({{ review_count }}){% endif %}</a>
-      <a href="/settings" class="{{ 'on' if active=='settings' }}">Settings</a>
+      <a href="/settings" class="nav-settings {{ 'on' if active=='settings' }}" title="Settings" aria-label="Settings">⚙ Settings</a>
       <form method="post" action="/logout" style="display:inline">
         <button class="ghost" style="margin:0;padding:7px 13px">Log out</button>
       </form>
