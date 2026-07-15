@@ -31,7 +31,18 @@ class Settings(BaseSettings):
 
     # --- LLM pipeline (milestone 2+) ---
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
+    # The CREATIVE model — writes the actual post copy that ships. Quality here
+    # is the product, so it's the one place worth a top-tier model. gpt-4o is a
+    # safe default; gpt-5 or gpt-4.1 are both cheaper AND stronger (see
+    # .env.example) — switch here once you've confirmed the id on your account.
     openai_model: str = Field(default="gpt-4o", alias="CHRGD_OPENAI_MODEL")
+    # The SCOUT model — trend/meta research + summarising into JSON. Mechanical
+    # work that doesn't touch shipped copy, so a cheap fast model is the right
+    # call (gpt-4o-mini ≈ 1/16th the price of gpt-4o).
+    scout_model: str = Field(default="gpt-4o-mini", alias="CHRGD_SCOUT_MODEL")
+    # The JUDGE model — the cold scroll test's vision verdict. A rubric-based
+    # stop/scroll call on one image; a cheap vision model handles it fine.
+    judge_model: str = Field(default="gpt-4o-mini", alias="CHRGD_JUDGE_MODEL")
     # Optional base-URL override (aggregators / Azure / compatible gateways).
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     # The official endpoint, used whenever no override is set. Passed to the

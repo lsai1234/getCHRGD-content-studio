@@ -119,7 +119,8 @@ class OpenAITrendClient:
             api_key=settings.openai_api_key,
             base_url=settings.get_openai_base_url(),
         )
-        self._model = settings.openai_model
+        # Research/summarise work — cheap scout model, not the creative model.
+        self._model = settings.scout_model
 
     def search(self, system: str, user: str) -> str:
         try:

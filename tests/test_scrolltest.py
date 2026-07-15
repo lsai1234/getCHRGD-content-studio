@@ -181,6 +181,24 @@ def test_endpoint_400_without_render(settings, store):
     assert r.status_code == 400
 
 
+def test_judge_uses_the_cheap_judge_model_not_the_creative_one(settings):
+    from chrgd.scrolltest import OpenAIScrollJudge
+
+    settings.openai_api_key = "sk-test"
+    settings.openai_model = "gpt-4o"
+    settings.judge_model = "gpt-4o-mini"
+    assert OpenAIScrollJudge(settings)._model == "gpt-4o-mini"
+
+
+def test_scout_uses_the_cheap_scout_model(settings):
+    from chrgd.trends import OpenAITrendClient
+
+    settings.openai_api_key = "sk-test"
+    settings.openai_model = "gpt-4o"
+    settings.scout_model = "gpt-4o-mini"
+    assert OpenAITrendClient(settings)._model == "gpt-4o-mini"
+
+
 def test_endpoint_enqueues_for_rendered_idea(settings, store):
     _rendered_idea(settings, store)
     client = TestClient(create_app(settings))

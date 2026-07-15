@@ -107,7 +107,9 @@ class OpenAIScrollJudge:
             api_key=settings.openai_api_key,
             base_url=settings.get_openai_base_url(),
         )
-        self._model = settings.openai_model
+        # A rubric-based vision verdict — the cheap judge model, not the
+        # creative model (both must support image input).
+        self._model = settings.judge_model
 
     def judge(self, system: str, user: str, image_b64: str, mime: str) -> str:
         try:

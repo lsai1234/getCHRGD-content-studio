@@ -156,6 +156,14 @@ def test_estimate_cost_unknown_model_falls_back():
     assert estimate_cost("mystery-model", 1_000_000, 0) == pytest.approx(2.5)
 
 
+def test_mini_models_are_not_mispriced_as_their_base():
+    # Longest-prefix match: -mini/-nano must not inherit the base model's price.
+    assert estimate_cost("gpt-4o-mini", 1_000_000, 0) == pytest.approx(0.15)
+    assert estimate_cost("gpt-5-mini", 1_000_000, 1_000_000) == pytest.approx(0.25 + 2.0)
+    assert estimate_cost("gpt-5-nano", 1_000_000, 0) == pytest.approx(0.05)
+    assert estimate_cost("gpt-5", 1_000_000, 0) == pytest.approx(1.25)
+
+
 # --- runner -----------------------------------------------------------------
 
 
