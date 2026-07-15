@@ -59,6 +59,19 @@ prompt = "Deliberately mundane amateur photo look, awkward framing, fluorescent 
 label = "Dark cinematic"
 prompt = "Cinematic film still, anamorphic depth, volumetric light cutting through chalk dust in a dark gym, cool blue-and-black grade, icy light-blue highlights, high contrast, dramatic atmosphere."
 
+# --- Embedded typography (words rendered as part of the scene) ---------------
+# When a slide's copy is short and punchy, the image model can render the words
+# AS a real object in the shot (chalk on the floor, formed from plates, gym
+# neon, a sign the character holds) instead of a flat caption bar. Denser
+# slides (long copy or a reader `body` block) always use clean, legible type.
+[typography]
+embed_when_appropriate = true
+# Max headline+supporting length for a slide to qualify for embedded type.
+# Above this the copy needs clean legibility more than a creative treatment.
+embed_max_chars = 90
+# The brand's palette of ways to turn words into part of the CHRGD gym world.
+embed_prompt = "Render the words as a tangible part of the CHRGD gym world rather than a flat caption: e.g. spelled in chalk dust on the floor or a plate, formed from stacked weights, sprayed on a wall, glowing in gym neon or LED signage, written on the whiteboard by the water fountain, printed on a shaker or supplement label, or on a sign the recurring character holds. The typography is a real object in the shot — physically lit and placed in the scene — never a floating overlay."
+
 [safe_zones]          # fractions of the canvas kept clear of TikTok UI
 top = 0.10
 right = 0.18

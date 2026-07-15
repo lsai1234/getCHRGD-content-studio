@@ -59,6 +59,71 @@ def test_compose_slide_returns_rgb_canvas():
     assert out.size == (brand.canvas.width, brand.canvas.height)
 
 
+def test_short_slide_gets_embedded_typography():
+    from chrgd.images import compose_design_prompt
+
+    brand = load_brand()
+    slide = Slide(headline="how many scoops?", supporting="confess below")
+    prompt = compose_design_prompt(slide, brand, None)
+    # Words become part of the scene, not a caption bar…
+    assert "TANGIBLE PART OF THE SCENE" in prompt
+    assert "TYPOGRAPHY TREATMENT:" in prompt
+    # …and the clean caption-placement rules are NOT used.
+    assert "Place the headline in the upper third" not in prompt
+    # Legibility + exact-copy guarantees still hold.
+    assert "Use EXACTLY the text provided above" in prompt
+    assert "margin" in prompt.lower() and "off any edge" in prompt.lower()
+
+
+def test_reader_slide_stays_clean():
+    from chrgd.images import compose_design_prompt
+
+    brand = load_brand()
+    slide = Slide(
+        headline="the real cost",
+        supporting="what you're paying for",
+        body="A £4.50 energy drink is mostly water, sugar and caffeine. "
+        "The caffeine costs pennies. You're paying for the can and the brand.",
+    )
+    prompt = compose_design_prompt(slide, brand, None)
+    assert "This is a READER slide" in prompt
+    assert "Place the headline in the upper third" in prompt  # clean rules
+    assert "TANGIBLE PART OF THE SCENE" not in prompt
+
+
+def test_long_copy_stays_clean():
+    from chrgd.images import _typography_mode
+
+    brand = load_brand()
+    short = Slide(headline="one rep left", supporting="you said that 4 sets ago")
+    long = Slide(
+        headline="the five lads every single gym has and you are definitely one",
+        supporting="be honest with yourself before you tag the other four below",
+    )
+    assert _typography_mode(short, brand) == "embedded"
+    assert _typography_mode(long, brand) == "clean"
+
+
+def test_embedded_typography_can_be_disabled(monkeypatch):
+    from chrgd.images import _typography_mode
+
+    brand = load_brand()
+    slide = Slide(headline="short", supporting="copy")
+    assert _typography_mode(slide, brand) == "embedded"
+    monkeypatch.setattr(brand.typography, "embed_when_appropriate", False)
+    assert _typography_mode(slide, brand) == "clean"
+
+
+def test_compose_design_prompt_locks_recurring_character():
+    from chrgd.images import compose_design_prompt
+
+    brand = load_brand()
+    slide = Slide(headline="which one are you?", supporting="tag the other four")
+    prompt = compose_design_prompt(slide, brand, None, character_ref=True)
+    assert "LOCKED recurring character" in prompt
+    assert "same person" in prompt.lower()
+
+
 def test_render_without_slides_errors(settings):
     idea = Idea(idea_id="G-0002", concept_note="x")  # no slides_json
     with pytest.raises(ImageError):

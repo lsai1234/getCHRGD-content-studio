@@ -73,6 +73,24 @@ class StylePreset(BaseModel):
     prompt: str = ""
 
 
+class Typography(BaseModel):
+    """Controls when the model renders text as part of the scene vs a caption.
+
+    Embedded typography (words spelled in chalk, formed from plates, on a sign
+    the character holds) is the scroll-stopping treatment — but only where the
+    copy is short enough to stay legible. Longer or reader-heavy slides fall
+    back to clean, high-contrast type.
+    """
+
+    embed_when_appropriate: bool = True
+    embed_max_chars: int = 90
+    embed_prompt: str = (
+        "Render the words as a tangible part of the scene rather than a flat "
+        "caption — a real object in the shot, physically lit and placed, never "
+        "a floating overlay."
+    )
+
+
 class SafeZones(BaseModel):
     top: float = 0.10
     right: float = 0.18
@@ -126,6 +144,7 @@ class Brand(BaseModel):
     colors: Colors = Field(default_factory=Colors)
     fonts: Fonts = Field(default_factory=Fonts)
     text: TextOpts = Field(default_factory=TextOpts)
+    typography: Typography = Field(default_factory=Typography)
     identity: Identity = Field(default_factory=Identity)
     styles: dict[str, StylePreset] = Field(default_factory=dict)
 

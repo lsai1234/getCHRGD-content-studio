@@ -27,7 +27,7 @@
     engine decide.</p>
   {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
 
-  <form method="post" action="/settings">
+  <form method="post" action="/settings" enctype="multipart/form-data">
     <div class="set-card">
       <h2>Brand &amp; voice</h2>
       <p class="sub">Fed into every concept and every post — the biggest lever on what gets made.</p>
@@ -88,6 +88,20 @@
 
       <label>Recurring character <span class="k">— the SAME character/mascot in every post</span></label>
       <textarea name="character" placeholder="e.g. a deadpan wiry UK gym bloke, buzz cut, grey hoodie, always mid-eye-roll — same face every time">{{ profile.character }}</textarea>
+
+      <label>Locked character portrait <span class="k">— pins the EXACT same face across every post</span></label>
+      <p class="sub" style="margin:2px 0 8px">A written description drifts — the face changes post to post. Upload one clear
+        portrait of your character and it's attached to slide 1 of every post as a reference, so it's
+        unmistakably the same person every time. PNG, JPG or WEBP.</p>
+      {% if profile.character_image %}
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <img src="/media/_brand/{{ profile.character_image }}" alt="locked character portrait"
+             style="width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--line)">
+        <label style="margin:0"><input type="checkbox" name="remove_character_image" value="1"
+               style="width:auto;margin-right:8px">Remove this portrait</label>
+      </div>
+      {% endif %}
+      <input type="file" name="character_image" accept="image/png,image/jpeg,image/webp">
 
       <label>Recurring motif <span class="k">— a fixed object/graphic device</span></label>
       <input name="motif" value="{{ profile.motif }}"

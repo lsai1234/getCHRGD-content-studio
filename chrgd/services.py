@@ -28,12 +28,13 @@ def render_idea(
     notify=None,
 ) -> RenderResult:
     """Render one carousel, persist asset paths, and log image spend."""
-    from .profile import brand_style_note, brand_swipe_style
+    from .profile import brand_character_ref, brand_style_note, brand_swipe_style
 
     result = render_carousel(
         idea, settings, dry_run=dry_run, on_slide=on_slide, notify=notify,
         house_style=brand_style_note(store),
         swipe_style=brand_swipe_style(store),
+        character_ref_path=brand_character_ref(store, settings),
     )
     store.save_asset_paths(idea.idea_id, result.paths)
     log.info(

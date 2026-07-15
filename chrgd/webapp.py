@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -57,6 +57,54 @@ def _safe_output_path(settings: Settings, *parts: str) -> Path:
     if not target.exists():
         raise HTTPException(status_code=404, detail="not found")
     return target
+
+
+_CHARACTER_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+async def _apply_character_upload(
+    settings: Settings,
+    current: str,
+    upload: UploadFile | None,
+    remove: bool,
+) -> str:
+    """Reconcile the locked character portrait on a settings save.
+
+    Returns the filename (under output_dir/_brand/) to store on the profile:
+    the new upload's name, '' if removed, or `current` unchanged. Keeps exactly
+    one portrait on disk (stored as `character.<ext>`).
+    """
+    from .profile import brand_asset_dir
+
+    asset_dir = brand_asset_dir(settings)
+
+    def _clear_existing() -> None:
+        if asset_dir.exists():
+            for old in asset_dir.glob("character.*"):
+                old.unlink(missing_ok=True)
+
+    if remove:
+        _clear_existing()
+        return ""
+
+    filename = (upload.filename or "").strip() if upload else ""
+    if not filename:
+        return current  # no file chosen — leave the saved portrait alone
+
+    ext = Path(filename).suffix.lower()
+    if ext not in _CHARACTER_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail="character portrait must be a PNG, JPG or WEBP image",
+        )
+    data = await upload.read()
+    if not data:
+        return current
+    _clear_existing()
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    dest = asset_dir / f"character{ext}"
+    dest.write_bytes(data)
+    return dest.name
 
 
 def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> FastAPI:
@@ -293,7 +341,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         )
 
     @app.post("/settings")
-    def settings_save(
+    async def settings_save(
         request: Request,
         brand_name: str = Form(""),
         one_liner: str = Form(""),
@@ -309,19 +357,31 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         character: str = Form(""),
         motif: str = Form(""),
         swipe_style: str = Form("cohesive"),
+        character_image: UploadFile | None = File(None),
+        remove_character_image: str = Form(""),
         _: str = Depends(require_user_page),
     ):
-        from .profile import BrandProfile, save_profile
-
-        profile = BrandProfile(
-            brand_name=brand_name, one_liner=one_liner, voice=voice,
-            audience=audience, dos=dos, donts=donts, handle=handle,
-            default_hashtags=default_hashtags, house_style=house_style,
-            palette=palette, type_style=type_style, character=character,
-            motif=motif,
-            swipe_style="pan" if swipe_style == "pan" else "cohesive",
+        from .profile import (
+            BrandProfile,
+            brand_asset_dir,
+            load_profile,
+            save_profile,
         )
+
         with _store(settings) as store:
+            # Start from the saved portrait so a plain save doesn't drop it.
+            portrait = load_profile(store).character_image.strip()
+            portrait = await _apply_character_upload(
+                settings, portrait, character_image, bool(remove_character_image)
+            )
+            profile = BrandProfile(
+                brand_name=brand_name, one_liner=one_liner, voice=voice,
+                audience=audience, dos=dos, donts=donts, handle=handle,
+                default_hashtags=default_hashtags, house_style=house_style,
+                palette=palette, type_style=type_style, character=character,
+                character_image=portrait, motif=motif,
+                swipe_style="pan" if swipe_style == "pan" else "cohesive",
+            )
             save_profile(store, profile)
         return RedirectResponse(
             "/settings?flash=Saved+%E2%80%94+applies+to+your+next+build", 303

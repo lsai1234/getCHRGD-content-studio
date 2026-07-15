@@ -1978,6 +1978,70 @@ def test_settings_saves_character_field(client, settings):
     assert "deadpan gym bloke" in client.get("/settings").text
 
 
+def test_settings_upload_locks_character_portrait(client, settings):
+    import io
+    from pathlib import Path
+
+    from PIL import Image as PILImage
+
+    buf = io.BytesIO()
+    PILImage.new("RGB", (128, 128), (200, 30, 30)).save(buf, "PNG")
+    buf.seek(0)
+    client.post(
+        "/settings",
+        data={"brand_name": "CHRGD"},
+        files={"character_image": ("mascot.png", buf, "image/png")},
+        follow_redirects=False,
+    )
+    from chrgd.profile import brand_character_ref, load_profile
+
+    with Store(settings.db_path) as store:
+        assert load_profile(store).character_image == "character.png"
+        ref = brand_character_ref(store, settings)
+    assert ref and Path(ref).exists()
+    # The portrait preview is reachable on the settings page.
+    assert client.get("/media/_brand/character.png").status_code == 200
+
+    # Ticking "remove" clears it (and a plain save keeps it until then).
+    client.post(
+        "/settings",
+        data={"brand_name": "CHRGD", "remove_character_image": "1"},
+        follow_redirects=False,
+    )
+    with Store(settings.db_path) as store:
+        assert load_profile(store).character_image == ""
+        assert brand_character_ref(store, settings) == ""
+
+
+def test_locked_character_portrait_anchors_slide_1(settings, monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    settings.openai_api_key = "sk-test"
+    portrait = settings.output_dir / "_brand" / "character.png"
+    portrait.parent.mkdir(parents=True, exist_ok=True)
+    PILImage.new("RGB", (200, 200), (222, 11, 99)).save(portrait)
+
+    calls = []
+
+    def fake_gen(prompt, s, brand, quality, references=None):
+        calls.append((prompt, references))
+        return PILImage.new("RGB", (1080, 1350), (5, 5, 5))
+
+    monkeypatch.setattr(images, "_generate_background", fake_gen)
+    images.render_carousel(
+        make_built_idea(), settings, character_ref_path=str(portrait)
+    )
+
+    first_prompt, first_refs = calls[0]
+    # Slide 1 locks the recurring character and is handed the portrait itself.
+    assert "LOCKED recurring character" in first_prompt
+    assert first_refs and any(r.size == (200, 200) for r in first_refs)
+    # Later slides anchor on slide 1, not on the portrait directly.
+    assert "LOCKED recurring character" not in calls[1][0]
+
+
 # --- visual continuity: slide 1 anchors the rest of the carousel -----------------
 
 

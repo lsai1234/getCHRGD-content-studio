@@ -200,6 +200,49 @@ _DESIGN_TEXT_RULES = (
 )
 
 
+# Embedded-typography variant: the words become a physical part of the scene
+# (chalk, plates, neon, a sign the character holds) instead of a caption bar.
+# Used only where the copy is short enough to stay legible — see
+# `_typography_mode`. The legibility + exact-copy + margin guarantees are the
+# same as the clean rules; only the treatment changes.
+_EMBEDDED_TEXT_RULES = (
+    "\n\nText & layout rules (follow EXACTLY):"
+    "\n- Render the words as a TANGIBLE PART OF THE SCENE, not a flat caption"
+    " bar — integrate the typography into a surface, object, sign or material"
+    " that belongs in the shot, physically lit and placed, so it reads as"
+    " designed and native (the kind of image people stop scrolling for)."
+    "\n- Even integrated, the text is the HERO of the frame: large, high"
+    "-contrast and instantly readable at a glance on a phone. If a placement"
+    " would hurt legibility, keep the creative idea but make the words clearer."
+    "\n- The image is a vertical 2:3 phone graphic. Treat the outer 12% on"
+    " every side as an untouchable margin: every letter must sit fully inside"
+    " the frame with clear breathing room — nothing touching or running off any"
+    " edge, nothing cropped."
+    "\n- Use EXACTLY the text provided above, spelled correctly and complete —"
+    " never truncate, abbreviate, add or invent words."
+    "\n- No caption bars, logos, watermarks, page numbers or any random text"
+    " beyond the copy above and the small progress-dot indicator described"
+    " above (dots, not numbers)."
+)
+
+
+def _typography_mode(slide: Slide, brand: Brand) -> str:
+    """'embedded' when this slide's copy is short enough to render as part of
+    the scene; 'clean' for reader/long slides that need plain legibility.
+
+    Kept deliberately simple and deterministic: a reader `body` block or copy
+    over the configured character budget always stays clean.
+    """
+    if not brand.typography.embed_when_appropriate:
+        return "clean"
+    if slide.body.strip():
+        return "clean"
+    length = len(slide.headline.strip()) + len(slide.supporting.strip())
+    if length > brand.typography.embed_max_chars:
+        return "clean"
+    return "embedded"
+
+
 def compose_image_prompt(slide_prompt: str, brand: Brand, style: str | None) -> str:
     """Background-only prompt (branded/overlay mode): a strong photo with room
     for the CHRGD frame. Text + brand furniture are drawn in code, so the model
@@ -310,6 +353,7 @@ def compose_design_prompt(
     house_style: str = "",
     anchored: bool = False,
     pan: bool = False,
+    character_ref: bool = False,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -318,10 +362,24 @@ def compose_design_prompt(
     carousel's shared visual language and this frame's place in the swipe
     journey, so the set reads as one continuous story rather than isolated
     slides (each image is generated blind to its siblings). `pan` turns the
-    set into one seamless horizontal shot the viewer glides through."""
+    set into one seamless horizontal shot the viewer glides through.
+    `character_ref` means the attached reference is the account's LOCKED
+    recurring character portrait (slide 1), so the same person carries across
+    every post, not just within this set."""
     parts = []
     # When reference image(s) are attached, matching them is the strongest
-    # instruction — lead with it. Pan mode makes the swipe one continuous move.
+    # instruction — lead with it. The locked character portrait wins first (it
+    # spans every post); then pan continuity; then the in-set anchor.
+    if character_ref:
+        parts.append(
+            "You are given a reference PORTRAIT of the account's LOCKED "
+            "recurring character — the brand's mascot who appears in every "
+            "post. The person in this image MUST be that exact same character: "
+            "identical face, hair, build, skin tone and signature clothing as "
+            "the portrait. Do not restyle or age them; place that same person "
+            "into this slide's scene and pose. Consistency of this character "
+            "across posts is the point — treat the portrait as law."
+        )
     if pan:
         parts.append(
             "You are given TWO reference images: the FIRST slide of this "
@@ -382,7 +440,15 @@ def compose_design_prompt(
             "every word is easy to read. Simplify the imagery to serve the "
             "text; render EVERY sentence, complete and correctly spelled."
         )
-    prompt += _DESIGN_TEXT_RULES
+    # Short, punchy slides get scene-integrated typography; reader/long slides
+    # stay clean and legible (see _typography_mode).
+    if _typography_mode(slide, brand) == "embedded":
+        embed = brand.typography.embed_prompt.strip()
+        if embed:
+            prompt += "\n\nTYPOGRAPHY TREATMENT: " + embed
+        prompt += _EMBEDDED_TEXT_RULES
+    else:
+        prompt += _DESIGN_TEXT_RULES
     return prompt
 
 
@@ -672,6 +738,7 @@ def render_slide(
     anchor: Image.Image | None = None,
     prev: Image.Image | None = None,
     swipe_style: str = "cohesive",
+    character_ref_path: str = "",
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
@@ -706,6 +773,22 @@ def render_slide(
     def _note(msg: str) -> None:
         if notify:
             notify(f"slide {slide_index + 1}: {msg}")
+
+    # Slide 1 is the identity anchor for the whole set. When the account has a
+    # LOCKED recurring-character portrait, attach it here so the SAME person
+    # carries across every post (not just within this carousel); later slides
+    # then anchor on this character-locked slide 1 as they already do.
+    anchor_is_character = False
+    if slide_index == 0 and anchor is None and not dry_run and character_ref_path:
+        p = Path(character_ref_path)
+        if p.exists():
+            try:
+                portrait = Image.open(p)
+                portrait.load()
+                anchor = portrait
+                anchor_is_character = True
+            except OSError:
+                anchor = None
 
     # Regenerating a later slide on its own: anchor it to the saved slide 1 so
     # it still matches the set (unless an anchor was passed in explicitly). In
@@ -748,12 +831,19 @@ def render_slide(
             # Build the visual references: slide 1 (identity anchor) always;
             # the previous slide too in pan mode (edge continuity / one shot).
             refs: list[Image.Image] = []
-            panning = swipe_style == "pan" and prev is not None
-            if brand.generation.reference_continuity:
-                if anchor is not None:
-                    refs.append(anchor)
-                if panning:
-                    refs.append(prev)
+            panning = (
+                swipe_style == "pan"
+                and prev is not None
+                and brand.generation.reference_continuity
+            )
+            # The locked-character portrait is attached regardless of the
+            # set-continuity setting — it's a separate, brand-level lock.
+            if anchor is not None and (
+                brand.generation.reference_continuity or anchor_is_character
+            ):
+                refs.append(anchor)
+            if panning:
+                refs.append(prev)
             if mode == "ai_design":
                 prompt = compose_design_prompt(
                     slide,
@@ -763,14 +853,16 @@ def render_slide(
                     index=slide_index,
                     design_system=_route_of(idea).get("design_system"),
                     house_style=house_style,
-                    anchored=bool(refs),
+                    anchored=bool(refs) and not anchor_is_character,
                     pan=panning,
+                    character_ref=anchor_is_character,
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
             _note(
                 f"request sent to {settings.image_model} ({quality} quality) — "
-                + ("continuing the pan from the last slide — " if panning
+                + ("locking to your recurring character — " if anchor_is_character
+                   else "continuing the pan from the last slide — " if panning
                    else "matching the first slide's look — " if refs else "")
                 + "waiting for the image, typically 20-60s"
             )
@@ -909,6 +1001,7 @@ def render_carousel(
     notify=None,
     house_style: str = "",
     swipe_style: str = "cohesive",
+    character_ref_path: str = "",
 ) -> RenderResult:
     """Render every slide for one idea to disk. Returns paths + spend.
 
@@ -943,6 +1036,7 @@ def render_carousel(
             anchor=anchor if i > 0 else None,
             prev=prev if i > 0 else None,
             swipe_style=swipe_style,
+            character_ref_path=character_ref_path if i == 0 else "",
         )
         result.spend_usd += slide_result.spend_usd
         result.generated += slide_result.generated

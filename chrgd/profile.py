@@ -15,11 +15,15 @@ falls back to the prompt-file defaults.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import BaseModel
 
 from .db import Store
 
 SETTINGS_KEY = "brand_profile"
+# Sub-folder of output_dir where brand assets (the character portrait) live.
+BRAND_ASSET_DIR = "_brand"
 
 # Fields that carry a non-blank default (a mode, not user content) — excluded
 # from is_empty so a fresh profile still counts as blank.
@@ -44,6 +48,10 @@ class BrandProfile(BaseModel):
     palette: str = ""          # brand colours + how they're used
     type_style: str = ""       # fixed typography treatment
     character: str = ""        # a recurring character/mascot, same every post
+    # Filename (under output_dir/_brand/) of a LOCKED character portrait. When
+    # set it's attached as a visual reference to slide 1 of every post, pinning
+    # the exact same face/build across posts — a pixel lock the text can't give.
+    character_image: str = ""
     motif: str = ""            # a recurring object/graphic device
     # How the carousel connects as a swipe experience:
     #   'cohesive' — same world + character, distinct scene per slide (default)
@@ -60,7 +68,7 @@ class BrandProfile(BaseModel):
     def has_visual_lock(self) -> bool:
         return any(v.strip() for v in (
             self.house_style, self.palette, self.type_style,
-            self.character, self.motif,
+            self.character, self.character_image, self.motif,
         ))
 
 
@@ -127,6 +135,13 @@ def _visual_rows(profile: BrandProfile) -> list[str]:
         rows.append(f"Typography: {profile.type_style.strip()}")
     if profile.character.strip():
         rows.append(f"Recurring character (SAME on every post): {profile.character.strip()}")
+    elif profile.character_image.strip():
+        # A portrait is locked but no text description — still tell the engine a
+        # fixed character exists (the portrait itself is attached at render).
+        rows.append(
+            "Recurring character (SAME on every post): a fixed character whose "
+            "locked portrait is provided — match that exact person every time"
+        )
     if profile.motif.strip():
         rows.append(f"Recurring motif: {profile.motif.strip()}")
     return rows
@@ -188,3 +203,24 @@ def brand_swipe_style(store: Store) -> str:
     """The chosen swipe experience ('cohesive' | 'pan') for the saved profile."""
     style = load_profile(store).swipe_style.strip().lower()
     return style if style in ("cohesive", "pan") else "cohesive"
+
+
+def brand_asset_dir(settings) -> Path:
+    """The folder holding brand assets (the character portrait)."""
+    return Path(settings.output_dir) / BRAND_ASSET_DIR
+
+
+def character_image_path(settings, profile: BrandProfile) -> Path | None:
+    """Absolute path to the locked character portrait, or None if unset/missing."""
+    name = profile.character_image.strip()
+    if not name:
+        return None
+    p = brand_asset_dir(settings) / name
+    return p if p.exists() else None
+
+
+def brand_character_ref(store: Store, settings) -> str:
+    """The locked character portrait path as a string ('' when none), for the
+    render path (see images.render_carousel / render_slide)."""
+    p = character_image_path(settings, load_profile(store))
+    return str(p) if p else ""
