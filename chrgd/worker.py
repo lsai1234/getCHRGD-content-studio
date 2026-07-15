@@ -431,11 +431,27 @@ def _handle_run(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _handle_scroll_test(store: Store, settings: Settings, job: dict) -> dict:
+    """Cold scroll test: an honest vision verdict on the finished slide 1."""
+    from .scrolltest import run_scroll_test
+
+    idea = store.get_idea(job["idea_id"])
+    if idea is None:
+        raise ValueError(f"no such idea {job['idea_id']}")
+    store.update_job(
+        job["job_id"], progress=30,
+        result_json=json.dumps({"note": "scroll-testing your finished slide 1"}),
+    )
+    verdict = run_scroll_test(idea, settings, store)
+    return {"verdict": verdict.model_dump(mode="json")}
+
+
 _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "build": _handle_build,
     "build_one": _handle_build_one,
     "render": _handle_render,
     "render_slide": _handle_render_slide,
+    "scroll_test": _handle_scroll_test,
     "angles": _handle_angles,
     "takes": _handle_takes,
     "revise": _handle_revise,
@@ -456,6 +472,14 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
 
 def enqueue_build(store: Store, *, count: int, dry_run: bool) -> int:
     return store.create_job("build", params={"count": count, "dry_run": dry_run})
+
+
+def enqueue_scroll_test(store: Store, idea_id: str) -> int:
+    """Judge the finished slide 1 — dedupe an in-flight test for the same idea."""
+    existing = store.active_job_for(idea_id, "scroll_test")
+    if existing is not None:
+        return existing
+    return store.create_job("scroll_test", idea_id=idea_id)
 
 
 def enqueue_render(store: Store, idea_id: str, *, dry_run: bool) -> int:

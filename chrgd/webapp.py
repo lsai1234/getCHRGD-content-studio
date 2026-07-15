@@ -35,6 +35,7 @@ from .worker import (
     enqueue_render,
     enqueue_render_slide,
     enqueue_revise,
+    enqueue_scroll_test,
 )
 
 # Days a topical idea stays fresh before the calendar flags it as going stale.
@@ -649,6 +650,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 raise HTTPException(404, "no such idea")
             job_id = enqueue_render(store, idea_id, dry_run=dry_run)
         return {"job_id": job_id, "kind": "render", "idea_id": idea_id}
+
+    @app.post("/api/scroll-test/{idea_id}")
+    def api_scroll_test(idea_id: str, _: str = Depends(require_user)):
+        """Cold scroll test on the finished slide 1 → a job the UI polls."""
+        from .scrolltest import _slide_one_path
+
+        with _store(settings) as store:
+            idea = store.get_idea(idea_id)
+            if idea is None:
+                raise HTTPException(404, "no such idea")
+            if _slide_one_path(idea) is None:
+                raise HTTPException(400, "render the carousel before scroll-testing")
+            job_id = enqueue_scroll_test(store, idea_id)
+        return {"job_id": job_id, "kind": "scroll_test", "idea_id": idea_id}
 
     @app.post("/api/jobs/run")
     def api_job_run(
