@@ -108,6 +108,38 @@ def test_parse_moments_all_broken_raises():
         parse_moments('{"moments": [ total garbage ]}')
 
 
+def test_trending_lane_is_carousel_first():
+    """The trending prompt + ask must steer to carousel-buildable trends, not
+    video formats, and demand the swipe shape in each angle."""
+    from chrgd.trends import _DISCOVER_ASKS, TRENDING_PROMPT
+
+    p = TRENDING_PROMPT.lower()
+    assert "carousel" in p
+    assert "carousel test" in p
+    # It must actively reject motion/sound-only formats.
+    assert "sound" in p and "motion" in p
+    # It must ask for the swipe shape so the angle is buildable.
+    assert "swipe shape" in p
+    assert "carousel" in _DISCOVER_ASKS["trending"].lower()
+
+
+def test_moment_carries_carousel_fit():
+    """A trending moment round-trips its carousel_fit; other lanes leave it blank."""
+    from chrgd.trends import parse_moments
+
+    text = (
+        '{"moments": [{"title": "gym red flags tier list", '
+        '"carousel_fit": "native", "why": "everyone ranks people they know", '
+        '"angles": [{"type": "funny", "title": "flags", '
+        '"concept_note": "slide 1 hook -> one flag per slide -> arguable last flag"}]}]}'
+    )
+    res = parse_moments(text)
+    assert res.moments[0].carousel_fit == "native"
+    # Backward compatible: a moment without the field defaults to blank.
+    plain = parse_moments('{"moments": [{"title": "x", "angles": []}]}')
+    assert plain.moments[0].carousel_fit == ""
+
+
 # --- scouting ---------------------------------------------------------------
 
 

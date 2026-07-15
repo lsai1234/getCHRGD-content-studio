@@ -885,6 +885,7 @@ function drawMoments(data){
         <span class="m-title">${esc(m.title)}</span>
         ${m.scope === 'global' ? '<span class="m-when" style="color:#7fb3ff;border-color:#2c4a7a">🌍 global</span>' : ''}
         <span class="m-when">${esc(m.when || m.category || '').replace(/^spike/i, '⚡ spike').replace(/^wave/i, '🌊 wave')}</span>
+        ${m.carousel_fit === 'adaptable' ? '<span class="m-when" style="color:#e6b800;border-color:#5c4a27" title="a video trend reframed as a carousel">🔁 reframed for carousel</span>' : m.carousel_fit === 'native' ? '<span class="m-when" style="color:#6fd08f;border-color:#2c5c3e" title="already a carousel format">🎞️ carousel-native</span>' : ''}
       </div>
       <div class="m-why">${esc(m.why || '')}</div>
       <div class="m-angles"></div>`;

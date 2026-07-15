@@ -1523,11 +1523,14 @@ def test_trending_scout_hunts_participation_not_events(settings):
     assert [m.category for m in result.moments] == ["format", "challenge"]
     sys = fake.system
     assert "TRENDING" in sys and "18-30" in sys
-    assert "NOT news events" in sys          # events belong to the other lane
+    assert "NOT news/fixtures/weather" in sys  # events belong to the other lane
     assert "THE FEED TEST" in sys            # recognisable from the FYP, not trade press
     assert '"spike"' in sys and '"wave"' in sys  # horizon called on every trend
     assert "gym" in sys.lower() and "meme" in sys.lower()
     assert "never claim a specific sound" in sys  # the no-live-FYP limitation
+    # Carousel-first: steer to buildable carousel trends, not video formats.
+    assert "CAROUSEL TEST" in sys
+    assert "swipe shape" in sys.lower()
 
 
 def test_trending_lane_seeds_trend_framed_ideas(client, settings):

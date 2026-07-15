@@ -322,6 +322,11 @@ class Moment(BaseModel):
     peak: str = ""
     why: str = ""
     decay_speed: DecaySpeed = DecaySpeed.days
+    # Trending lane only: how well this rides as a PHOTO carousel.
+    #   'native'    — already a stills+text format (list, take, POV, screenshot)
+    #   'adaptable' — a video trend whose IDEA is reframed into a swipe shape
+    # Blank on the moments/evergreen lanes (they don't judge carousel fit).
+    carousel_fit: str = ""
     angles: list[MomentAngle] = Field(default_factory=list)
 
 
@@ -390,44 +395,60 @@ Rank by expected reach. Strongest, most shareable facts first.
 # The third discovery lane: not events, not facts — what people are actually
 # PARTICIPATING in. Formats, memes, challenges, gym discourse: the trends an
 # 18-30 TikTok audience is living inside even when nothing is "happening".
-TRENDING_PROMPT = """You are the Trend Radar for CHRGD, a premium UK gym/supplement brand.
+TRENDING_PROMPT = """You are the Carousel Trend Radar for CHRGD, a premium UK gym/supplement brand.
+
+CHRGD posts PHOTO CAROUSELS only — swipeable still images with text, no video,
+no sound, no motion. Your whole job is to find trends this brand can ride *as a
+carousel* and hand back a swipe shape the editor can build today. A trend that
+only works as a video is useless here unless you translate its IDEA into stills.
 
 Use web search to find what is actually TRENDING for a UK 18-30, TikTok-native
-audience right now. NOT news events, fixtures or weather (a different lane
-covers those) — you are hunting the things people are PARTICIPATING in:
+audience right now (NOT news/fixtures/weather — another lane covers those).
+Hunt in two buckets:
 
-- TikTok-wide: viral formats, meme templates, POV/text-on-screen styles,
-  challenges and joke structures everyone is doing this week/month.
-- 18-30 culture: the phrases everyone is suddenly saying, in-jokes, aesthetic
-  waves (e.g. a 'core' or a character archetype), dating/work/money discourse
-  that generation is having.
-- Gym & fitness trends: training methods doing the rounds (the next 12-3-30 or
-  75-Hard-alike), gym-tok arguments and discourse waves, supplement
-  conversations, fitness-creator moments spawning copycat content.
+1. CAROUSEL-NATIVE trends — formats that are already stills + text and go viral
+   AS carousels: tier lists / rankings, "types of ___" archetype sets, hot
+   takes & "hill I'll die on", red flags / green flags, POV text-on-image
+   ("POV: you said one rep left 4 sets ago"), the unsaid thing / "we all do
+   it", screenshot & notes-app posts, fake text threads, "things I wish I
+   knew", receipt breakdowns, "wait WHAT" fact cards, photo-dump aesthetics,
+   expectation vs reality splits, "overheard at the gym". These are the bread
+   and butter — most of what you return should be these.
+2. ADAPTABLE video trends — a format that's blowing up as VIDEO but whose
+   underlying idea/joke/discourse can be reframed into a swipe. Keep the IDEA,
+   drop the motion: a dance/transition challenge becomes a "types of people on
+   the gym floor" tier list; a talking-head hot take becomes a text-on-image
+   take; a "get ready with me" becomes a POV carousel of the ritual. Say
+   exactly how it's reframed.
 
-For EVERY trend call its HORIZON honestly:
+THE CAROUSEL TEST (hard filter — apply to every candidate): could this land the
+SAME dopamine as a set of still images with text that someone swipes through?
+If it fundamentally needs motion, a performance, a transition, lip-sync, or a
+specific trending SOUND to work — and its idea can't be reframed into stills —
+it FAILS. Cut it. Do not return dance challenges, transition trends, or
+sound-dependent memes as-is.
+
+For EVERY trend also call its HORIZON honestly:
 - "spike" — days-to-weeks. Ride it THIS week or skip it.
 - "wave" — a format/discourse with months of life. Reusable repeatedly.
 
 THE FEED TEST (hard filter): would a UK 18-30 TikTok user recognise this from
-their own For You feed or group chats THIS week? It does not need to be on
-front pages (that's the events lane) — but if only marketers and trend
-reports talk about it, it FAILS. No quota: three real trends beat six
-inventions.
+their own feed or group chats THIS week? If only marketers and trend reports
+talk about it, it FAILS. No quota: three real, buildable carousel trends beat
+six inventions.
 
 Limitation you MUST respect: {limitation}
 Because you cannot see the live For You feed: work from current reporting and
 roundups, never claim a specific sound/audio is trending, and describe each
-trend's format precisely enough that the editor can verify it in the app in
-30 seconds.
+trend precisely enough that the editor can verify it in the app in 30 seconds.
 
-For EACH trend, propose 2-3 ready-to-build angles that BEND THE TREND to
-CHRGD's world (gym, energy, training culture) — the trend's format is the
-vehicle and must be followed faithfully (that's what makes it land); the
-brand rides inside it. Usually: one straight execution of the format in gym
-terms, one funny/relatable twist, one light product tie-in ONLY where natural.
-Claim-safe as ever: nothing medical, no guaranteed outcomes, humour is social
-commentary.
+For EACH trend, propose 2-3 ready-to-build CAROUSEL angles in CHRGD's world
+(gym, energy, training culture). Each angle's concept_note MUST spell out the
+SWIPE SHAPE — what slide 1 (the hook) does, what the middle slides escalate
+through, and what the final slide's payoff/CTA is — so it's buildable as-is.
+Usually: one straight execution of the format in gym terms, one funny/relatable
+twist, one light product tie-in ONLY where natural. Claim-safe as ever: nothing
+medical, no guaranteed outcomes, humour is social commentary.
 
 Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape:
 {{
@@ -435,25 +456,26 @@ Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape:
     {{
       "title": "the trend in one line, named the way people say it",
       "emoji": "one emoji",
-      "category": "format | meme | challenge | phrase | aesthetic | gym | discourse",
+      "category": "list | take | pov | screenshot | flags | aesthetic | gym | discourse",
       "scope": "global | uk",
       "when": "spike — peaking now | wave — months of life left",
       "peak": "when to post to catch it",
-      "why": "what participating in it signals + why this audience is on it, one line",
+      "carousel_fit": "native | adaptable",
+      "why": "what participating signals + why this audience is on it — and, if adaptable, one line on how the video trend becomes a carousel",
       "decay_speed": "days | weeks",
       "angles": [
         {{
           "type": "advice | funny | tiein",
           "title": "short label",
           "hook": "the slide-1 hook this would open with",
-          "concept_note": "1-2 sentence buildable brief INCLUDING how the trend's format is used"
+          "concept_note": "buildable brief that STATES THE SWIPE SHAPE: slide 1 hook → middle beats → final payoff/CTA"
         }}
       ]
     }}
   ]
 }}
-Rank by how live the trend is for this audience right now — spikes first when
-they're truly peaking, then the strongest waves.
+Rank by how live AND how carousel-buildable each trend is — native, peaking
+spikes first, then strong adaptable waves.
 """.format(limitation=LIMITATION)
 
 _DISCOVER_PROMPTS = {
@@ -471,10 +493,13 @@ _DISCOVER_ASKS = {
         "angles. Rank by shareability and return the JSON object."
     ),
     "trending": (
-        "Find up to {count} trends this audience is genuinely participating "
-        "in right now — a mix of spikes and waves, TikTok-wide, 18-30 culture "
-        "and gym-tok. Each with 2-3 ready angles that bend the trend to the "
-        "brand's world. Rank by how live each is and return the JSON object."
+        "Find up to {count} trends this audience is participating in right now "
+        "that CHRGD can ride AS A PHOTO CAROUSEL — mostly carousel-native "
+        "formats (tier lists, 'types of', hot takes, POV, flags, screenshots), "
+        "plus any video trends you translate into a swipe shape. Apply the "
+        "carousel test; skip anything that only works as video. Each with 2-3 "
+        "ready carousel angles whose concept_note states the swipe shape. Rank "
+        "by how live and how buildable each is, and return the JSON object."
     ),
 }
 
