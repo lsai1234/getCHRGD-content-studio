@@ -114,14 +114,55 @@ def test_embedded_typography_can_be_disabled(monkeypatch):
     assert _typography_mode(slide, brand) == "clean"
 
 
-def test_compose_design_prompt_locks_recurring_character():
+def test_character_portrait_is_identity_not_a_pose():
     from chrgd.images import compose_design_prompt
 
     brand = load_brand()
     slide = Slide(headline="which one are you?", supporting="tag the other four")
     prompt = compose_design_prompt(slide, brand, None, character_ref=True)
-    assert "LOCKED recurring character" in prompt
-    assert "same person" in prompt.lower()
+    low = prompt.lower()
+    # Same person (identity locked)…
+    assert "same person" in low
+    assert "identity reference" in low
+    # …but the pose/angle is the scene's call, not the portrait pasted back in.
+    assert "not a pose to copy" in low
+    assert "never the same head pasted in again" in low
+
+
+def test_slide_features_character_honours_explicit_flag_then_heuristic():
+    from chrgd.images import slide_features_character
+
+    # Explicit engine call always wins, even against the cue scan.
+    assert slide_features_character(
+        Slide(headline="h", image_prompt="an empty barbell", feature_character=True)
+    ) is True
+    assert slide_features_character(
+        Slide(headline="h", image_prompt="a lifter mid-rep", feature_character=False)
+    ) is False
+    # Fallback scan when the engine didn't decide: person cue vs object-only.
+    assert slide_features_character(
+        Slide(headline="h", image_prompt="a gym bloke reacting to the scale")
+    ) is True
+    assert slide_features_character(
+        Slide(headline="h", image_prompt="a chalk-dusted barbell on the floor",
+              visual_intent="object, prop")
+    ) is False
+
+
+def test_person_free_slide_told_not_to_add_character():
+    from chrgd.images import compose_design_prompt
+
+    brand = load_brand()
+    # Slide 1 (no look anchor) of an account that HAS a recurring character,
+    # but this beat is a pure object shot: the model must be told to leave the
+    # person out rather than pasting them in from habit.
+    prompt = compose_design_prompt(
+        Slide(headline="the receipt", image_prompt="a crumpled gym membership bill"),
+        brand, None, has_character=True, feature_character=False,
+    )
+    low = prompt.lower()
+    assert "does not call for a person" in low
+    assert "do not place them or any human figure" in low
 
 
 def test_render_without_slides_errors(settings):

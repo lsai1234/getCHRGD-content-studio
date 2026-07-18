@@ -66,6 +66,13 @@ class Slide(BaseModel):
     visual_intent: str = ""
     role: str = ""
     swipe_trigger: str = ""
+    # Whether the recurring character/person genuinely belongs in THIS slide's
+    # scene. The engine sets it per slide (a person only where a person is the
+    # point — reacting, demonstrating, being the subject), so the mascot isn't
+    # forced into object/text/chart/environment frames. `None` = the engine
+    # didn't decide (older builds); the renderer then falls back to scanning the
+    # visual brief for human cues. See images.slide_features_character.
+    feature_character: bool | None = None
 
 
 # Carousel length bounds. The engine picks the count per idea (a meme might

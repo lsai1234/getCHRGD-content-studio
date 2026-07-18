@@ -2016,15 +2016,27 @@ def test_settings_upload_locks_character_portrait(client, settings):
         assert brand_character_ref(store, settings) == ""
 
 
-def test_locked_character_portrait_anchors_slide_1(settings, monkeypatch):
+def test_character_portrait_attaches_only_to_person_slides(settings, monkeypatch):
+    import json
+
     from PIL import Image as PILImage
 
     from chrgd import images
+    from chrgd.models import Idea
 
     settings.openai_api_key = "sk-test"
     portrait = settings.output_dir / "_brand" / "character.png"
     portrait.parent.mkdir(parents=True, exist_ok=True)
     PILImage.new("RGB", (200, 200), (222, 11, 99)).save(portrait)
+
+    # A person beat (slide 1) and an object beat (slide 2).
+    slides = [
+        {"headline": "h1", "supporting": "s", "feature_character": True,
+         "image_prompt": "a lone gym bloke mid-set", "visual_intent": "person"},
+        {"headline": "h2", "supporting": "s", "feature_character": False,
+         "image_prompt": "a chalk-dusted barbell on the floor", "visual_intent": "object"},
+    ]
+    idea = Idea(idea_id="G-9001", concept_note="x", slides_json=json.dumps(slides))
 
     calls = []
 
@@ -2033,16 +2045,17 @@ def test_locked_character_portrait_anchors_slide_1(settings, monkeypatch):
         return PILImage.new("RGB", (1080, 1350), (5, 5, 5))
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
-    images.render_carousel(
-        make_built_idea(), settings, character_ref_path=str(portrait)
-    )
+    images.render_carousel(idea, settings, character_ref_path=str(portrait))
 
     first_prompt, first_refs = calls[0]
-    # Slide 1 locks the recurring character and is handed the portrait itself.
-    assert "LOCKED recurring character" in first_prompt
+    # The person slide gets the portrait as a pose-free identity reference.
+    assert "identity reference" in first_prompt.lower()
     assert first_refs and any(r.size == (200, 200) for r in first_refs)
-    # Later slides anchor on slide 1, not on the portrait directly.
-    assert "LOCKED recurring character" not in calls[1][0]
+    # The object slide is told not to add the person, and the portrait is NOT
+    # attached to it (only the slide-1 look anchor is).
+    second_prompt, second_refs = calls[1]
+    assert "does not feature the recurring character" in second_prompt.lower()
+    assert not any(getattr(r, "size", None) == (200, 200) for r in (second_refs or []))
 
 
 # --- visual continuity: slide 1 anchors the rest of the carousel -----------------
@@ -2106,17 +2119,28 @@ def test_regen_single_slide_anchors_to_saved_first_slide(settings, monkeypatch):
     assert seen["got"] is True  # picked up the saved slide 1 as its anchor
 
 
-def test_anchored_prompt_tells_model_to_match_reference():
+def test_anchored_prompt_matches_look_and_conditions_character():
     from chrgd.brand import load_brand
     from chrgd.images import compose_design_prompt
     from chrgd.models import Slide
 
-    p = compose_design_prompt(
+    brand = load_brand()
+    # Object slide: keep the look, but do NOT carry the person over.
+    obj = compose_design_prompt(
         Slide(headline="h", image_prompt="a squat rack"),
-        load_brand(), None, index=2, anchored=True,
+        brand, None, index=2, anchored=True, feature_character=False,
     )
-    assert "reference image" in p.lower()
-    assert "identical character" in p.lower()
+    assert "reference image" in obj.lower()
+    assert "do not carry a person over" in obj.lower()
+    assert "identical character" not in obj.lower()
+
+    # Person slide: keep the identical character, re-framed for this slide.
+    person = compose_design_prompt(
+        Slide(headline="h", image_prompt="a lifter mid-rep"),
+        brand, None, index=2, anchored=True, feature_character=True,
+    )
+    assert "identical character" in person.lower()
+    assert "re-framed" in person.lower()
 
 
 # --- seamless-pan swipe experience -----------------------------------------------

@@ -57,7 +57,8 @@ in exactly this shape:
       "role": "string — this slide's job in the arc: one of hook / recognition / escalation / payoff / cta. The slides in order must form a real story with rising tension, NOT parallel restatements of the theme.",
       "swipe_trigger": "string — the OPEN LOOP this slide leaves dangling: the specific reason the viewer swipes to the NEXT slide (a question raised, a reveal promised, a tension unresolved). The last slide's trigger is the social action (rank/confess/tag/argue/save). Every non-final slide MUST hand off to the next one.",
       "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art, written as ONE FRAME of the shared design_system below (same world, palette, type treatment and recurring motif as every other slide — never a standalone poster). Cover: the visual concept (subject, setting, action, mood), the composition/layout on the shared grid, and how the typography is treated. Then say what has CHANGED from the previous frame so the swipe shows visible motion/escalation. Think agency-level concept art for TikTok. Do NOT invent text beyond the approved slide copy.",
-      "visual_intent": "string: subject, setting, action, prop, double-take"
+      "visual_intent": "string: subject, setting, action, prop, double-take",
+      "feature_character": "boolean — does the account's recurring person/mascot genuinely belong in THIS slide's scene? true ONLY when a human is the point of the frame (reacting, demonstrating, being the subject, holding the prop). false for object, product, chart, text-led or pure environment slides. Do NOT default to true — most sets show the person on only a couple of beats (usually the hook and the payoff), not every slide. When true, the person should be framed for THIS beat (its own angle, distance, pose), not repeated identically frame to frame."
     }
     // One object per slide, in order — 1 to 10 slides, however many the
     // Architect stage decided this idea deserves
@@ -79,7 +80,7 @@ in exactly this shape:
     "design_system": {
       "palette": "string — the ONE colour palette used on every slide (name 2-4 specific colours + how they're used). Shared across the whole set so it reads as one piece.",
       "type_style": "string — the ONE typographic treatment for headlines + supporting text on every slide (font character, weight, case, how text sits in the layout).",
-      "motif": "string — a recurring visual anchor carried across all slides: the SAME character/subject, object, or graphic device that reappears frame to frame so the viewer feels continuity.",
+      "motif": "string — a recurring visual anchor carried across all slides so the viewer feels continuity: PREFER an object or graphic device (a colour block, a prop, a symbol) that can sit in every frame. It may be the recurring person, but a person does NOT have to appear on every slide — mark each slide's `feature_character` and only show them where they're the point.",
       "layout": "string — the shared layout grid every slide follows (where the headline sits, where the subject sits, consistent margins), so the set feels like one designed template, not random posters.",
       "evolution": "string — how the shared design VISIBLY changes as the story escalates (e.g. palette heats up, the character's state shifts, the composition tightens, a progress motif fills). This is what makes swiping feel like motion."
     },

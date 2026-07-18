@@ -342,6 +342,33 @@ def _sequence_block(
     return " ".join(out)
 
 
+# Words in a slide's visual brief that signal a human genuinely belongs in the
+# shot. Used only as a fallback when the engine didn't set `feature_character`.
+_PERSON_CUES = (
+    "person", "people", "man", "woman", "men ", "women", "guy", "lad",
+    "bloke", "someone", "somebody", "figure", "character", "mascot",
+    "athlete", "lifter", "gym-goer", "gymgoer", "gym goer", "trainer",
+    "coach", "spotter", "crowd", "hand", "face", "portrait", "selfie",
+    "arms", "shoulders", "flexing", "posing", "mid-rep", "mid-set",
+    "lifting", "squatting", "benching", "standing", "sitting", "walking",
+    "reacting", "holding a", "human",
+)
+
+
+def slide_features_character(slide: Slide) -> bool:
+    """Whether a person genuinely belongs in this slide's scene.
+
+    Freshly built slides carry the engine's explicit per-slide call
+    (`feature_character`); we honour it. For older slides (field unset) we fall
+    back to a simple scan of the visual brief for human cues, so an
+    object/chart/text/environment slide doesn't get a person shoe-horned in.
+    """
+    if slide.feature_character is not None:
+        return slide.feature_character
+    text = f"{slide.image_prompt} {slide.visual_intent}".lower()
+    return any(cue in text for cue in _PERSON_CUES)
+
+
 def compose_design_prompt(
     slide: Slide,
     brand: Brand,
@@ -354,6 +381,8 @@ def compose_design_prompt(
     anchored: bool = False,
     pan: bool = False,
     character_ref: bool = False,
+    feature_character: bool | None = None,
+    has_character: bool = False,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -363,48 +392,102 @@ def compose_design_prompt(
     journey, so the set reads as one continuous story rather than isolated
     slides (each image is generated blind to its siblings). `pan` turns the
     set into one seamless horizontal shot the viewer glides through.
-    `character_ref` means the attached reference is the account's LOCKED
-    recurring character portrait (slide 1), so the same person carries across
-    every post, not just within this set."""
+    `character_ref` means the account's recurring-character portrait is attached
+    to THIS slide as an identity reference (same person across posts) — used to
+    fix *who* the person is, not to copy their pose. `feature_character` says
+    whether a person belongs in this slide's scene at all (the engine's
+    per-slide call; falls back to a cue scan); `has_character` says the account
+    has a recurring character configured, so a person-free slide can be told
+    explicitly not to invent one."""
     parts = []
+    # Does a person belong in THIS slide's scene? The engine's per-slide call
+    # wins; otherwise infer from the brief. A portrait being attached always
+    # means yes.
+    person_here = feature_character
+    if person_here is None:
+        person_here = character_ref or slide_features_character(slide)
+
     # When reference image(s) are attached, matching them is the strongest
-    # instruction — lead with it. The locked character portrait wins first (it
-    # spans every post); then pan continuity; then the in-set anchor.
+    # instruction — lead with it. The portrait fixes identity (pose-free);
+    # then pan continuity; then the in-set anchor.
     if character_ref:
         parts.append(
-            "You are given a reference PORTRAIT of the account's LOCKED "
-            "recurring character — the brand's mascot who appears in every "
-            "post. The person in this image MUST be that exact same character: "
-            "identical face, hair, build, skin tone and signature clothing as "
-            "the portrait. Do not restyle or age them; place that same person "
-            "into this slide's scene and pose. Consistency of this character "
-            "across posts is the point — treat the portrait as law."
+            "You are given a reference PORTRAIT of the account's recurring "
+            "character — the same person who runs across the brand's posts. Use "
+            "it to fix WHO this is: the same face, hair, build, skin tone and "
+            "defining features. It is an IDENTITY reference, NOT a pose to copy "
+            "— do NOT reproduce the portrait's exact angle, crop or expression. "
+            "This slide's scene decides how they appear: frame them for THIS "
+            "moment (three-quarter, profile, from behind, mid-movement, close-up "
+            "or full body — whatever the action needs). Same person, a "
+            "genuinely new shot — never the same head pasted in again."
         )
     if pan:
-        parts.append(
+        clause = (
             "You are given TWO reference images: the FIRST slide of this "
             "carousel (the brand anchor) and the slide IMMEDIATELY BEFORE this "
             "one. This carousel is ONE continuous panoramic scene the viewer "
             "glides through by swiping — like a single camera slowly panning. "
             "Your image is the very next section of that same unbroken scene: "
-            "keep the identical character (same face, build, clothing), palette, "
-            "lighting, art style and typography, and continue the composition "
-            "SEAMLESSLY from the right-hand edge of the previous slide so that, "
-            "placed side by side, they line up into one uninterrupted image "
-            "with no visible seam. Move the scene along — a new part of the "
-            "world, the character a step further through it — never repeat the "
-            "previous frame. This is a designed, scroll-stopping experience, "
-            "not five separate posters."
+            "keep the identical palette, lighting, art style and typography, and "
+            "continue the composition SEAMLESSLY from the right-hand edge of the "
+            "previous slide so that, placed side by side, they line up into one "
+            "uninterrupted image with no visible seam. Move the scene along — a "
+            "new part of the world — never repeat the previous frame."
         )
+        if person_here:
+            clause += (
+                " The recurring character continues through this section too: "
+                "the same person (same face, build, clothing), carried a step "
+                "further and shown from the angle this part of the pan calls "
+                "for — not a frozen copy of the last frame."
+            )
+        else:
+            clause += (
+                " This section of the pan has no person in it — do not carry "
+                "the recurring character into this frame; let the environment "
+                "and objects lead here."
+            )
+        clause += (
+            " This is a designed, scroll-stopping experience, not five separate "
+            "posters."
+        )
+        parts.append(clause)
     elif anchored:
-        parts.append(
+        clause = (
             "You are given the FIRST slide of this carousel as a reference "
             "image. Produce the NEXT slide in the exact same visual world: keep "
-            "the identical character (same face, build, clothing), the identical "
-            "colour palette, lighting, art style and typography as the reference "
-            "— change only the scene/pose/composition for this slide's content. "
-            "It must look unmistakably like the same designer made both, seconds "
-            "apart."
+            "the identical colour palette, lighting, art style and typography as "
+            "the reference — change the scene/composition for this slide's "
+            "content. It must look unmistakably like the same designer made "
+            "both, seconds apart."
+        )
+        if person_here:
+            clause += (
+                " Keep the identical character too — the same person (same "
+                "face, build, clothing) as the reference — but RE-FRAMED for "
+                "this slide: a new pose, angle and action to fit the scene, not "
+                "the same shot again."
+            )
+        else:
+            clause += (
+                " This slide's scene does not feature the recurring character, "
+                "so do not carry a person over from the reference — take only "
+                "the look from it and build this frame from its own subject and "
+                "objects."
+            )
+        parts.append(clause)
+
+    # No look-reference attached (e.g. slide 1) but the account has a recurring
+    # character and this beat isn't a person beat: say so, so the model doesn't
+    # shoe-horn the mascot in out of habit.
+    if has_character and not person_here and not character_ref and not pan and not anchored:
+        parts.append(
+            "The account has a recurring character, but THIS slide's scene does "
+            "not call for a person — do not place them or any human figure in "
+            "it. Build the frame from its subject, objects, environment and "
+            "typography, in the same world, palette and type treatment as the "
+            "rest of the set."
         )
     if slide.image_prompt.strip():
         parts.append(slide.image_prompt.strip())
@@ -774,21 +857,25 @@ def render_slide(
         if notify:
             notify(f"slide {slide_index + 1}: {msg}")
 
-    # Slide 1 is the identity anchor for the whole set. When the account has a
-    # LOCKED recurring-character portrait, attach it here so the SAME person
-    # carries across every post (not just within this carousel); later slides
-    # then anchor on this character-locked slide 1 as they already do.
-    anchor_is_character = False
-    if slide_index == 0 and anchor is None and not dry_run and character_ref_path:
+    # The recurring-character portrait is an IDENTITY reference for whichever
+    # slides actually feature the person — not forced onto every frame. Load it
+    # once; attach it only where a person genuinely belongs (see below), and
+    # only then as a pose-free "this is who they are" reference. This is what
+    # stops the mascot being pasted, same angle, into slides that don't need a
+    # human at all.
+    portrait: Image.Image | None = None
+    if character_ref_path and not dry_run:
         p = Path(character_ref_path)
         if p.exists():
             try:
-                portrait = Image.open(p)
-                portrait.load()
-                anchor = portrait
-                anchor_is_character = True
+                img = Image.open(p)
+                img.load()
+                portrait = img
             except OSError:
-                anchor = None
+                portrait = None
+    wants_character = slide_features_character(slide)
+    attach_portrait = portrait is not None and wants_character
+    has_character = portrait is not None or "recurring character" in house_style.lower()
 
     # Regenerating a later slide on its own: anchor it to the saved slide 1 so
     # it still matches the set (unless an anchor was passed in explicitly). In
@@ -828,22 +915,27 @@ def render_slide(
                     f"spend cap £{settings.max_spend_per_run:g} would be exceeded "
                     f"at slide {slide_index + 1} — aborting render"
                 )
-            # Build the visual references: slide 1 (identity anchor) always;
-            # the previous slide too in pan mode (edge continuity / one shot).
+            # Build the visual references. Look continuity first so the
+            # positional prompt wording ("the FIRST slide", "TWO reference
+            # images") stays accurate: slide 1 as the set anchor, the previous
+            # slide too in pan mode. The character portrait, when this slide
+            # features the person, is appended last as a separate identity ref.
             refs: list[Image.Image] = []
             panning = (
                 swipe_style == "pan"
                 and prev is not None
                 and brand.generation.reference_continuity
             )
-            # The locked-character portrait is attached regardless of the
-            # set-continuity setting — it's a separate, brand-level lock.
-            if anchor is not None and (
-                brand.generation.reference_continuity or anchor_is_character
-            ):
+            anchored = anchor is not None and brand.generation.reference_continuity
+            if anchored:
                 refs.append(anchor)
             if panning:
                 refs.append(prev)
+            # The portrait attaches regardless of the set-continuity setting —
+            # it's a separate, brand-level identity lock — but only on the
+            # slides that actually show the person.
+            if attach_portrait:
+                refs.append(portrait)
             if mode == "ai_design":
                 prompt = compose_design_prompt(
                     slide,
@@ -853,15 +945,17 @@ def render_slide(
                     index=slide_index,
                     design_system=_route_of(idea).get("design_system"),
                     house_style=house_style,
-                    anchored=bool(refs) and not anchor_is_character,
+                    anchored=anchored and not panning,
                     pan=panning,
-                    character_ref=anchor_is_character,
+                    character_ref=attach_portrait,
+                    feature_character=wants_character,
+                    has_character=has_character,
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)
             _note(
                 f"request sent to {settings.image_model} ({quality} quality) — "
-                + ("locking to your recurring character — " if anchor_is_character
+                + ("placing your recurring character — " if attach_portrait
                    else "continuing the pan from the last slide — " if panning
                    else "matching the first slide's look — " if refs else "")
                 + "waiting for the image, typically 20-60s"
@@ -1036,7 +1130,10 @@ def render_carousel(
             anchor=anchor if i > 0 else None,
             prev=prev if i > 0 else None,
             swipe_style=swipe_style,
-            character_ref_path=character_ref_path if i == 0 else "",
+            # Every slide gets the portrait; render_slide attaches it only where
+            # the slide actually features the person, so the mascot appears on
+            # the beats that need them rather than in every frame.
+            character_ref_path=character_ref_path,
         )
         result.spend_usd += slide_result.spend_usd
         result.generated += slide_result.generated

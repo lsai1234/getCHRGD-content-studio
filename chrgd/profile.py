@@ -134,13 +134,17 @@ def _visual_rows(profile: BrandProfile) -> list[str]:
     if profile.type_style.strip():
         rows.append(f"Typography: {profile.type_style.strip()}")
     if profile.character.strip():
-        rows.append(f"Recurring character (SAME on every post): {profile.character.strip()}")
+        rows.append(
+            "Recurring character (the SAME person WHENEVER a person appears, but "
+            f"only on slides that need one): {profile.character.strip()}"
+        )
     elif profile.character_image.strip():
         # A portrait is locked but no text description — still tell the engine a
         # fixed character exists (the portrait itself is attached at render).
         rows.append(
-            "Recurring character (SAME on every post): a fixed character whose "
-            "locked portrait is provided — match that exact person every time"
+            "Recurring character (the SAME person whenever a person appears): a "
+            "fixed character whose portrait is provided — match that exact "
+            "person on the slides that feature a human"
         )
     if profile.motif.strip():
         rows.append(f"Recurring motif: {profile.motif.strip()}")
@@ -158,10 +162,13 @@ def profile_style_block(profile: BrandProfile) -> str:
     return (
         "LOCKED BRAND LOOK — this is the account's fixed visual identity and "
         "must be IDENTICAL on every slide of every post (same aesthetic, same "
-        "colours, same typography, same character). Do NOT reinvent it or drift "
-        "— only the specific scene changes post to post. If a recurring "
-        "character is named, that EXACT character (same face, build, clothing) "
-        "must appear, consistent frame to frame:\n" + _bullet(rows)
+        "colours, same typography). Do NOT reinvent it or drift — only the "
+        "specific scene changes post to post. If a recurring character is "
+        "named, they are the SAME person every time they appear (same face, "
+        "build, clothing) — but they do NOT belong in every frame: show them "
+        "only on slides where a person is genuinely the point, and when they do "
+        "appear, frame them for that moment (their own angle, distance and "
+        "pose), never the same shot repeated:\n" + _bullet(rows)
     )
 
 
