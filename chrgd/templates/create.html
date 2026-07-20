@@ -293,6 +293,12 @@
         <span class="s">Fascinating, shareable angles that work any week of the year</span></span>
       <span class="chev">›</span>
     </button>
+    <button type="button" class="opt" onclick="pickSource('ragebait', this)">
+      <span class="ic">🔥</span>
+      <span class="tx"><span class="t">Start an argument</span>
+        <span class="s">Ragebait — a divisive take stated with full confidence; the comment war does the distribution</span></span>
+      <span class="chev">›</span>
+    </button>
     <button type="button" class="opt" onclick="pickSource('idea', this)">
       <span class="ic">💡</span>
       <span class="tx"><span class="t">My own idea</span>
@@ -334,11 +340,22 @@
         <button type="button" class="chip sel" data-lane="moments" onclick="switchLane('moments')">🌍 Big moments</button>
         <button type="button" class="chip" data-lane="trending" onclick="switchLane('trending')">📈 Trending</button>
         <button type="button" class="chip" data-lane="evergreen" onclick="switchLane('evergreen')">🤯 Worth knowing</button>
+        <button type="button" class="chip" data-lane="ragebait" onclick="switchLane('ragebait')">🔥 Ragebait</button>
       </div>
       <span class="age" id="radar-age"></span>
       <button type="button" class="chip" id="radar-refresh" onclick="refreshLane(true)">↻ Rescan</button>
     </div>
     <div class="chip-row" data-len-slot style="margin:2px 0 8px"></div>
+    <!-- ragebait lane only: skip the scout and bring your own beef -->
+    <div id="ragebait-own" class="angle-chip custom-angle" style="display:none; margin-top:10px">
+      <span class="a-type">🔥 got your own beef?</span>
+      <input id="ragebait-own-text" type="text"
+             placeholder="e.g. paying for a PT at a commercial gym is a waste of money">
+      <div class="angle-actions">
+        <button type="button" title="five genuinely different ways to start this fight — pick before anything is written">🎯 See the takes</button>
+        <button type="button" class="ghost" title="skip the fan-out — one straight write">⚡ Just build it</button>
+      </div>
+    </div>
     <div id="radar-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
   </section>
 
@@ -713,7 +730,7 @@ function pickLength(len, el){
 }
 function routeToDoor(){
   const src = state.source;
-  if (src === 'moments' || src === 'trending' || src === 'evergreen') { show('radar'); switchLane(src); }
+  if (src === 'moments' || src === 'trending' || src === 'evergreen' || src === 'ragebait') { show('radar'); switchLane(src); }
   else if (src === 'idea')   { show('idea'); setTimeout(() => document.getElementById('idea-text').focus(), 350); }
   else if (src === 'facts')  { show('facts'); setTimeout(() => document.getElementById('facts-text').focus(), 350); }
   else if (src === 'format') { show('format'); }
@@ -827,17 +844,19 @@ async function skipTakes(){
 }
 
 /* ---------- radar (moments / trending / evergreen lanes) ---------- */
-const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in'};
+const TYPE_LABEL = {advice: '💡 advice', funny: '😂 funny', tiein: '🧃 product tie-in',
+                    take: '🔥 hot take', ranking: '🏆 wrong on purpose', callout: '📣 call-out'};
 const LANE_HINT = {
   moments: 'The biggest UK & global events this week — tap a story, pick your angle.',
   trending: 'Formats, memes & gym-tok the 18–30 crowd is actually on — ⚡ spikes to ride this week, 🌊 waves you can reuse.',
   evergreen: 'Fascinating, shareable facts that work any week of the year.',
+  ragebait: 'Debates that split the gym down the middle — pick a side, say it with full confidence, and let the comment war carry it. Always an opinion the brand can stand behind, never a lie.',
 };
-const LANE_EYEBROW = {moments: 'Happening now', trending: 'Trending', evergreen: 'Worth knowing'};
+const LANE_EYEBROW = {moments: 'Happening now', trending: 'Trending', evergreen: 'Worth knowing', ragebait: 'Start an argument'};
 // Spikes go stale fast; evergreen facts barely age — rescan cadence per lane.
-const LANE_MAX_AGE_H = {moments: 12, trending: 24, evergreen: 24 * 7};
+const LANE_MAX_AGE_H = {moments: 12, trending: 24, evergreen: 24 * 7, ragebait: 24 * 3};
 let lane = 'moments';
-const laneJobs = {moments: null, trending: null, evergreen: null};
+const laneJobs = {moments: null, trending: null, evergreen: null, ragebait: null};
 
 function switchLane(l){
   lane = l;
@@ -845,6 +864,7 @@ function switchLane(l){
     t.classList.toggle('sel', t.dataset.lane === l));
   document.getElementById('lane-hint').textContent = LANE_HINT[l];
   document.getElementById('radar-eyebrow').textContent = LANE_EYEBROW[l];
+  document.getElementById('ragebait-own').style.display = l === 'ragebait' ? '' : 'none';
   loadLane();
 }
 
@@ -869,6 +889,7 @@ async function refreshLane(showSkeleton = true){
   document.getElementById('radar-age').textContent =
     lane === 'moments' ? 'scanning what the UK is talking about…' :
     lane === 'trending' ? 'scanning TikTok formats, memes & gym-tok…' :
+    lane === 'ragebait' ? 'hunting arguments worth starting…' :
     'hunting fascinating facts…';
   await post('/api/jobs/moments', new URLSearchParams({kind: lane}));
   pollLane(lane);
@@ -1016,6 +1037,31 @@ async function pollDig(jobId, deep){
     (sm.angles || []).forEach((a, ai) => box.appendChild(angleChip(jobId, si, ai, a)));
     box.appendChild(customAngleRow(jobId, si));
     deep.appendChild(box);
+  });
+}
+
+/* ---------- ragebait: bring your own beef ---------- */
+// A hand-written hot take skips the scout but keeps the ragebait framing:
+// the seed rides a ragebait moment so the build commits to the fight.
+async function startRagebait(takes){
+  const input = document.getElementById('ragebait-own-text');
+  const text = input.value.trim();
+  if (!text) { input.focus(); return; }
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  body.set('text', text);
+  body.set('ragebait', 'true');
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+{
+  const own = document.getElementById('ragebait-own');
+  const [fan, quick] = own.querySelectorAll('button');
+  fan.onclick = () => startRagebait(true);
+  quick.onclick = () => startRagebait(false);
+  own.querySelector('input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); startRagebait(true); }
   });
 }
 

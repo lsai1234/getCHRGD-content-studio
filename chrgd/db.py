@@ -502,7 +502,7 @@ class Store:
             "UPDATE jobs SET status = 'ERROR', error = 'interrupted — re-run', "
             "updated_at = ? WHERE status = 'PROCESSING' "
             "AND kind IN ('build','build_one','render','render_slide',"
-            "'angles','takes','revise','trends','moments','evergreen','trending','meta_scan',"
+            "'angles','takes','revise','trends','moments','evergreen','trending','ragebait','meta_scan',"
             "'moment_detail','concept','run')",
             (datetime.now().astimezone().isoformat(),),
         )

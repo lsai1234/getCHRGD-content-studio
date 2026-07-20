@@ -801,6 +801,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         manual: bool = Form(False),
         develop: bool = Form(False),
         takes: bool = Form(False),
+        ragebait: bool = Form(False),
         _: str = Depends(require_user),
     ):
         """Open one of the three doors into the create journey."""
@@ -829,9 +830,18 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             if mode == "idea":
                 if not text.strip():
                     raise HTTPException(400, "give the idea a line of text")
+                # A hand-written hot take enters the ragebait flow directly:
+                # the seed carries the ragebait moment so the build commits to
+                # the fight framing, same as a scouted debate.
                 idea = _new_seed(
                     store, concept_note=text.strip(), style=style,
+                    content_category="ragebait" if ragebait else "",
                     render_mode=render_mode, length=length, scheduled_for=when,
+                    moment=(
+                        {"kind": "ragebait", "title": text.strip(),
+                         "angle": text.strip()}
+                        if ragebait else None
+                    ),
                 )
                 job_id = _first_job(store, idea.idea_id)
                 return {
@@ -1134,10 +1144,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             raise HTTPException(400, str(exc))
         return {"idea_id": idea_id, "slide": n, "path": path}
 
-    # --- discovery radar (moments = UK now · evergreen = worth knowing) --------
+    # --- discovery radar (moments = UK now · evergreen = worth knowing ·
+    #     trending = formats to ride · ragebait = arguments worth starting) ----
 
     def _discover_kind(kind: str) -> str:
-        if kind not in ("moments", "evergreen", "trending"):
+        if kind not in ("moments", "evergreen", "trending", "ragebait"):
             raise HTTPException(400, f"unknown discover kind '{kind}'")
         return kind
 
@@ -1240,7 +1251,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         with _store(settings) as store:
             job = store.get_job(job_id)
             if job is None or job["kind"] not in (
-                "moments", "evergreen", "trending", "moment_detail",
+                "moments", "evergreen", "trending", "ragebait", "moment_detail",
             ):
                 raise HTTPException(404, "no such discovery scan")
             moments = json.loads(job["result_json"] or "{}").get("moments", [])
@@ -1258,10 +1269,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 note = a.get("concept_note", a.get("title", ""))
                 if a.get("hook"):
                     note += f" — open with: {a['hook']}"
-            # Trends and moments seed differently for the learning loop and
-            # for the build framing (event = the moment is the star; trend =
-            # the format is the vehicle to follow faithfully).
-            kind_tag = "trending" if job["kind"] == "trending" else "moment"
+            # Trends, ragebait and moments seed differently for the learning
+            # loop and for the build framing (event = the moment is the star;
+            # trend = the format is the vehicle to follow faithfully;
+            # ragebait = the argument is the star and the post picks a side).
+            kind_tag = (
+                job["kind"] if job["kind"] in ("trending", "ragebait") else "moment"
+            )
             idea = _new_seed(
                 store,
                 concept_note=f"[{m.get('title', 'UK moment')}] {note}",
@@ -1566,7 +1580,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         retryable = {
             "build", "build_one", "render", "render_slide",
             "angles", "revise", "concept", "trends", "moments", "evergreen",
-            "trending", "takes", "meta_scan", "run",
+            "trending", "ragebait", "takes", "meta_scan", "run",
         }
         with _store(settings) as store:
             job = store.get_job(job_id)

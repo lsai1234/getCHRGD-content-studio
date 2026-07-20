@@ -357,7 +357,35 @@ def _seed_context(idea: Idea, prefs: dict) -> list[str]:
     # account's biggest win (the 2am England-game post) worked because the
     # moment was the star — so every stage must keep that inversion explicit.
     moment = prefs.get("moment")
-    if moment and moment.get("kind") == "trending":
+    if moment and moment.get("kind") == "ragebait":
+        lines.append("")
+        lines.append(
+            "RAGEBAIT POST — this post is deliberately divisive: it states "
+            "one side of a genuine debate at maximum confidence so the "
+            "comment section does the distribution. The ARGUMENT is the star; "
+            "the brand is the loudmouth mate who started it and can back "
+            "every word:"
+        )
+        for key in ("title", "why", "when", "category", "angle"):
+            if moment.get(key):
+                lines.append(f"- {key}: {moment[key]}")
+        lines.append(
+            "Rules of the fight: COMMIT to the take — no hedging, no 'in my "
+            "opinion', no both-sides slide; the post is the mate who says it "
+            "outright. Leave ONE obvious counter-argument conspicuously "
+            "unaddressed — that gap is what the comments rush to fill (a "
+            "slightly-wrong-on-purpose ranking works the same way). The "
+            "comment trigger must invite the OTHER side to fight back, never "
+            "ask for agreement. Weight the writing toward comment_fight and "
+            "group_chat_share — this post lives or dies on the argument it "
+            "starts. Hard limits, non-negotiable: the take stays a genuinely "
+            "defensible OPINION — never a fabricated fact, invented statistic "
+            "or debunked myth presented as truth; punch at behaviours and "
+            "ideas, never named people, protected groups or bodies; nothing "
+            "medical or guaranteed-outcome; the brand must be able to stand "
+            "behind every word when it blows up."
+        )
+    elif moment and moment.get("kind") == "trending":
         lines.append("")
         lines.append(
             "LIVE TREND — this post rides a format/meme/discourse the "

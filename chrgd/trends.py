@@ -479,10 +479,89 @@ Rank by how live AND how carousel-buildable each trend is — native, peaking
 spikes first, then strong adaptable waves.
 """.format(limitation=LIMITATION)
 
+# The fourth discovery lane: arguments worth starting. Not events, not facts,
+# not formats — the genuinely divisive debates in gym culture that a
+# deliberately provocative "ragebait" post can ride, because on TikTok a
+# comment section at war IS the distribution engine.
+RAGEBAIT_PROMPT = """You are the Ragebait Scout for CHRGD, a premium UK gym/supplement brand.
+
+Your job is to find ARGUMENTS WORTH STARTING: the genuinely divisive opinions,
+sacred cows and running debates in UK gym/fitness culture that reliably split
+a comment section down the middle. These fuel deliberately provocative
+ragebait carousels whose reach comes from people arguing in the comments and
+tagging mates to settle it — on TikTok, a comment war is free distribution.
+
+Use web search for what gym-tok, fitness reddit/forums and current reporting
+are ACTUALLY arguing about right now, plus the evergreen beefs that never die:
+training-split tribalism, cardio vs weights, gym etiquette wars (curling in
+the squat rack, seat-hoggers, filming), supplement snobbery, dirty bulk vs
+clean, commercial gym vs spit-and-sawdust, "influencer advice that's secretly
+a scam", morning-vs-evening training superiority.
+
+THE SPLIT TEST (hard filter — apply to every candidate): can you name BOTH
+camps, and are both big? If ~90% of the audience would just agree, it's a
+crowd-pleaser, not ragebait — cut it. If one camp is tiny or imaginary
+("some people say…"), cut it. The perfect take makes half the audience type
+"finally someone said it" and the other half type an essay about why you're
+dead wrong.
+
+RULES OF THE FIGHT (hard, non-negotiable — provocation, never harm):
+- OPINIONS, not lies: every take must be a genuinely defensible position
+  stated at maximum confidence — never a fabricated fact, invented statistic
+  or debunked myth presented as truth. The fight is over the TAKE, not over
+  whether the post lied.
+- Punch at BEHAVIOURS and IDEAS, never people: no named individuals or
+  influencers, nothing aimed at a protected group, no body-shaming, no
+  beginner-shaming. A viewer may feel called out for a CHOICE they can laugh
+  about defending — never for who they are.
+- Claim safety as ever: nothing medical, no cure/treat/prevent or
+  guaranteed-outcome language; supplement takes stay observational.
+- The brand must be able to STAND BEHIND the take when it blows up — spicy,
+  defensible, ownable. If the only honest reply to backlash would be "we
+  didn't mean it", cut it.
+
+For EACH debate, propose 2-3 ready-to-build RAGEBAIT angles. Engineer the
+provocation deliberately in every angle:
+- the hook states the take with TOTAL confidence — no hedging, no "in my
+  opinion", no both-sides;
+- leave ONE obvious counter-argument conspicuously unaddressed — the gap the
+  comments rush to fill (a slightly-wrong-on-purpose ranking people must
+  correct works the same way);
+- the comment section is the product: each angle's concept_note must END by
+  naming the fight it starts ("the fight: X camp vs Y camp over Z").
+
+Limitation you MUST respect: {limitation}
+
+Return a SINGLE JSON object, no markdown, no commentary, in EXACTLY this shape:
+{{
+  "moments": [
+    {{
+      "title": "the debate in one line, phrased as the argument people have",
+      "emoji": "one emoji",
+      "category": "etiquette | training | supplements | diet | culture | cardio",
+      "when": "live — arguing about it this week | evergreen beef",
+      "why": "the two camps in one line — who's on each side and what they believe",
+      "decay_speed": "days | weeks",
+      "angles": [
+        {{
+          "type": "take | ranking | callout",
+          "title": "short label",
+          "hook": "the slide-1 take, stated at maximum confidence",
+          "concept_note": "1-2 sentence buildable brief, ending with 'the fight: …'"
+        }}
+      ]
+    }}
+  ]
+}}
+Rank by how hard the comments will go — the most evenly-split, most-felt
+debates first. Only takes that pass the split test AND the rules of the fight.
+""".format(limitation=LIMITATION)
+
 _DISCOVER_PROMPTS = {
     "moments": MOMENTS_PROMPT,
     "evergreen": EVERGREEN_PROMPT,
     "trending": TRENDING_PROMPT,
+    "ragebait": RAGEBAIT_PROMPT,
 }
 _DISCOVER_ASKS = {
     "moments": (
@@ -501,6 +580,12 @@ _DISCOVER_ASKS = {
         "carousel test; skip anything that only works as video. Each with 2-3 "
         "ready carousel angles whose concept_note states the swipe shape. Rank "
         "by how live and how buildable each is, and return the JSON object."
+    ),
+    "ragebait": (
+        "Find up to {count} genuinely divisive UK gym/fitness debates that "
+        "pass the split test, each with 2-3 ready ragebait angles engineered "
+        "to start the fight (and each passing the rules of the fight). Rank "
+        "by how hard the comments will go and return the JSON object."
     ),
 }
 
@@ -530,7 +615,8 @@ def scout_discover(
     *,
     client: TrendSearchClient | None = None,
 ) -> MomentsResult:
-    """One discovery scan: 'moments' (UK now) or 'evergreen' (worth knowing)."""
+    """One discovery scan: 'moments' (UK now), 'evergreen' (worth knowing),
+    'trending' (formats to ride) or 'ragebait' (arguments worth starting)."""
     if kind not in _DISCOVER_PROMPTS:
         raise TrendError(f"unknown discover kind '{kind}'")
     client = client or OpenAITrendClient(settings)

@@ -1562,6 +1562,119 @@ def test_trending_lane_seeds_trend_framed_ideas(client, settings):
     assert "SHARED CULTURAL MOMENT" not in msg
 
 
+# --- the ragebait lane: arguments worth starting ---------------------------------
+
+RAGEBAIT_PAYLOAD = {
+    "moments": [
+        {
+            "title": "Curling in the squat rack", "emoji": "🔥",
+            "category": "etiquette", "when": "evergreen beef",
+            "decay_speed": "weeks",
+            "why": "rack purists vs the 'any free rack is my rack' lifters",
+            "angles": [
+                {"type": "take", "title": "Rack purist",
+                 "hook": "curling in the squat rack should cost you your membership",
+                 "concept_note": "full-confidence etiquette take — the fight: "
+                                 "purists vs do-what-you-want"},
+            ],
+        },
+        {
+            "title": "Cardio is a waste of gym time", "emoji": "🏃",
+            "category": "training", "when": "live — arguing about it this week",
+            "decay_speed": "weeks",
+            "why": "pure lifters vs the hybrid-athlete crowd",
+            "angles": [
+                {"type": "ranking", "title": "Machines ranked",
+                 "hook": "ranking cardio machines by how much of your life they waste",
+                 "concept_note": "slightly-wrong-on-purpose ranking — the fight: "
+                                 "runners must correct it"},
+            ],
+        },
+    ]
+}
+
+
+def test_ragebait_scout_hunts_divisive_but_defensible(settings):
+    from chrgd.trends import scout_discover
+
+    fake = FakeSearch(RAGEBAIT_PAYLOAD)
+    result = scout_discover(settings, "ragebait", client=fake)
+    assert [m.category for m in result.moments] == ["etiquette", "training"]
+    sys = fake.system
+    assert "ARGUMENTS WORTH STARTING" in sys
+    assert "SPLIT TEST" in sys            # both camps must be real and big
+    assert "RULES OF THE FIGHT" in sys    # provocation, never harm
+    # Opinions, not lies — and the punches land on behaviours, never people.
+    assert "never a fabricated fact" in sys
+    assert "no named individuals" in sys
+    assert "protected group" in sys
+    assert "STAND BEHIND" in sys
+    assert "nothing medical" in sys
+
+
+def test_ragebait_lane_seeds_fight_framed_ideas(client, settings):
+    job_id = client.post(
+        "/api/jobs/moments", data={"kind": "ragebait"}
+    ).json()["job_id"]
+    with Store(settings.db_path) as store:
+        assert store.get_job(job_id)["kind"] == "ragebait"
+        store.update_job(job_id, status="COMPLETED",
+                         result_json=json.dumps(RAGEBAIT_PAYLOAD))
+    # The lane feed serves it back like any discovery scan.
+    feed = client.get("/api/moments?kind=ragebait").json()
+    assert feed["moments"][0]["title"] == "Curling in the squat rack"
+
+    r = client.post(
+        f"/api/moments/{job_id}/use", data={"moment": "0", "angle": "0"}
+    ).json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(r["idea_id"])
+    assert idea.content_category == "ragebait"
+    assert idea.learning_tag == "ragebait:etiquette"
+    route = json.loads(idea.route_json)
+    assert route["moment"]["kind"] == "ragebait"
+
+    # The build brief commits to the fight — with the hard limits attached.
+    msg = build_user_message(idea)
+    assert "RAGEBAIT POST" in msg
+    assert "COMMIT to the take" in msg
+    assert "comment_fight" in msg
+    assert "defensible OPINION" in msg
+    assert "never named people, protected groups or bodies" in msg
+    assert "SHARED CULTURAL MOMENT" not in msg and "LIVE TREND" not in msg
+
+
+def test_create_page_offers_the_ragebait_flow(client):
+    html = client.get("/create").text
+    assert "pickSource('ragebait'" in html          # the dedicated door
+    assert 'data-lane="ragebait"' in html           # the radar lane tab
+    assert 'id="ragebait-own"' in html              # bring-your-own-beef row
+
+
+def test_own_hot_take_enters_the_ragebait_flow(client, settings):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "text": "pre-workout is a personality substitute",
+        "ragebait": "true",
+    }).json()
+    with Store(settings.db_path) as store:
+        idea = store.get_idea(r["idea_id"])
+    assert idea.content_category == "ragebait"
+    route = json.loads(idea.route_json)
+    assert route["moment"]["kind"] == "ragebait"
+    assert route["moment"]["angle"] == "pre-workout is a personality substitute"
+    msg = build_user_message(idea)
+    assert "RAGEBAIT POST" in msg
+
+    # Without the flag the same door stays a plain idea seed.
+    r2 = client.post("/api/create/start", data={
+        "mode": "idea", "text": "morning sessions hit different",
+    }).json()
+    with Store(settings.db_path) as store:
+        idea2 = store.get_idea(r2["idea_id"])
+    assert idea2.content_category == ""
+    assert "RAGEBAIT POST" not in build_user_message(idea2)
+
+
 def test_moment_seeds_still_use_moment_framing(client, settings):
     job_id = client.post("/api/jobs/moments").json()["job_id"]
     with Store(settings.db_path) as store:

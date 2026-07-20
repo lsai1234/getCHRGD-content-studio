@@ -384,7 +384,7 @@ def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
 
 
 def _handle_discover(store: Store, settings: Settings, job: dict) -> dict:
-    """One discovery scan: 'moments' (UK now) or 'evergreen' (worth knowing)."""
+    """One discovery scan: 'moments', 'evergreen', 'trending' or 'ragebait'."""
     from .trends import scout_discover
 
     params = json.loads(job["params_json"] or "{}")
@@ -460,6 +460,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "moments": _handle_discover,
     "evergreen": _handle_discover,
     "trending": _handle_discover,
+    "ragebait": _handle_discover,
     "meta_scan": _handle_meta_scan,
     "moment_detail": _handle_moment_detail,
     "concept": _handle_concept,
@@ -495,7 +496,7 @@ def enqueue_trends(store: Store, *, count: int) -> int:
 
 def enqueue_discover(store: Store, kind: str = "moments", *, count: int = 6) -> int:
     """One scan per lane at a time — reuse an in-flight scan, don't stack."""
-    if kind not in ("moments", "evergreen", "trending"):
+    if kind not in ("moments", "evergreen", "trending", "ragebait"):
         raise ValueError(f"unknown discover kind '{kind}'")
     row = store.conn.execute(
         "SELECT job_id FROM jobs WHERE kind = ? "
