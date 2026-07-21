@@ -483,7 +483,7 @@ def creation_prefs(idea: Idea) -> dict:
     return {
         k: route[k]
         for k in (
-            "style", "mechanic_lock", "render_mode", "concept_brief",
+            "style", "mechanic_lock", "concept_brief",
             "length_pref", "moment", "take",
         )
         if k in route

@@ -677,7 +677,7 @@ const RESUME_IDEA = "{{ resume_idea }}";
 const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
-let state = { ideaId: null, source: null, style: null, mode: 'ai_design',
+let state = { ideaId: null, source: null, style: null,
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
 const MAX_SLIDES = 10, MIN_SLIDES = 1;
@@ -751,7 +751,7 @@ function routeToDoor(){
 /* ---------- shared create params ---------- */
 function baseParams(develop, takes = false){
   return new URLSearchParams({
-    style: state.style || '', render_mode: state.mode,
+    style: state.style || '',
     length: state.length || '',
     scheduled_for: PRESET_DAY ? `${PRESET_DAY}T18:00` : '',
     develop: develop ? 'true' : '',

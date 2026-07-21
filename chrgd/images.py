@@ -837,15 +837,11 @@ def render_slide(
 ) -> SlideRenderResult:
     """Render one slide: N background variants + composed text overlay.
 
-    Two modes (per-post via route_json.render_mode, default from brand.toml):
-
-    * ``ai_design`` — the model designs the WHOLE slide, typography included
-      (the proven n8n approach). The design is saved as both `slide_N` and
-      `bg_N` so variant-picking works identically; there is no free text
-      re-lay in this mode.
-    * ``overlay`` — the model paints a background; the approved copy is
-      overlaid in code. The raw background is kept on disk so copy edits can
-      re-overlay text for free.
+    Only ``ai_design`` is used for a real render (see render_mode_for_idea): the
+    model designs the WHOLE slide, typography included, and the design is saved
+    as both `slide_N` and `bg_N` so variant-picking works identically — there is
+    no free text re-lay in this mode. (A dry run paints a placeholder + the code
+    overlay so the copy/frame can be previewed offline.)
 
     Variant files get an `_a`/`_b` suffix; the first variant also becomes the
     canonical `slide_N` / `bg_N` until a different one is picked.

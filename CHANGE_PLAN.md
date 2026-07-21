@@ -234,6 +234,8 @@ Pure UI/JSON — no model calls, no schema change. (Architecture note per the co
 
 ## Phase 4 — Polish / consistency
 
+> **Status: shipped.** (1) The fallback consistency clause is now count-agnostic ("Part of one carousel set…") in `brand.toml` + `brand.py`. (2) The dead `render_mode` input plumbing is removed — the form fields, `_new_seed` validation/storage, the `creation_prefs` key and the create.html payload field all gone; `render_mode_for_idea` (always `ai_design`) and the derived detail field stay. (3) ROADMAP's slide-quality line now matches config (slide 1 `high`, rest `low`). (4) The export screen warns that bulk-imported captions lose line breaks and points to manual posting. (5) Was already delivered in §1.3 — the native `gritty`/`meme` treatments are quoted in the stage-6 native guidance.
+
 1. **Fix the 5-image hardcode:** `brand.toml:40` consistency clause says "Part of a 5-image set" regardless of count. Make `images.py` format it with `len(slides)` or drop the number ("Part of one image set…").
 2. **Resolve the render_mode dead switch:** either delete the `render_mode` form field + validation (`webapp.py:766-769`) or make `render_mode_for_idea` honour it. Recommend deleting the field — one mode, one truth (`images.py:553-561` docstring already says so).
 3. **Config/docs mismatch:** ROADMAP.md line 18 says slide 1 renders `high`; `brand.toml` said `medium` (fixed in 1.1 — update the doc).

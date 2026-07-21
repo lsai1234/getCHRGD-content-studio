@@ -46,10 +46,11 @@ class Generation(BaseModel):
     #   "branded"/"overlay" — legacy code-overlay modes; accepted as a stored
     #                 hint but ignored (see images.render_mode_for_idea).
     render_mode: str = "ai_design"
-    # Composed into every image prompt (see images.compose_image_prompt).
+    # Fallback continuity clause for legacy posts with no design_system
+    # (see images.compose_design_prompt). Count-agnostic on purpose.
     consistency_clause: str = (
-        "Part of a 5-image set: keep the same location, lighting, colour "
-        "grade and photographic style across all images in this set."
+        "Part of one carousel set: keep the same location, lighting, colour "
+        "grade and photographic style across every image in the set."
     )
     negative_clause: str = (
         "Absolutely no text, no words, no letters, no numbers, no captions, "

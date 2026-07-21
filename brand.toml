@@ -40,8 +40,9 @@ handle = "@getchrgd"     # bottom-corner handle
 show_counter = true      # "1/5" slide counter
 scrim = true             # top+bottom legibility gradient over the photo
 footer_bar = true        # thin CHRGD light-blue line along the bottom edge
-# Appended to every slide prompt so the five backgrounds read as ONE carousel.
-consistency_clause = "Part of a 5-image set: keep the same location, lighting, colour grade and photographic style across all images in this set."
+# Appended to a slide prompt (fallback for legacy posts with no design_system)
+# so the backgrounds read as ONE carousel. Count-agnostic on purpose.
+consistency_clause = "Part of one carousel set: keep the same location, lighting, colour grade and photographic style across every image in the set."
 # Text is always overlaid in code — the model must never paint its own.
 negative_clause = "Absolutely no text, no words, no letters, no numbers, no captions, no watermarks anywhere in the image."
 

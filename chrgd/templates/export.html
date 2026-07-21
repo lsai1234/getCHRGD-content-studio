@@ -10,6 +10,12 @@
     Builds a Metricool bulk-import CSV + <code>ready/</code> assets from
     <b>{{ ready_count }}</b> done &amp; rendered post(s) not yet exported.
   </p>
+  <p class="muted" style="margin:-6px 0 14px; font-size:12.5px">
+    ⚠️ Bulk-imported captions lose their line breaks (a TikTok API limit), so
+    the caption's title-line structure is flattened. For a post that leans on
+    caption formatting, use <b>Post it now</b> (manual) from the calendar
+    instead — it keeps the line breaks.
+  </p>
   <form method="post" action="/export" class="row">
     <button type="submit">Export week</button>
     <a href="/export?sample=1"><button type="button" class="ghost">Write sample CSV</button></a>

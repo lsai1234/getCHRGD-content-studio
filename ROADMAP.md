@@ -15,7 +15,7 @@ Sizing: **S** ≈ half a session · **M** ≈ one session · **L** ≈ multiple 
 |---|---|---|
 | 1 | Skeleton + SQLite backlog + `capture` | `chrgd capture`, `chrgd backlog` |
 | 2 | Pipeline runner (OpenAI) + QA gate | `chrgd build`, `chrgd review` |
-| 3 | Carousel image builder (gpt-image-2) | `chrgd render` — slide 1 `high`, rest `medium` |
+| 3 | Carousel image builder (gpt-image-2) | `chrgd render` — slide 1 `high`, rest `low` (see `brand.toml [generation]`) |
 | 4 | Metricool CSV export | `chrgd export` (+ `--sample`) |
 | — | **Higgsfield video infra (OFF)** | feature flag, provider client skeleton, `jobs` table, guarded CLI path |
 

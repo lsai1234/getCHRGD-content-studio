@@ -752,7 +752,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         core_tension: str = "",
         style: str = "",
         mechanic_key: str = "",
-        render_mode: str = "",
         length: str = "",
         scheduled_for: datetime | None = None,
         moment: dict | None = None,
@@ -765,10 +764,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             route["moment"] = moment
         if style:
             route["style"] = style
-        if render_mode:
-            if render_mode not in ("branded", "overlay", "ai_design"):
-                raise HTTPException(400, f"unknown render mode '{render_mode}'")
-            route["render_mode"] = render_mode
         if length:
             if length not in ("quick", "standard", "deep"):
                 raise HTTPException(400, f"unknown length preference '{length}'")
@@ -797,7 +792,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         text: str = Form(""),
         mechanic: str = Form(""),
         style: str = Form(""),
-        render_mode: str = Form(""),
         length: str = Form(""),
         scheduled_for: str = Form(""),
         manual: bool = Form(False),
@@ -838,7 +832,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 idea = _new_seed(
                     store, concept_note=text.strip(), style=style,
                     content_category="ragebait" if ragebait else "",
-                    render_mode=render_mode, length=length, scheduled_for=when,
+                    length=length, scheduled_for=when,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}
@@ -857,7 +851,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     concept_note=text.strip() or "blank canvas",
                     style=style,
                     mechanic_key=mechanic,
-                    render_mode=render_mode,
                     length=length,
                     scheduled_for=when,
                 )
@@ -894,7 +887,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         job_id: int,
         index: int = Form(...),
         style: str = Form(""),
-        render_mode: str = Form(""),
         length: str = Form(""),
         scheduled_for: str = Form(""),
         develop: bool = Form(False),
@@ -918,7 +910,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 pain_point=a.get("pain_point", ""),
                 core_tension=a.get("core_tension", ""),
                 style=style,
-                render_mode=render_mode,
                 length=length,
                 scheduled_for=when,
             )
@@ -1240,7 +1231,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         angle: int = Form(-1),
         custom: str = Form(""),
         style: str = Form(""),
-        render_mode: str = Form(""),
         length: str = Form(""),
         scheduled_for: str = Form(""),
         develop: bool = Form(False),
@@ -1286,7 +1276,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 concept_note=f"[{m.get('title', 'UK moment')}] {note}",
                 content_category=kind_tag,
                 style=style,
-                render_mode=render_mode,
                 length=length,
                 scheduled_for=when,
                 # The full moment/trend travels with the seed so the build

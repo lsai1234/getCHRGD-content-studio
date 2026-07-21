@@ -663,8 +663,9 @@ def test_detail_endpoint_shape(client, settings):
 
 
 def test_create_start_render_mode_always_ai_design(client, settings):
-    # Even if a legacy "overlay" hint is posted, the effective render mode is
-    # forced to ai_design (API-baked text) everywhere it matters.
+    # render_mode is no longer a create-journey input (ai_design is the only
+    # real render mode); the detail endpoint always reports the effective mode.
+    # A stray legacy render_mode field is simply ignored, not a 400.
     r = client.post(
         "/api/create/start",
         data={"mode": "idea", "text": "x", "render_mode": "overlay"},
@@ -672,12 +673,6 @@ def test_create_start_render_mode_always_ai_design(client, settings):
     idea_id = r.json()["idea_id"]
     d = client.get(f"/api/ideas/{idea_id}/detail").json()
     assert d["render_mode"] == "ai_design"
-    assert (
-        client.post(
-            "/api/create/start", data={"mode": "idea", "text": "x", "render_mode": "nope"}
-        ).status_code
-        == 400
-    )
 
 
 def test_slide_endpoints_roundtrip(client, settings):
@@ -887,7 +882,7 @@ def test_moments_api_and_use_flow(client, settings):
     # One tap on an angle → seeded idea + build job.
     r = client.post(
         f"/api/moments/{job_id}/use",
-        data={"moment": 1, "angle": 0, "style": "gritty", "render_mode": "ai_design"},
+        data={"moment": 1, "angle": 0, "style": "gritty"},
     )
     body = r.json()
     with Store(settings.db_path) as store:
@@ -898,7 +893,7 @@ def test_moments_api_and_use_flow(client, settings):
         assert idea.decay_speed is not None and idea.decay_speed.value == "days"
         assert idea.learning_tag == "moment:global"
         route = json.loads(idea.route_json)
-        assert route["style"] == "gritty" and route["render_mode"] == "ai_design"
+        assert route["style"] == "gritty"
         job = store.get_job(body["job_id"])
         assert job["kind"] == "build_one" and job["idea_id"] == idea.idea_id
 
