@@ -639,23 +639,68 @@ def parse_moments(text: str) -> MomentsResult:
     raise TrendError("could not parse any moments from the response")
 
 
+# Stage-1 (two-stage scans): return the HEADLINES fast; the per-story angles are
+# written separately when the editor taps a story (generate_lane_angles). This
+# is what turns a 60-90s "everything at once" scan into a ~15-25s headline list.
+_HEADLINES_ONLY_SUFFIX = (
+    "\n\nHEADLINES ONLY THIS RUN: return each item with its title, emoji, why, "
+    "category, scope and when/tier ONLY, and set its \"angles\" to an empty "
+    "array []. Do NOT write any angles now — they are generated separately when "
+    "the editor taps a story, so spend all your effort finding more and sharper "
+    "stories instead."
+)
+
+
 def scout_discover(
     settings: Settings,
     kind: str = "moments",
     count: int = 6,
     *,
     client: TrendSearchClient | None = None,
+    headlines_only: bool = False,
 ) -> MomentsResult:
     """One discovery scan: 'moments' (UK now), 'evergreen' (worth knowing),
-    'trending' (formats to ride) or 'ragebait' (arguments worth starting)."""
+    'trending' (formats to ride) or 'ragebait' (arguments worth starting).
+
+    `headlines_only` runs the fast stage-1 pass (titles + why, no angles); the
+    angles are then written per-story by `generate_lane_angles`."""
     if kind not in _DISCOVER_PROMPTS:
         raise TrendError(f"unknown discover kind '{kind}'")
     client = client or OpenAITrendClient(settings)
-    result = parse_moments(
-        client.search(_DISCOVER_PROMPTS[kind], _DISCOVER_ASKS[kind].format(count=count))
-    )
+    ask = _DISCOVER_ASKS[kind].format(count=count)
+    if headlines_only:
+        ask += _HEADLINES_ONLY_SUFFIX
+    result = parse_moments(client.search(_DISCOVER_PROMPTS[kind], ask))
     result.moments = result.moments[:count]
     return result
+
+
+def generate_lane_angles(
+    settings: Settings,
+    kind: str,
+    title: str,
+    why: str = "",
+    *,
+    count: int = 3,
+    client: TrendSearchClient | None = None,
+) -> list[MomentAngle]:
+    """Stage-2: write the angles for ONE already-surfaced story, using the
+    lane's own rules (ragebait's fight formula, trending's firewall, …). Reuses
+    the lane system prompt + parser, so the angles match the lane exactly."""
+    if kind not in _DISCOVER_PROMPTS:
+        raise TrendError(f"unknown discover kind '{kind}'")
+    if not title.strip():
+        raise TrendError("no story to write angles for")
+    client = client or OpenAITrendClient(settings)
+    ask = (
+        f"Write {count} ready-to-build carousel angles for this ONE story, "
+        "following every rule above. Return the JSON object with a SINGLE "
+        "moment — this exact story — carrying the angles.\n\n"
+        f"Story: {title.strip()}\n" + (f"Context: {why.strip()}\n" if why.strip() else "")
+    )
+    result = parse_moments(client.search(_DISCOVER_PROMPTS[kind], ask))
+    angles = result.moments[0].angles if result.moments else []
+    return angles[:count]
 
 
 def scout_moments(

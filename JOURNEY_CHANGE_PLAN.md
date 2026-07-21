@@ -256,6 +256,8 @@ Cost: ~2 creative-model web-search completions/day at most (lane cadences: trend
 
 ## Phase 2 — Performance & fetch architecture
 
+> **Status: shipped (full).** 2.4 error truth + working retries + non-blocking toast, and 2.5 perceived-perf polish (per-lane client cache for flash-free switches, rescan busy state, scan-wait copy) landed first. Then, with sign-off, the structural work: **2.1 worker split** — `claim_next_job` is now atomic (guarded UPDATE) and kind-filterable, and the web app runs a *fast* worker (`exclude=RESEARCH_KINDS`) + a *research* worker (`kinds=RESEARCH_KINDS`) with a single up-front interrupt-recovery, so a scan can never delay a build/render again. **2.3 warm-on-open** fires all four lane scans at `/create` load. **2.2 two-stage scans** — the four lanes now return headlines fast (`scout_discover(headlines_only=True)`) and write a story's angles on tap via a new `lane_angles` job (`generate_lane_angles`) + `POST /api/moments/{job}/angles`; the UI lazy-loads angles when a story is opened, falling back to inline angles for any full/cached scan. Tests added for the atomic claim, lane partitioning, headlines-only, `generate_lane_angles`, the angles endpoint and handler. Full suite: 277 passed.
+
 ### 2.1 Split the worker: research lane + fast lane — **the structural change; plan first**
 **Lever:** B1 (Critical). One thread means every scan blocks every other job.
 **Proposal:** two `Worker` instances in the web app's lifespan — a *fast* worker excluding research kinds, and a *research* worker running only `{"moments","evergreen","trending","ragebait","moment_detail","trends","meta_scan"}`.

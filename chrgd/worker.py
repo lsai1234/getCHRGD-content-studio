@@ -4,9 +4,12 @@ A single in-process thread drains the `jobs` table so the web request that
 enqueued a build/render returns immediately and the UI can poll progress.
 
 Design choices:
-  * **Single worker** — the claim step assumes one consumer, so the web app
-    must run as one process (see deploy docs). Simpler than Redis/Celery and
-    plenty for one user.
+  * **Two in-process workers, one lane each** — a *fast* worker (builds,
+    renders, takes, angles…) and a *research* worker (the slow web-search
+    scans, `RESEARCH_KINDS`), so a minute-long scan can never delay a build or
+    render. The claim step (`db.claim_next_job`) is concurrency-safe via a
+    guarded UPDATE, so the two share the `jobs` table without double-processing.
+    Still one process, still no Redis/Celery.
   * **Resumable, no re-bill** — on startup, non-pollable jobs (build/render)
     left mid-flight by a crash are marked ERROR for manual re-run rather than
     silently re-charged. Video jobs (pollable via external_id) resume in M6.
@@ -26,10 +29,38 @@ from .db import Store
 from .models import Status
 
 
+# The slow research lanes (web-search scans). Split onto their own worker so a
+# minute-long scan can never delay a build/render on the fast worker.
+RESEARCH_KINDS = frozenset({
+    "moments", "evergreen", "trending", "ragebait",
+    "moment_detail", "lane_angles", "trends", "meta_scan",
+})
+
+
 class Worker:
-    def __init__(self, settings: Settings, poll_interval: float = 1.0):
+    def __init__(
+        self,
+        settings: Settings,
+        poll_interval: float = 1.0,
+        *,
+        kinds: "frozenset[str] | None" = None,
+        exclude: "frozenset[str] | None" = None,
+        name: str = "chrgd-worker",
+        recover_on_start: bool = True,
+    ):
         self.settings = settings
         self.poll_interval = poll_interval
+        # Job-kind partitioning so multiple workers can share the table: `kinds`
+        # restricts to those kinds, `exclude` skips them. Default (both None) =
+        # the classic single worker that takes everything.
+        self.kinds = kinds
+        self.exclude = exclude
+        self._name = name
+        # When several workers run, recovery must happen ONCE before any of them
+        # starts — otherwise a fresh worker reaps another's in-flight job as
+        # "interrupted". The multi-worker lifespan does it explicitly and passes
+        # recover_on_start=False here.
+        self._recover_on_start = recover_on_start
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._store: Store | None = None
@@ -44,9 +75,10 @@ class Worker:
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
-        self.store().recover_interrupted_jobs()
+        if self._recover_on_start:
+            self.store().recover_interrupted_jobs()
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="chrgd-worker", daemon=True)
+        self._thread = threading.Thread(target=self._loop, name=self._name, daemon=True)
         self._thread.start()
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -71,7 +103,7 @@ class Worker:
     def run_once(self) -> int | None:
         """Process at most one queued job. Returns its job_id, or None if idle."""
         store = self.store()
-        job = store.claim_next_job()
+        job = store.claim_next_job(kinds=self.kinds, exclude=self.exclude)
         if job is None:
             return None
 
@@ -404,13 +436,35 @@ def _handle_discover(store: Store, settings: Settings, job: dict) -> dict:
         if job["kind"] in ("ragebait", "trending")
         else None
     )
+    # Two-stage: stage 1 returns headlines fast; the angles for a story are
+    # written on tap by _handle_lane_angles. Turns a 60-90s "everything" scan
+    # into a ~15-25s headline list.
     result = scout_discover(
-        settings, job["kind"], int(params.get("count", 6)), client=client
+        settings, job["kind"], int(params.get("count", 6)),
+        client=client, headlines_only=True,
     )
     return {
         "limitation": result.limitation,
         "moments": [m.model_dump(mode="json") for m in result.moments],
     }
+
+
+def _handle_lane_angles(store: Store, settings: Settings, job: dict) -> dict:
+    """Stage-2 of a two-stage scan: write the angles for ONE surfaced story."""
+    from .trends import OpenAITrendClient, generate_lane_angles
+
+    params = json.loads(job["params_json"] or "{}")
+    kind = str(params.get("lane", "moments"))
+    client = (
+        OpenAITrendClient(settings, model=settings.openai_model)
+        if kind in ("ragebait", "trending")
+        else None
+    )
+    angles = generate_lane_angles(
+        settings, kind, str(params.get("title", "")), str(params.get("why", "")),
+        count=int(params.get("count", 3)), client=client,
+    )
+    return {"angles": [a.model_dump(mode="json") for a in angles]}
 
 
 def _handle_moment_detail(store: Store, settings: Settings, job: dict) -> dict:
@@ -492,6 +546,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "ragebait": _handle_discover,
     "meta_scan": _handle_meta_scan,
     "moment_detail": _handle_moment_detail,
+    "lane_angles": _handle_lane_angles,
     "concept": _handle_concept,
     "run": _handle_run,
 }

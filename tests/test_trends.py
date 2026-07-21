@@ -195,3 +195,46 @@ def test_trend_model_defaults():
     t = Trend(trend="x", concept_note="y")
     assert t.decay_speed is DecaySpeed.weeks
     assert not t.ships_fast
+
+
+# --- two-stage scans (headlines fast, angles on tap) -----------------------------
+
+
+def test_headlines_only_appends_the_directive(settings):
+    from chrgd.trends import scout_discover
+
+    class Rec:
+        def search(self, system, user):
+            self.user = user
+            return '{"moments": []}'
+
+    rec = Rec()
+    scout_discover(settings, "moments", 6, client=rec, headlines_only=True)
+    assert "HEADLINES ONLY THIS RUN" in rec.user
+    assert 'empty' in rec.user  # tells the model to leave angles empty
+
+    rec2 = Rec()
+    scout_discover(settings, "moments", 6, client=rec2, headlines_only=False)
+    assert "HEADLINES ONLY THIS RUN" not in rec2.user  # full scan by default
+
+
+def test_generate_lane_angles_for_one_story(settings):
+    from chrgd.trends import generate_lane_angles
+
+    payload = json.dumps({"moments": [{"title": "curling in the rack", "why": "w",
+        "angles": [
+            {"type": "take", "title": "A1", "hook": "h1", "concept_note": "n1"},
+            {"type": "ranking", "title": "A2", "hook": "h2", "concept_note": "n2"},
+        ]}]})
+    angles = generate_lane_angles(
+        settings, "ragebait", "curling in the rack", "why", client=FakeSearch(payload)
+    )
+    assert [a.title for a in angles] == ["A1", "A2"]
+    assert angles[0].hook == "h1"
+
+
+def test_generate_lane_angles_needs_a_story(settings):
+    from chrgd.trends import generate_lane_angles
+
+    with pytest.raises(TrendError):
+        generate_lane_angles(settings, "ragebait", "  ", client=FakeSearch("{}"))

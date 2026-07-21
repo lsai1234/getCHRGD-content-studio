@@ -477,20 +477,47 @@ class Store:
         self.conn.commit()
         return int(cur.lastrowid)
 
-    def claim_next_job(self) -> dict | None:
-        """Atomically take the oldest QUEUED job → PROCESSING. Single worker."""
-        row = self.conn.execute(
-            "SELECT * FROM jobs WHERE status = 'QUEUED' ORDER BY job_id ASC LIMIT 1"
-        ).fetchone()
-        if row is None:
-            return None
-        self.conn.execute(
-            "UPDATE jobs SET status = 'PROCESSING', attempts = attempts + 1, "
-            "updated_at = ? WHERE job_id = ?",
-            (datetime.now().astimezone().isoformat(), row["job_id"]),
-        )
-        self.conn.commit()
-        return self.get_job(row["job_id"])
+    def claim_next_job(
+        self,
+        kinds: "frozenset[str] | None" = None,
+        exclude: "frozenset[str] | None" = None,
+    ) -> dict | None:
+        """Atomically take the oldest QUEUED job → PROCESSING.
+
+        Optionally restrict to `kinds` (inclusion) or skip `exclude` kinds, so
+        several workers can share the table without stepping on each other (a
+        research worker taking scans, a fast worker taking everything else).
+
+        Concurrency-safe: the claiming UPDATE is guarded on `status='QUEUED'`, so
+        when two workers race the same row exactly one gets rowcount==1 and wins;
+        the loser simply tries the next queued job. Backward compatible — called
+        with no args it behaves exactly like the old single-worker claim.
+        """
+        where = "status = 'QUEUED'"
+        params: list = []
+        if kinds:
+            where += " AND kind IN (%s)" % ",".join("?" * len(kinds))
+            params += list(kinds)
+        if exclude:
+            where += " AND kind NOT IN (%s)" % ",".join("?" * len(exclude))
+            params += list(exclude)
+
+        while True:
+            row = self.conn.execute(
+                f"SELECT job_id FROM jobs WHERE {where} ORDER BY job_id ASC LIMIT 1",
+                params,
+            ).fetchone()
+            if row is None:
+                return None
+            cur = self.conn.execute(
+                "UPDATE jobs SET status = 'PROCESSING', attempts = attempts + 1, "
+                "updated_at = ? WHERE job_id = ? AND status = 'QUEUED'",
+                (datetime.now().astimezone().isoformat(), row["job_id"]),
+            )
+            self.conn.commit()
+            if cur.rowcount == 1:
+                return self.get_job(row["job_id"])
+            # Lost the race — another worker claimed it; try the next queued job.
 
     def recover_interrupted_jobs(self) -> int:
         """On startup, fail any PROCESSING build/render jobs (avoid re-billing).
@@ -503,7 +530,7 @@ class Store:
             "updated_at = ? WHERE status = 'PROCESSING' "
             "AND kind IN ('build','build_one','render','render_slide',"
             "'angles','takes','revise','trends','moments','evergreen','trending','ragebait','meta_scan',"
-            "'moment_detail','concept','run')",
+            "'moment_detail','lane_angles','concept','run')",
             (datetime.now().astimezone().isoformat(),),
         )
         self.conn.commit()

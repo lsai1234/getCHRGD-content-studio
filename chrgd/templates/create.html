@@ -869,6 +869,25 @@ const LANE_MAX_AGE_H = {moments: 12, trending: 24, evergreen: 24 * 7, ragebait: 
 let lane = 'moments';
 const laneJobs = {moments: null, trending: null, evergreen: null, ragebait: null};
 
+// Warm every lane the moment /create opens, before a door is even picked, so
+// the morning's first tap lands on ready content instead of a cold scan. Cheap
+// GETs populate the client cache; stale/empty lanes get a background scan fired
+// (deduped server-side) — these run on the research worker and never delay a
+// build. Fire-and-forget: no UI is touched (no lane is open yet).
+async function warmLanes(){
+  for (const l of ['moments', 'trending', 'evergreen', 'ragebait']) {
+    try {
+      const data = await (await fetch(`/api/moments?kind=${l}`)).json();
+      laneJobs[l] = data.job_id;
+      if (data.moments && data.moments.length) laneCache[l] = data;
+      const stale = !data.moments.length || data.age_hours === null
+                    || data.age_hours > LANE_MAX_AGE_H[l];
+      if (!data.scanning && stale)
+        post('/api/jobs/moments', new URLSearchParams({kind: l}));
+    } catch (e) { /* warming is best-effort */ }
+  }
+}
+
 function switchLane(l){
   lane = l;
   document.querySelectorAll('[data-lane]').forEach(t =>
@@ -947,6 +966,7 @@ async function pollLane(forLane){
 
 function drawMoments(data){
   const body = document.getElementById('radar-body');
+  const scanJob = data.job_id || laneJobs[lane];  // the scan these moments came from
   body.innerHTML = '';
   document.getElementById('radar-age').textContent =
     data.age_hours === null ? '' :
@@ -967,9 +987,17 @@ function drawMoments(data){
       <div class="m-why">${esc(m.why || '')}</div>
       <div class="m-angles"></div>`;
     const anglesBox = el.querySelector('.m-angles');
-    (m.angles || []).forEach((a, ai) =>
-      anglesBox.appendChild(angleChip(laneJobs[lane], mi, ai, a)));
-    anglesBox.appendChild(customAngleRow(laneJobs[lane], mi));
+    if ((m.angles || []).length) {
+      // Full scan / cached: render the angles inline (legacy path).
+      m.angles.forEach((a, ai) => anglesBox.appendChild(angleChip(scanJob, mi, ai, a)));
+    } else {
+      // Two-stage: angles are written when the story is first opened.
+      const lazy = document.createElement('div');
+      lazy.className = 'angles-lazy';
+      lazy.innerHTML = '<p class="muted" style="font-size:12.5px; margin:0">tap to load angles…</p>';
+      anglesBox.appendChild(lazy);
+    }
+    anglesBox.appendChild(customAngleRow(scanJob, mi));
     // "Happening now" moments can be dug into for specific current headlines.
     if (lane === 'moments') {
       const dig = document.createElement('button');
@@ -982,10 +1010,61 @@ function drawMoments(data){
     el.onclick = () => {
       const was = el.classList.contains('open');
       body.querySelectorAll('.moment').forEach(x => x.classList.remove('open'));
-      if (!was) el.classList.add('open');
+      if (!was) {
+        el.classList.add('open');
+        const lazy = el.querySelector('.angles-lazy');
+        if (lazy && !lazy.dataset.loaded) loadLaneAngles(scanJob, mi, el, lazy);
+      }
     };
     body.appendChild(el);
   });
+}
+
+// Stage-2: write this one story's angles on first open (two-stage scans).
+async function loadLaneAngles(scanJob, mi, el, lazy){
+  lazy.dataset.loaded = '1';
+  lazy.innerHTML = '<p class="muted" style="font-size:12.5px; margin:0"><span class="spin">✍️</span> writing angles for this one…</p>';
+  const r = await post(`/api/moments/${scanJob}/angles`, new URLSearchParams({moment: mi}));
+  if (!r) { lazy.dataset.loaded = ''; lazy.innerHTML = '<p class="muted" style="font-size:12.5px; margin:0">tap to load angles…</p>'; return; }
+  if (r.angles) return renderLazyAngles(scanJob, mi, lazy, r.angles);   // cached inline
+  pollLaneAngles(r.job_id, scanJob, mi, el, lazy);
+}
+async function pollLaneAngles(jobId, scanJob, mi, el, lazy){
+  const job = await (await fetch(`/api/jobs/${jobId}`)).json();
+  if (job.status === 'ERROR') {
+    lazy.innerHTML = `<p class="muted" style="font-size:12.5px; margin:0 0 6px">Couldn't write angles: ${esc(job.error||'failed')}.</p>`;
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = '↻ Try again';
+    b.onclick = ev => { ev.stopPropagation(); lazy.dataset.loaded = ''; loadLaneAngles(scanJob, mi, el, lazy); };
+    lazy.appendChild(b); return;
+  }
+  if (job.status !== 'COMPLETED') return setTimeout(() => pollLaneAngles(jobId, scanJob, mi, el, lazy), 1800);
+  renderLazyAngles(scanJob, mi, lazy, (JSON.parse(job.result_json||'{}').angles) || []);
+}
+function renderLazyAngles(scanJob, mi, lazy, angles){
+  const box = document.createElement('div'); box.style.cssText = 'display:flex; flex-direction:column; gap:8px';
+  if (!angles.length) box.innerHTML = '<p class="muted" style="font-size:12.5px; margin:0">No angles came back — use “your own angle” below.</p>';
+  else angles.forEach(a => box.appendChild(onDemandAngleChip(scanJob, mi, a)));
+  lazy.replaceWith(box);
+}
+// A story-scoped angle whose CONTENT is sent as a custom angle (the scan job's
+// angle array is empty in two-stage mode, so we can't reference it by index).
+function onDemandAngleChip(scanJob, mi, a){
+  const chip = document.createElement('div');
+  chip.className = 'angle-chip';
+  chip.innerHTML = `<span class="a-type">${TYPE_LABEL[a.type] || esc(a.type || '')}</span>
+    <b>${esc(a.title || '')}</b>
+    <span class="a-hook">${esc(a.hook ? '“' + a.hook + '”' : a.concept_note || '')}</span>
+    <div class="angle-actions">
+      <button type="button" title="five genuinely different takes on this angle — pick before anything is written">🎯 See the takes</button>
+      <button type="button" class="ghost" title="skip the fan-out — one straight write">⚡ Just build it</button>
+    </div>`;
+  chip.onclick = ev => ev.stopPropagation();
+  const text = a.hook ? `${a.concept_note || a.title || ''} — open with: ${a.hook}`
+                      : (a.concept_note || a.title || '');
+  const [fan, quick] = chip.querySelectorAll('button');
+  fan.onclick = () => useCustomMoment(scanJob, mi, text, false, true);
+  quick.onclick = () => useCustomMoment(scanJob, mi, text, false);
+  return chip;
 }
 
 // One tappable angle (build now / shape first) bound to a specific scan job.
@@ -2100,6 +2179,7 @@ if (RESUME_IDEA) {
   })();
 } else {
   show('source');
+  warmLanes();  // start the radar scans now, before a door is even picked
   if (PRESET_DAY) {
     document.getElementById('preset-day-note').style.display = '';
     document.getElementById('preset-day-label').textContent = PRESET_DAY;

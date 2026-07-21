@@ -837,7 +837,7 @@ def test_worker_discover_job_and_dedupe(settings, store, monkeypatch):
 
     seen_kinds = []
 
-    def fake_scout(s, kind="moments", count=6, client=None):
+    def fake_scout(s, kind="moments", count=6, client=None, headlines_only=False):
         seen_kinds.append(kind)
         return MomentsResult.model_validate(MOMENTS_PAYLOAD)
 
@@ -1556,7 +1556,7 @@ def test_claim_lanes_use_the_creative_model(settings, store, monkeypatch):
     monkeypatch.setattr(trends, "OpenAITrendClient", RecClient)
     monkeypatch.setattr(
         trends, "scout_discover",
-        lambda s, kind, count, client=None: trends.MomentsResult(),
+        lambda s, kind, count, client=None, headlines_only=False: trends.MomentsResult(),
     )
 
     worker._handle_discover(store, settings, {"kind": "ragebait", "params_json": "{}"})
@@ -1588,6 +1588,42 @@ def test_api_moments_reports_last_error_not_empty(client, settings):
     d2 = client.get("/api/moments?kind=trending").json()
     assert d2["last_error"] is None
     assert d2["moments"][0]["title"] == "back up"
+
+
+def test_two_stage_angles_endpoint(client, settings):
+    """Headlines-only scan → the angles endpoint queues a lane_angles job; a
+    scan that already carries angles returns them inline (cached)."""
+    with Store(settings.db_path) as store:
+        jid = store.create_job("trending", params={})
+        store.update_job(jid, status="COMPLETED", result_json=json.dumps(
+            {"moments": [{"title": "the of-course format", "why": "w", "angles": []}]}))
+    r = client.post(f"/api/moments/{jid}/angles", data={"moment": "0"}).json()
+    assert r["kind"] == "lane_angles" and r["job_id"]
+
+    with Store(settings.db_path) as store:
+        jid2 = store.create_job("moments", params={})
+        store.update_job(jid2, status="COMPLETED", result_json=json.dumps(
+            {"moments": [{"title": "t",
+                          "angles": [{"type": "advice", "title": "A", "concept_note": "n"}]}]}))
+    r2 = client.post(f"/api/moments/{jid2}/angles", data={"moment": "0"}).json()
+    assert r2["cached"] is True and r2["angles"][0]["title"] == "A"
+
+
+def test_lane_angles_handler_writes_angles(settings, store, monkeypatch):
+    from chrgd import trends, worker
+
+    monkeypatch.setattr(trends, "OpenAITrendClient", lambda s, model=None: object())
+    monkeypatch.setattr(
+        trends, "generate_lane_angles",
+        lambda s, kind, title, why="", count=3, client=None: [
+            trends.MomentAngle(type="take", title="X", concept_note="n")
+        ],
+    )
+    jid = store.create_job("lane_angles", params={"lane": "ragebait", "title": "t", "why": "w"})
+    worker.Worker(settings).run_once()
+    job = store.get_job(jid)
+    assert job["status"] == "COMPLETED"
+    assert json.loads(job["result_json"])["angles"][0]["title"] == "X"
 
 
 def test_trending_lane_seeds_trend_framed_ideas(client, settings):

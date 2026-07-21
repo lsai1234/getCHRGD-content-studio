@@ -92,3 +92,35 @@ def test_claim_is_fifo(settings, store):
     assert store.claim_next_job()["job_id"] == j1
     assert store.claim_next_job()["job_id"] == j2
     assert store.claim_next_job() is None  # both now PROCESSING
+
+
+def test_claim_partitions_fast_and_research_lanes(settings, store):
+    from chrgd.worker import RESEARCH_KINDS
+
+    _rendered_idea(store)
+    enqueue_render(store, "G-0001", dry_run=True)   # fast lane
+    store.create_job("moments", params={})          # research lane
+    # The fast worker skips research kinds; the research worker only takes them.
+    assert store.claim_next_job(exclude=RESEARCH_KINDS)["kind"] == "render"
+    assert store.claim_next_job(kinds=RESEARCH_KINDS)["kind"] == "moments"
+    # Each lane is now empty for its own filter.
+    assert store.claim_next_job(exclude=RESEARCH_KINDS) is None
+    assert store.claim_next_job(kinds=RESEARCH_KINDS) is None
+
+
+def test_claim_is_atomic_no_double_take(settings):
+    """Two connections (two workers) racing one job: exactly one wins, because
+    the claiming UPDATE is guarded on status='QUEUED'."""
+    from chrgd.db import Store
+
+    a, b = Store(settings.db_path), Store(settings.db_path)
+    try:
+        _rendered_idea(a)
+        jid = a.create_job("render", idea_id="G-0001", params={"dry_run": True})
+        first = a.claim_next_job()
+        second = b.claim_next_job()  # sees it already PROCESSING → must not re-take
+        got = [j for j in (first, second) if j is not None]
+        assert len(got) == 1 and got[0]["job_id"] == jid
+    finally:
+        a.close()
+        b.close()

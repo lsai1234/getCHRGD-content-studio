@@ -116,16 +116,34 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        worker = None
+        workers: list[Worker] = []
         if run_worker:
-            worker = Worker(settings)
-            worker.start()
-            app.state.worker = worker
+            from .worker import RESEARCH_KINDS
+
+            # Recover interrupted jobs ONCE, before either worker starts, so a
+            # starting worker can't reap the other's in-flight job.
+            with _store(settings) as store:
+                store.recover_interrupted_jobs()
+            # Two lanes: research (slow web-search scans) can never delay the
+            # fast lane (builds, renders, takes) — the split that stops "check
+            # trending" blocking everything else.
+            fast = Worker(
+                settings, exclude=RESEARCH_KINDS,
+                name="chrgd-fast", recover_on_start=False,
+            )
+            research = Worker(
+                settings, kinds=RESEARCH_KINDS,
+                name="chrgd-research", recover_on_start=False,
+            )
+            fast.start()
+            research.start()
+            workers = [fast, research]
+            app.state.workers = workers
         try:
             yield
         finally:
-            if worker:
-                worker.stop()
+            for w in workers:
+                w.stop()
 
     app = FastAPI(title="CHRGD Content Studio", lifespan=lifespan)
     app.state.settings = settings
@@ -1233,6 +1251,35 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             topic = moments[moment].get("title", "")
             dig_job = enqueue_moment_detail(store, topic=topic)
         return {"job_id": dig_job, "kind": "moment_detail", "topic": topic}
+
+    @app.post("/api/moments/{job_id}/angles")
+    def api_moment_angles(
+        job_id: int, moment: int = Form(...), _: str = Depends(require_user)
+    ):
+        """Stage-2 of a two-stage scan: write the angles for one surfaced story.
+
+        Returns the angles inline if the scan already carried them (a legacy
+        full scan or a cached result); otherwise queues a `lane_angles` job."""
+        with _store(settings) as store:
+            job = store.get_job(job_id)
+            if job is None or job["kind"] not in (
+                "moments", "evergreen", "trending", "ragebait", "moment_detail",
+            ):
+                raise HTTPException(404, "no such discovery scan")
+            moments = json.loads(job["result_json"] or "{}").get("moments", [])
+            if not 0 <= moment < len(moments):
+                raise HTTPException(400, "moment index out of range")
+            m = moments[moment]
+            if m.get("angles"):
+                return {"angles": m["angles"], "cached": True}
+            aid = store.create_job(
+                "lane_angles",
+                params={
+                    "lane": job["kind"], "title": m.get("title", ""),
+                    "why": m.get("why", ""), "count": 3,
+                },
+            )
+        return {"job_id": aid, "kind": "lane_angles"}
 
     @app.post("/api/moments/{job_id}/use")
     def api_moments_use(
