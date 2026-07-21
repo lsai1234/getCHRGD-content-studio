@@ -53,15 +53,6 @@ def client(settings):
     return c
 
 
-def _single_variant_brand():
-    """A brand copy with one image per slide — for continuity/character tests
-    that count `_generate_background` calls and shouldn't be perturbed by the
-    slide-1 variant roll (variants_first)."""
-    brand = load_brand().model_copy(deep=True)
-    brand.generation.variants_first = 1
-    return brand
-
-
 def good_post(**over):
     post = {
         "post_type": "carousel",
@@ -355,22 +346,16 @@ def make_built_idea(idea_id="G-0001", style=None, render_mode=None):
     )
 
 
-def test_render_saves_slide1_variants_and_one_image_after(settings):
+def test_render_saves_backgrounds_one_image_per_slide(settings):
     from chrgd.images import list_variants, render_carousel
 
     idea = make_built_idea()
     result = render_carousel(idea, settings, dry_run=True)
     out = settings.output_dir / "G-0001"
-    # Slide 1 is the scroll-stopper: it's rolled several ways so the human (and
-    # the scroll test) can pick the strongest; slides 2+ get one image each.
-    n_first = load_brand().generation.variants_first
-    assert n_first > 1
+    assert load_brand().generation.variants_first == 1  # one image per slide
     assert (out / "bg_1.jpg").exists() and (out / "bg_5.jpg").exists()
-    assert (out / "bg_1_a.jpg").exists()      # slide 1 has variant options
-    assert not (out / "bg_2_a.jpg").exists()  # slides 2+ do not
-    variants = list_variants(idea, settings)
-    assert len(variants.get(0, [])) == n_first
-    assert set(variants) == {0}               # only slide 1 has variants
+    assert not (out / "bg_1_a.jpg").exists()  # no default variant pairs
+    assert list_variants(idea, settings) == {}
     assert len(result.paths) == 5
 
 
@@ -704,8 +689,8 @@ def test_slide_endpoints_roundtrip(client, settings):
     # copy change needs a full regenerate, not a free code re-overlay.
     r = client.post("/api/ideas/G-0001/slides/2/recompose")
     assert r.status_code == 400
-    # Variant pick works once options exist (here requested explicitly at 2;
-    # slide 1 also rolls variants by default).
+    # Variant pick works once options exist (explicitly requested — the
+    # default is one image per slide).
     render_slide(idea, 0, settings, dry_run=True, variants=2)
     r = client.post("/api/ideas/G-0001/slides/0/variant", data={"variant": "b"})
     assert r.status_code == 200
@@ -2174,10 +2159,7 @@ def test_character_portrait_attaches_only_to_person_slides(settings, monkeypatch
         return PILImage.new("RGB", (1080, 1350), (5, 5, 5))
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
-    images.render_carousel(
-        idea, settings, brand=_single_variant_brand(),
-        character_ref_path=str(portrait),
-    )
+    images.render_carousel(idea, settings, character_ref_path=str(portrait))
 
     first_prompt, first_refs = calls[0]
     # The person slide gets the portrait as a pose-free identity reference.
@@ -2206,9 +2188,7 @@ def test_reference_continuity_anchors_later_slides(settings, monkeypatch):
         return PILImage.new("RGB", (100, 150), (10, 20, 30))
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
-    images.render_carousel(
-        make_built_idea(), settings, dry_run=False, brand=_single_variant_brand()
-    )  # 5 slides
+    images.render_carousel(make_built_idea(), settings, dry_run=False)  # 5 slides
     assert len(calls) == 5
     assert calls[0] is False        # slide 1 is generated plain — it's the anchor
     assert all(calls[1:])           # every later slide is generated FROM it
@@ -2294,8 +2274,7 @@ def test_pan_mode_passes_two_references_for_edge_continuity(settings, monkeypatc
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
     images.render_carousel(
-        make_built_idea(), settings, dry_run=False, swipe_style="pan",
-        brand=_single_variant_brand(),
+        make_built_idea(), settings, dry_run=False, swipe_style="pan"
     )
     assert ref_counts[0] == 0        # slide 1: no reference, it's the anchor
     assert ref_counts[1] == 2        # slide 2: anchor + previous slide
@@ -2316,8 +2295,7 @@ def test_cohesive_mode_passes_only_the_anchor(settings, monkeypatch):
         ) or PILImage.new("RGB", (100, 150)),
     )
     images.render_carousel(
-        make_built_idea(), settings, dry_run=False, swipe_style="cohesive",
-        brand=_single_variant_brand(),
+        make_built_idea(), settings, dry_run=False, swipe_style="cohesive"
     )
     assert ref_counts[0] == 0
     assert all(c == 1 for c in ref_counts[1:])  # anchor only, no pan

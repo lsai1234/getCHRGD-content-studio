@@ -76,6 +76,20 @@ class Settings(BaseSettings):
     # "auto" (render with a neutral bed). Trend-driven videos should stay draft.
     audio_mode: str = Field(default="draft", alias="CHRGD_AUDIO_MODE")
 
+    # --- Slide-1 concept gate (pre-image quality control) ---
+    # Slide 1 is generated ONCE at high quality, so we validate its concept hard
+    # BEFORE spending: an independent judge scores the slide-1 plan (headline +
+    # visual brief); below the bar it's sharpened and re-judged, up to a few
+    # rounds. Cheap text calls guarding one expensive image.
+    concept_gate_enabled: bool = Field(default=True, alias="CHRGD_CONCEPT_GATE")
+    # The bar the slide-1 concept must clear (0-10). Deliberately high — this is
+    # the compromise for a single slide-1 image. A literal 10 every time isn't
+    # something an LLM judge reliably emits, so 9 is "genuinely thumb-stopping";
+    # raise to 10 to be stricter (it'll simply use all the rounds more often).
+    concept_gate_min_score: int = Field(default=9, alias="CHRGD_CONCEPT_GATE_MIN")
+    # Max judge rounds (each failing round sharpens slide 1 and re-judges).
+    concept_gate_max_rounds: int = Field(default=3, alias="CHRGD_CONCEPT_GATE_ROUNDS")
+
     # --- Cost guard ---
     max_spend_per_run: float = Field(default=5.0, alias="CHRGD_MAX_SPEND_PER_RUN")
 

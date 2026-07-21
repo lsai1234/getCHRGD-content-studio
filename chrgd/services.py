@@ -27,8 +27,28 @@ def render_idea(
     on_slide=None,
     notify=None,
 ) -> RenderResult:
-    """Render one carousel, persist asset paths, and log image spend."""
+    """Render one carousel, persist asset paths, and log image spend.
+
+    Before the (paid, single) slide-1 image is generated, the concept gate
+    validates — and if needed sharpens — the slide-1 concept, so the money is
+    spent on an opener that has already cleared an independent quality bar. The
+    gate is skipped on dry runs and when disabled in settings.
+    """
     from .profile import brand_character_ref, brand_style_note, brand_swipe_style
+
+    gate_spend = 0.0
+    if not dry_run and settings.concept_gate_enabled:
+        from .conceptgate import gate_slide_one
+
+        gate = gate_slide_one(idea, settings, store, notify=notify)
+        gate_spend = gate.spend_usd
+        idea = gate.idea  # the (possibly sharpened) concept we now render
+        log.info(
+            "concept_gate idea=%s score=%d/%d rounds=%d refined=%s passed=%s%s",
+            idea.idea_id, gate.score, gate.min_score, gate.rounds,
+            gate.refined, gate.passed,
+            f" error={gate.error}" if gate.error else "",
+        )
 
     result = render_carousel(
         idea, settings, dry_run=dry_run, on_slide=on_slide, notify=notify,
@@ -37,17 +57,22 @@ def render_idea(
         character_ref_path=brand_character_ref(store, settings),
     )
     store.save_asset_paths(idea.idea_id, result.paths)
+    image_spend = result.spend_usd
     log.info(
-        "render idea=%s slides=%d generated=%d spend=%.4f dry_run=%s",
+        "render idea=%s slides=%d generated=%d image_spend=%.4f gate_spend=%.4f dry_run=%s",
         idea.idea_id,
         len(result.paths),
         result.generated,
-        result.spend_usd,
+        image_spend,
+        gate_spend,
         dry_run,
     )
-    if record_run and result.generated:
+    if record_run and (result.generated or gate_spend):
         run_id = store.start_run("render")
         store.finish_run(
-            run_id, spend_usd=round(result.spend_usd, 4), notes=idea.idea_id
+            run_id, spend_usd=round(image_spend + gate_spend, 4), notes=idea.idea_id
         )
+    # Report the true cost of the render (image + the gate that guarded it) so
+    # the cost guard and dashboard stay honest.
+    result.spend_usd = round(image_spend + gate_spend, 4)
     return result

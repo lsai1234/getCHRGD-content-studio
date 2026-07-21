@@ -600,6 +600,7 @@
       </div>
       <div id="slide-tools"></div>
     </div>
+    <div id="concept-gate"></div>
     <div id="scroll-verdict"></div>
     <div class="cta-row">
       <button type="button" class="ghost" onclick="openWriteStep(false)">← Amend the copy</button>
@@ -1604,6 +1605,8 @@ async function pollRender(){
     alert('Image generation failed: ' + d.last_error.error);
   }
   drawImages(d);
+  // Show how slide 1's concept scored at the gate (set server-side pre-render).
+  renderConceptGate(d.concept_gate);
   // The moment of truth: the finished slide 1 exists — cold-scroll-test it.
   const dry = document.getElementById('img-dry').checked;
   if ((d.assets || []).length && !dry) runScrollTest();
@@ -1684,6 +1687,23 @@ async function openImagesStep(){
     // on its honest read, not a blank card.
     renderVerdict(d.scroll_verdict);
   }
+  renderConceptGate(d.concept_gate);
+}
+
+/* The pre-image concept gate's score on slide 1 (set server-side at render). */
+function renderConceptGate(cg){
+  const box = document.getElementById('concept-gate');
+  if (!box) return;
+  if (!cg || !cg.score) { box.innerHTML = ''; return; }
+  const ok = cg.passed;
+  box.innerHTML = `<div class="verdict-card ${ok ? 'stop' : 'scroll'}" style="margin-bottom:10px">
+    <div class="v-top">
+      <span class="v-badge">${ok ? '✅' : '⚠️'} Slide-1 concept gate: ${cg.score}/10</span>
+      <span class="v-conf">checked before the image was generated${cg.rounds > 1 ? ` · sharpened over ${cg.rounds} rounds` : ''}</span>
+    </div>
+    ${!ok && cg.weakness ? `<p class="v-killer"><b>Still soft on:</b> ${esc(cg.weakness)}</p>` : ''}
+    ${cg.note ? `<p class="v-note">${esc(cg.note)}</p>` : ''}
+  </div>`;
 }
 
 function mediaUrl(d, name, mtime){ return `/media/${d.idea_id}/${name}?v=${mtime||0}`; }

@@ -35,9 +35,10 @@ class Generation(BaseModel):
     # Slide 1 is the whole scroll-stop; give it the best quality. Rest stay low.
     quality_first: str = "high"
     quality_rest: str = "low"
-    # Options generated for slide 1 (paid each). Slide 1 decides reach, so roll
-    # it a few ways and pick the strongest.
-    variants_first: int = 3
+    # Options generated for slide 1 (paid each). One image per slide — the
+    # concept gate validates the slide-1 concept before this single image is
+    # generated, rather than rolling several and picking.
+    variants_first: int = 1
     # How slides are produced. Only "ai_design" is real:
     #   "ai_design" — gpt-image-2 designs the WHOLE slide, every word of text
     #                 baked into the artwork by the image API, never overlaid

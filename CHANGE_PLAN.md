@@ -22,6 +22,8 @@ Companion to `REVIEW.md`. Ordered by leverage: Phase 1 attacks the 300-view cap 
 
 Cost: 3 × high ≈ $0.50/post for slide 1 (vs $0.04 today, `_IMAGE_COST`, `images.py:33`). That is the correct place to spend.
 
+> **Revision (shipped):** the editor chose to keep **one** high-quality slide-1 image (`variants_first = 1`, `quality_first = "high"`) rather than three, and traded the extra rolls for an upstream quality gate. A new **slide-1 concept gate** (`chrgd/conceptgate.py`) now runs inside `services.render_idea` **before** the image spend: an independent judge (the cheap `judge_model`) scores the slide-1 concept — its on-image headline + the visual brief — out of 10; below `CHRGD_CONCEPT_GATE_MIN` (default 9) a creative pass sharpens slide 1 against the judge's named weakness and it's re-judged, up to `CHRGD_CONCEPT_GATE_ROUNDS` (default 3). Cheap text calls guard the one expensive image. The verdict is persisted to `route_json.concept_gate`, surfaced in `api_idea_detail`, streamed as live render notes, and shown as a badge in the create journey. It's config-gated (`CHRGD_CONCEPT_GATE`) and never blocks a render on an LLM hiccup. This is complementary to the post-render scroll test (1.2): concept judged before spend, pixels judged after.
+
 ### 1.2 Auto-run the cold scroll test after every render, persist the verdict, act on it
 **Lever:** #1. The only adversarial judge in the pipeline must be mandatory, not a button.
 **Where:** `worker.py:_handle_render` (and `_handle_render_slide` when `slide == 0`), `worker.py:_handle_scroll_test`.
