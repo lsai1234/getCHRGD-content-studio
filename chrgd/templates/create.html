@@ -879,41 +879,69 @@ function switchLane(l){
   loadLane();
 }
 
-async function loadLane(){
+const laneCache = {};  // last drawn payload per lane → instant, flash-free switches
+const SKELS = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+
+function setRescanBusy(busy){
+  const btn = document.getElementById('radar-refresh');
+  if (!btn) return;
+  btn.disabled = busy;
+  btn.innerHTML = busy ? '<span class="spin">↻</span> scanning…' : '↻ Rescan';
+}
+function renderLaneError(msg){
   document.getElementById('radar-body').innerHTML =
-    '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+    `<div class="job-panel" style="border-color:#7a2c2c">
+       <p style="margin:0">❌ <b>Scan failed</b></p>
+       <p class="note" style="margin:8px 0">${esc(msg)}</p>
+       <button class="chip" onclick="refreshLane(true)">↻ Try again</button>
+     </div>`;
   document.getElementById('radar-age').textContent = '';
-  const r = await fetch(`/api/moments?kind=${lane}`);
-  if (!r.ok) return;
-  const data = await r.json();
+}
+
+async function loadLane(){
+  // Show cached content instantly (no skeleton flash); only skeleton a lane
+  // we've never drawn. A background fetch below freshens it either way.
+  const cached = laneCache[lane];
+  if (cached && cached.moments.length) drawMoments(cached);
+  else { document.getElementById('radar-body').innerHTML = SKELS;
+         document.getElementById('radar-age').textContent = ''; }
+  let data;
+  try {
+    const r = await fetch(`/api/moments?kind=${lane}`);
+    if (!r.ok) throw new Error('couldn’t reach the scanner (HTTP ' + r.status + ')');
+    data = await r.json();
+  } catch (e) { if (!(cached && cached.moments.length)) renderLaneError(e.message || e); return; }
   laneJobs[lane] = data.job_id;
-  if (data.moments.length) drawMoments(data);
-  if (data.scanning) return pollLane(lane);
+  if (data.moments.length) { laneCache[lane] = data; drawMoments(data); }
+  else if (data.last_error && !data.scanning) return renderLaneError(data.last_error);
+  if (data.scanning) { setRescanBusy(true); return pollLane(lane); }
   if (!data.moments.length || data.age_hours === null || data.age_hours > LANE_MAX_AGE_H[lane])
     refreshLane(!data.moments.length);
 }
 
 async function refreshLane(showSkeleton = true){
-  if (showSkeleton)
-    document.getElementById('radar-body').innerHTML =
-      '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  if (showSkeleton) document.getElementById('radar-body').innerHTML = SKELS;
+  setRescanBusy(true);
   document.getElementById('radar-age').textContent =
-    lane === 'moments' ? 'scanning what the UK is talking about…' :
-    lane === 'trending' ? 'scanning TikTok formats, memes & gym-tok…' :
-    lane === 'ragebait' ? 'hunting arguments worth starting…' :
-    'hunting fascinating facts…';
+    (lane === 'moments' ? 'scanning what the UK is talking about' :
+     lane === 'trending' ? 'scanning TikTok formats, memes & gym-tok' :
+     lane === 'ragebait' ? 'hunting arguments worth starting' :
+     'hunting fascinating facts') + '… usually 30–60s';
   await post('/api/jobs/moments', new URLSearchParams({kind: lane}));
   pollLane(lane);
 }
 
 async function pollLane(forLane){
   if (forLane !== lane) return;  // user switched tabs — that lane polls itself
-  const r = await fetch(`/api/moments?kind=${forLane}`);
-  const data = await r.json();
+  let data;
+  try { data = await (await fetch(`/api/moments?kind=${forLane}`)).json(); }
+  catch (e) { setRescanBusy(false); return renderLaneError('lost the connection mid-scan'); }
   if (data.scanning) return setTimeout(() => pollLane(forLane), 2500);
+  setRescanBusy(false);
   laneJobs[forLane] = data.job_id;
   if (forLane !== lane) return;
-  if (data.moments.length) drawMoments(data);
+  if (data.moments.length) { laneCache[forLane] = data; drawMoments(data); }
+  else if (data.last_error) renderLaneError(data.last_error);   // the truth, not "empty"
   else document.getElementById('radar-age').textContent = 'scan came back empty — try rescan';
 }
 
@@ -1030,13 +1058,18 @@ async function digMoment(mi, cardEl){
   deep.innerHTML = '<p class="muted" style="font-size:12.5px; margin:0"><span class="spin">🔍</span> Finding the specific stories happening right now…</p>';
   const r = await post(`/api/moments/${laneJobs[lane]}/dig`, new URLSearchParams({moment: mi}));
   if (!r) { deep.innerHTML = ''; return; }
-  pollDig(r.job_id, deep);
+  pollDig(r.job_id, deep, () => digMoment(mi, cardEl));
 }
 
-async function pollDig(jobId, deep){
+async function pollDig(jobId, deep, retry){
   const job = await (await fetch(`/api/jobs/${jobId}`)).json();
-  if (job.status === 'ERROR') { deep.innerHTML = `<p class="muted" style="font-size:12.5px">Couldn't dig in: ${esc(job.error||'failed')}. <a href="#" onclick="return false">try again</a></p>`; return; }
-  if (job.status !== 'COMPLETED') return setTimeout(() => pollDig(jobId, deep), 2000);
+  if (job.status === 'ERROR') {
+    deep.innerHTML = `<p class="muted" style="font-size:12.5px">Couldn't dig in: ${esc(job.error||'failed')}. </p>`;
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = '↻ Try again';
+    b.onclick = retry || (() => {}); deep.appendChild(b);
+    return;
+  }
+  if (job.status !== 'COMPLETED') return setTimeout(() => pollDig(jobId, deep, retry), 2000);
   const subs = (JSON.parse(job.result_json || '{}').moments) || [];
   deep.innerHTML = subs.length ? '<p class="muted" style="font-size:11.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.6px">Specific headlines right now</p>'
                               : '<p class="muted" style="font-size:12.5px">No specific headlines found — the broad angles above are your best bet.</p>';
@@ -1083,7 +1116,7 @@ document.getElementById('idea-text').addEventListener('keydown', e => {
 
 async function startIdea(develop, takes = false){
   const text = document.getElementById('idea-text').value;
-  if (!text.trim()) return alert('Give the idea a line of text first.');
+  if (!text.trim()) { toast('Give the idea a line of text first.'); return; }
   const body = baseParams(develop, takes);
   body.set('mode', 'idea');
   body.set('text', text);
@@ -1094,7 +1127,7 @@ async function startIdea(develop, takes = false){
 
 async function startFacts(){
   const text = document.getElementById('facts-text').value;
-  if (!text.trim()) return alert('Paste some facts first.');
+  if (!text.trim()) { toast('Paste some facts first.'); return; }
   const body = baseParams(false);
   body.set('mode', 'facts');
   body.set('text', text);
@@ -1567,7 +1600,7 @@ async function sendFeedback(){
   const chips = [...document.querySelectorAll('#fb-chips .chip.sel')].map(c => c.textContent.trim());
   const text = document.getElementById('feedback-text').value.trim();
   const fb = [...chips, text].filter(Boolean).join(' · ');
-  if (!fb) return alert('Tap a chip or type the feedback first.');
+  if (!fb) { toast('Tap a chip or type the feedback first.'); return; }
   await saveCopy();
   await post(`/api/ideas/${state.ideaId}/revise`, new URLSearchParams({focus: fb}));
   document.querySelectorAll('#fb-chips .chip.sel').forEach(c => c.classList.remove('sel'));
@@ -1612,7 +1645,7 @@ async function pollRender(){
   renderStart = null;
   document.getElementById('img-wait').style.display = 'none';
   if (d.last_error && !(d.assets || []).length) {
-    alert('Image generation failed: ' + d.last_error.error);
+    toast('Image generation failed: ' + d.last_error.error);
   }
   drawImages(d);
   // Show how slide 1's concept scored at the gate (set server-side pre-render).
@@ -1993,19 +2026,43 @@ async function detail(){
   return r.json();
 }
 async function post(url, body){
-  const r = await fetch(url, {method:'POST',
-    headers:{'Content-Type':'application/x-www-form-urlencoded', accept:'application/json'}, body});
+  let r;
+  try {
+    r = await fetch(url, {method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded', accept:'application/json'}, body});
+  } catch(e){ toast('Network error — check your connection and try again.'); return null; }
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch(e){}
-    alert(msg);
+    toast(msg);
     return null;
   }
   return r.json();
 }
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function fail(msg){ alert(msg); }
+// Non-blocking inline toast — replaces alert() so errors don't stop the phone.
+function toast(msg, kind = 'error'){
+  let t = document.getElementById('cj-toast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'cj-toast';
+    t.style.cssText = 'position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(8px);'
+      + ' z-index:200; max-width:min(440px,92vw); padding:12px 16px; border-radius:12px;'
+      + ' font-size:13.5px; box-shadow:var(--sh-pop); border:1px solid; opacity:0;'
+      + ' transition:opacity .2s var(--ease), transform .2s var(--ease);';
+    document.body.appendChild(t);
+  }
+  const err = kind === 'error';
+  t.style.background = err ? 'linear-gradient(180deg,rgba(255,107,107,.16),rgba(255,107,107,.07))'
+                          : 'linear-gradient(180deg,rgba(79,195,247,.16),rgba(79,195,247,.07))';
+  t.style.borderColor = err ? 'rgba(255,107,107,.5)' : 'var(--accent-line)';
+  t.style.color = err ? '#ffd9d9' : '#dff2fd';
+  t.textContent = msg;
+  requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)'; });
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(-50%) translateY(8px)'; }, 4200);
+}
+function fail(msg){ toast(msg); }
 
 /* ---------- boot ---------- */
 // The one editorial dial left after the look step went: length. Same chip

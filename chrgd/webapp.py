@@ -1164,12 +1164,22 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 1",
                 (kind,),
             ).fetchone()
+            # The newest job's state is the truth: if the last attempt ERRORed,
+            # the journey should say so, not fall through to "came back empty".
+            latest = store.conn.execute(
+                "SELECT status, error FROM jobs WHERE kind = ? "
+                "ORDER BY job_id DESC LIMIT 1",
+                (kind,),
+            ).fetchone()
         payload = {
             "job_id": None,
             "moments": [],
             "updated_at": None,
             "age_hours": None,
             "scanning": bool(active),
+            "last_error": (
+                latest["error"] if latest and latest["status"] == "ERROR" else None
+            ),
         }
         if done:
             data = json.loads(done["result_json"] or "{}")

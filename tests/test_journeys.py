@@ -1569,6 +1569,27 @@ def test_claim_lanes_use_the_creative_model(settings, store, monkeypatch):
     assert seen == {}                            # no creative client built (scout default)
 
 
+def test_api_moments_reports_last_error_not_empty(client, settings):
+    """A failed scan surfaces as last_error (so the journey stops lying 'empty')
+    until a newer COMPLETED scan supersedes it."""
+    with Store(settings.db_path) as store:
+        jid = store.create_job("trending", params={"count": 6})
+        store.update_job(jid, status="ERROR", error="scout blew up")
+    d = client.get("/api/moments?kind=trending").json()
+    assert d["last_error"] == "scout blew up"
+    assert d["moments"] == [] and d["scanning"] is False
+
+    with Store(settings.db_path) as store:
+        jid2 = store.create_job("trending", params={"count": 6})
+        store.update_job(
+            jid2, status="COMPLETED",
+            result_json=json.dumps({"moments": [{"title": "back up"}]}),
+        )
+    d2 = client.get("/api/moments?kind=trending").json()
+    assert d2["last_error"] is None
+    assert d2["moments"][0]["title"] == "back up"
+
+
 def test_trending_lane_seeds_trend_framed_ideas(client, settings):
     job_id = client.post(
         "/api/jobs/moments", data={"kind": "trending"}
