@@ -192,6 +192,17 @@
     <textarea id="manual-caption" readonly style="min-height:120px; margin-top:6px; font-size:13px"></textarea>
     <button class="ghost" style="margin:8px 0 0; width:100%" onclick="copyCaption()"><span id="manual-copy-label">📋 Copy caption + hashtags</span></button>
 
+    <div id="manual-firstcomment-wrap" style="display:none; margin-top:16px">
+      <label style="font-size:12px; color:var(--muted); display:block">Step 3 — pin this as the first comment</label>
+      <textarea id="manual-firstcomment" readonly style="min-height:52px; margin-top:6px; font-size:13px"></textarea>
+      <button class="ghost" style="margin:8px 0 0; width:100%" onclick="copyFirstComment()"><span id="manual-fc-label">💬 Copy first comment</span></button>
+      <p class="muted" style="font-size:11.5px; margin:6px 0 0">After posting, add this as your own first comment and pin it — it seeds the comment section.</p>
+    </div>
+    <div id="manual-checklist-wrap" style="display:none; margin-top:16px">
+      <label style="font-size:12px; color:var(--muted); display:block">Before you post — the 20-second wins</label>
+      <ul id="manual-checklist" style="margin:8px 0 0; padding-left:18px; font-size:12.5px; line-height:1.5"></ul>
+    </div>
+
     <p class="muted" style="font-size:11.5px; margin:14px 0 0">
       Then open TikTok → upload the photos as a carousel → paste the caption. Done.</p>
     <div class="row" style="margin-top:14px">
@@ -600,8 +611,34 @@ async function openManual(c){
   });
   document.getElementById('manual-caption').value = manualData.caption_text || '(no caption)';
   document.getElementById('manual-save').disabled = manualData.count === 0;
+  // Step 3 — the first comment (comment bait), shown only when there is one.
+  const fc = (manualData.first_comment || '').trim();
+  document.getElementById('manual-firstcomment-wrap').style.display = fc ? '' : 'none';
+  if (fc) document.getElementById('manual-firstcomment').value = fc;
+  // The pre-post checklist (sound, pin, early replies).
+  const cl = manualData.checklist || [];
+  const escHtml = s => String(s ?? '').replace(/[&<>"']/g,
+    m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  document.getElementById('manual-checklist-wrap').style.display = cl.length ? '' : 'none';
+  document.getElementById('manual-checklist').innerHTML =
+    cl.map(s => `<li>${escHtml(s)}</li>`).join('');
 }
 function closeManual(){ document.getElementById('manual-modal').style.display = 'none'; }
+
+async function copyFirstComment(){
+  const lbl = document.getElementById('manual-fc-label');
+  try {
+    await navigator.clipboard.writeText(manualData.first_comment || '');
+    lbl.textContent = '✓ Copied — pin it after posting';
+  } catch(e) {
+    const ta = document.getElementById('manual-firstcomment');
+    ta.removeAttribute('readonly'); ta.focus(); ta.select();
+    document.execCommand && document.execCommand('copy');
+    ta.setAttribute('readonly', '');
+    lbl.textContent = '✓ Selected — press Copy';
+  }
+  setTimeout(() => { lbl.textContent = '💬 Copy first comment'; }, 2500);
+}
 
 async function copyCaption(){
   const lbl = document.getElementById('manual-copy-label');

@@ -70,6 +70,7 @@ in exactly this shape:
     "mechanic": "string (one of the virality mechanics)",
     "visual_engine": "string (one of the visual engines)",
     "primary_goal": "string",
+    "engagement_play": "string — the ONE deliberate off-screen action this post is BUILT to earn, chosen and named, exactly one of: 'save' (reference/checklist value — the final slide AND/OR the caption must literally tell them to save or screenshot it), 'share' (the caption or final slide must name WHO to send it to, e.g. 'send this to the mate who still skips leg day'), or 'comment' (the comment_trigger below is the play). Pick one and EXECUTE it explicitly in the actual copy — a declared play that never appears in a slide or the caption is an auto-fail.",
     "psych": {
       "emotion": "string — the ONE high-arousal target emotion (amusement / indignation / awe / recognition-shock / anxiety-relief). If the honest label is 'interested' or 'fair point', you routed wrong — go back.",
       "hook_question": "string — the exact question slide 1 plants in the viewer's head, phrased in THEIR words. If you cannot write this question, there is no curiosity gap and the hook fails.",

@@ -151,6 +151,25 @@ def test_export_schedules_across_days(store, settings):
     assert d2 > d1  # per_day=1 -> consecutive days
 
 
+def test_first_comment_column_off_by_default(store, settings):
+    _rendered_idea(store, settings)
+    pub = MetricoolCSVPublisher()  # default config: header.first_comment = ""
+    assert pub.cols.header.first_comment == ""
+    result = pub.export(store, settings)
+    row = next(csv.DictReader(Path(result.csv_path).open()))
+    assert "First comment" not in row
+
+
+def test_first_comment_column_carries_comment_trigger_when_configured(store, settings):
+    _rendered_idea(store, settings)
+    store.save_build("G-0001", {"comment_trigger": "which one are you? 👇"})
+    pub = MetricoolCSVPublisher()
+    pub.cols.header.first_comment = "First comment"  # the template has the column
+    result = pub.export(store, settings)
+    row = next(csv.DictReader(Path(result.csv_path).open()))
+    assert row["First comment"] == "which one are you? 👇"
+
+
 def test_url_media_reference(store, settings):
     _rendered_idea(store, settings)
     pub = MetricoolCSVPublisher()

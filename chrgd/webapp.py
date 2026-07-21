@@ -1037,6 +1037,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "psych": route.get("psych", {}),
             "scroll_verdict": route.get("scroll_verdict", {}),
             "concept_gate": route.get("concept_gate", {}),
+            "engagement_play": route.get("engagement_play", ""),
             "take": route.get("take", {}),
             "last_takes_job": dict(takes_row) if takes_row else None,
             "design_system": route.get("design_system", {}),
@@ -1397,11 +1398,27 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             t if t.startswith("#") else f"#{t}" for t in hashtags if t
         ).strip()
         caption_text = caption + (f"\n\n{tag_str}" if tag_str else "")
+        # The comment section's opening move is part of the post — pin the
+        # engine's comment trigger as the first comment the moment it's live.
+        first_comment = (idea.comment_trigger or "").strip()
         return {
             "idea_id": idea_id,
             "caption_text": caption_text,
+            "first_comment": first_comment,
             "images": images,
             "count": len(images),
+            # The 20-second in-app steps that actually move reach and can't be
+            # done from the CSV — sound especially (Photo Mode posts with a
+            # trending sound outperform silent ones, and we can't see live audio).
+            "checklist": [
+                "Add a trending sound in the TikTok app before posting — browse "
+                "the Trending tab in the sound picker and pick something "
+                "low-vocal. Photo Mode posts with trending audio outperform "
+                "silent ones.",
+                "Pin the first comment (copied above) right after posting.",
+                "Reply to the first few comments within the hour — early replies "
+                "feed the same signals that get you out of the test pool.",
+            ],
         }
 
     # --- learning loop (real results → future builds) --------------------------

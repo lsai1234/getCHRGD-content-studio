@@ -50,6 +50,11 @@ class HeaderCfg(BaseModel):
     text: str = "Text"
     datetime: str = "Date"
     draft: str = "Draft"
+    # Optional: the column that carries the auto-pinned first comment (the
+    # post's comment_trigger). Empty means the Metricool template has no such
+    # column, so it's skipped entirely — set it to your template's header to
+    # deliver the comment bait through the CSV too.
+    first_comment: str = ""
 
 
 class MediaCfg(BaseModel):
@@ -151,7 +156,10 @@ class MetricoolCSVPublisher:
 
     def _ordered_headers(self, include_video: bool) -> list[str]:
         c = self.cols
-        headers = [c.header.text, c.header.datetime, c.header.draft]
+        headers = [c.header.text]
+        if c.header.first_comment:
+            headers.append(c.header.first_comment)
+        headers += [c.header.datetime, c.header.draft]
         headers += list(c.networks.values())
         headers += c.media.image_columns
         if include_video:
@@ -173,6 +181,8 @@ class MetricoolCSVPublisher:
         row[c.header.text] = build_caption(
             idea.caption or "", hashtags, c.format.caption_max_length
         )
+        if c.header.first_comment:
+            row[c.header.first_comment] = (idea.comment_trigger or "").strip()
         row[c.header.datetime] = when.strftime(c.format.datetime_format)
         row[c.header.draft] = c.format.draft_false
 
@@ -295,6 +305,8 @@ class MetricoolCSVPublisher:
         c = self.cols
         sample = {h: "" for h in headers}
         sample[c.header.text] = "Example caption with hashtags #gym #uk"
+        if c.header.first_comment:
+            sample[c.header.first_comment] = "which one are you? be honest 👇"
         sample[c.header.datetime] = datetime.now().strftime(c.format.datetime_format)
         sample[c.header.draft] = c.format.draft_false
         for net in c.targets.default_networks:

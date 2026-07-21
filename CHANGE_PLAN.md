@@ -156,6 +156,8 @@ And `pipeline.py:252-258`, `LENGTH_PREFS["quick"]`: change "roughly 1–2 slides
 
 ## Phase 2 — Deliver the engagement signals you already generate
 
+> **Status: shipped.** 2.1 delivers the `comment_trigger` as a pinnable first comment in the manual-post flow (both the create journey and the calendar modals) and, config-gated, as a CSV column (`[header] first_comment` in `config/metricool_columns.toml`, off by default). 2.2 adds a declared `engagement_play` (save/share/comment) to the write contract + an auto-fail when the copy doesn't execute it, surfaced in `api_idea_detail`. 2.3 adds the pre-post checklist (trending sound, pin the first comment, early replies) to the manual-post payload and both modals.
+
 ### 2.1 Comment trigger → pinned first comment, both posting paths
 **Lever:** #5. Generation is excellent; delivery is zero.
 **Where:** `webapp.py:api_manual_post` (lines 1372-1403) and `publisher.py`.

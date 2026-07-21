@@ -29,6 +29,13 @@ draft_false = "FALSE"
 text = "Text"
 datetime = "Date"
 draft = "Draft"
+# Optional: the column that carries the auto-pinned FIRST COMMENT (the post's
+# comment_trigger — the engine's built-in comment bait). Leave EMPTY unless your
+# Metricool plan/template has a first-comment column; set it to that exact
+# header (e.g. "First comment") to deliver the comment bait through the CSV too.
+# When empty the column is skipped entirely. (The manual-post flow always shows
+# it regardless.)
+first_comment = ""
 
 [networks]
 # logical network -> column header. Remove any you don't publish to.

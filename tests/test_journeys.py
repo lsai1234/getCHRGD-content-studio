@@ -70,6 +70,7 @@ def good_post(**over):
             "mechanic": "identity_exposure",
             "visual_engine": "flash_photo",
             "primary_goal": "shares",
+            "engagement_play": "comment",
             "build_note": "n",
             "qa": {
                 "hook": 9, "swipe_loop": 9, "identity_recognition": 9,
@@ -646,7 +647,8 @@ def test_detail_endpoint_shape(client, settings):
                 "hook": "h",
                 "slides_json": json.dumps(good_post()["slides"]),
                 "route_json": json.dumps(
-                    {"qa": {"overall": 9}, "hook_options": ["a", "b"], "style": "gritty"}
+                    {"qa": {"overall": 9}, "hook_options": ["a", "b"],
+                     "style": "gritty", "engagement_play": "save"}
                 ),
             },
         )
@@ -654,6 +656,7 @@ def test_detail_endpoint_shape(client, settings):
     assert d["hook_options"] == ["a", "b"]
     assert d["qa"] == {"overall": 9}
     assert d["style"] == "gritty"
+    assert d["engagement_play"] == "save"  # the declared save/share/comment play
     assert d["status"] == "done"
     assert d["active_jobs"] == {}
     assert client.get("/api/ideas/NOPE/detail").status_code == 404
@@ -1069,6 +1072,7 @@ def test_manual_post_bundle(client, settings):
                 concept_note="x",
                 slides_json=json.dumps(good_post()["slides"]),
                 caption="Sweating just looking at the forecast?\nHere's how to cope.",
+                comment_trigger="which one are you? be honest 👇",
                 hashtags=json.dumps(["#gymtok", "heatwave", "#uk"]),
                 asset_paths_json=json.dumps(
                     [f"/out/G-0001/slide_{i}.jpg" for i in range(1, 4)]
@@ -1087,6 +1091,11 @@ def test_manual_post_bundle(client, settings):
     assert "Sweating just looking" in d["caption_text"]
     assert d["caption_text"].endswith("#gymtok #heatwave #uk")
     assert "\n\n#gymtok" in d["caption_text"]
+    # The comment trigger is delivered as the pinnable first comment, and the
+    # in-app checklist (sound, pin, early replies) rides along.
+    assert d["first_comment"] == "which one are you? be honest 👇"
+    assert any("trending sound" in step.lower() for step in d["checklist"])
+    assert any("pin the first comment" in step.lower() for step in d["checklist"])
     assert client.get("/api/ideas/NOPE/manual").status_code == 404
 
 
