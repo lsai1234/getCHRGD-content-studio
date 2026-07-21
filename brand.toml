@@ -15,11 +15,13 @@ save_quality = 90     # JPEG/WebP quality 1-100
 # gpt-image-2 vertical size; the background is resized/cropped to the canvas.
 size = "1024x1536"
 # Per-slide quality (low / medium / high / auto) — drives image API cost.
-# Slide 1 is the scroll-stopper (medium); the rest are low to keep spend down.
-quality_first = "medium"
+# Slide 1 IS the whole first-pool verdict, so it gets the best quality; the
+# rest are low to keep spend down.
+quality_first = "high"
 quality_rest = "low"
-# Options generated for slide 1 (paid per option). 1 = one image per slide.
-variants_first = 1
+# Options generated for slide 1 (paid per option). Slide 1 decides reach, so we
+# roll it 3 ways and let the human (and the scroll test) pick the strongest.
+variants_first = 3
 # "ai_design": gpt-image-2 designs the WHOLE slide — every word of text is
 #              generated and baked into the artwork by the image API, never
 #              overlaid in code. This is the only supported mode: all image

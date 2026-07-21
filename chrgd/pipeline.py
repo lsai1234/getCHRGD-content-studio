@@ -56,7 +56,7 @@ in exactly this shape:
       "body": "string — OPTIONAL detail block, empty string for most slides. Use it ONLY on a slide that genuinely earns density (usually the escalation or payoff): 2-5 tight sentences or a short list telling the full story/mechanism/details — the slide people stop and actually READ, then screenshot or save. Written to be read on a phone: short sentences, concrete specifics, no filler. Never pad a slide with a body just to look thorough.",
       "role": "string — this slide's job in the arc: one of hook / recognition / escalation / payoff / cta. The slides in order must form a real story with rising tension, NOT parallel restatements of the theme.",
       "swipe_trigger": "string — the OPEN LOOP this slide leaves dangling: the specific reason the viewer swipes to the NEXT slide (a question raised, a reveal promised, a tension unresolved). The last slide's trigger is the social action (rank/confess/tag/argue/save). Every non-final slide MUST hand off to the next one.",
-      "image_prompt": "string — a COMPLETE graphic-design brief for this slide as a piece of scroll-stopping social media art, written as ONE FRAME of the shared design_system below (same world, palette, type treatment and recurring motif as every other slide — never a standalone poster). Cover: the visual concept (subject, setting, action, mood), the composition/layout on the shared grid, and how the typography is treated. Then say what has CHANGED from the previous frame so the swipe shows visible motion/escalation. Think agency-level concept art for TikTok. Do NOT invent text beyond the approved slide copy.",
+      "image_prompt": "string — a COMPLETE visual brief for this slide that a stranger scrolling the FYP would read as NATIVE TikTok content, NOT an advert. Default to the platform's native visual formats: a candid phone photo (harsh direct flash, slightly awkward framing, a real UK gym), a screenshot-style artefact (notes app, a group-chat thread, a poster stuck on the gym wall), a meme-shaped image, or a photo-dump frame. Reserve a designed/illustrated treatment ONLY for a slide whose concept IS the design (a tier chart, a fake receipt/document, a ranking). Write it as ONE FRAME of the shared design_system below (same palette, recurring motif and type treatment as its siblings) — but the continuity should feel like the same person's camera roll, not a branded template. Cover the visual concept (subject, setting, action, mood) and the composition, then say what has CHANGED from the previous frame so the swipe shows visible motion/escalation. HARD RULE: if the finished image could pass for a supplement brand's paid ad or for generic AI art, the brief has failed — rewrite it rawer and more native. Do NOT invent text beyond the approved slide copy.",
       "visual_intent": "string: subject, setting, action, prop, double-take",
       "feature_character": "boolean — does the account's recurring person/mascot genuinely belong in THIS slide's scene? true ONLY when a human is the point of the frame (reacting, demonstrating, being the subject, holding the prop). false for object, product, chart, text-led or pure environment slides. Do NOT default to true — most sets show the person on only a couple of beats (usually the hook and the payoff), not every slide. When true, the person should be framed for THIS beat (its own angle, distance, pose), not repeated identically frame to frame."
     }
@@ -95,8 +95,13 @@ in exactly this shape:
 }
 
 All QA scores are integers 0–10 and must reflect the honest, brutal QA stage.
-Apply the QA thresholds and REVISE internally before returning — only emit a
-post you would pass. Use only the approved slide text inside image prompts.
+Revise internally first to make the post as strong as you genuinely can — but
+then SCORE THE POST YOU ACTUALLY WROTE, honestly. Do NOT inflate scores to
+clear the thresholds. A true 6 reported as 6 gets this post one targeted
+rewrite and comes back stronger; a true 6 reported as 9 ships a weak post to a
+real audience and poisons the account's own performance data. Honest failure
+is cheap; dishonest passing is expensive. Use only the approved slide text
+inside image prompts.
 """
 
 # Rough USD price per 1M tokens (input, output), for spend logging only —
@@ -251,9 +256,9 @@ def load_system_prompt() -> str:
 # sees. Deliberately loose ranges — a preference, not a category system.
 LENGTH_PREFS = {
     "quick": (
-        "the editor wants a quick hit — roughly 1–2 slides, a single punch "
-        "built for sharing. Only run longer if the idea truly can't land in "
-        "that space."
+        "the editor wants a quick hit — roughly 3–4 slides, a fast punch that "
+        "still gives the algorithm swipes to count. Go below 3 only if the idea "
+        "genuinely dies stretched; run longer if it truly needs the room."
     ),
     "standard": (
         "the editor wants a classic carousel — roughly 4–6 slides with a "

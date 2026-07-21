@@ -1035,6 +1035,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "style": route.get("style", ""),
             "throughline": route.get("throughline", ""),
             "psych": route.get("psych", {}),
+            "scroll_verdict": route.get("scroll_verdict", {}),
             "take": route.get("take", {}),
             "last_takes_job": dict(takes_row) if takes_row else None,
             "design_system": route.get("design_system", {}),

@@ -53,6 +53,15 @@ def client(settings):
     return c
 
 
+def _single_variant_brand():
+    """A brand copy with one image per slide — for continuity/character tests
+    that count `_generate_background` calls and shouldn't be perturbed by the
+    slide-1 variant roll (variants_first)."""
+    brand = load_brand().model_copy(deep=True)
+    brand.generation.variants_first = 1
+    return brand
+
+
 def good_post(**over):
     post = {
         "post_type": "carousel",
@@ -346,16 +355,22 @@ def make_built_idea(idea_id="G-0001", style=None, render_mode=None):
     )
 
 
-def test_render_saves_backgrounds_one_image_per_slide(settings):
+def test_render_saves_slide1_variants_and_one_image_after(settings):
     from chrgd.images import list_variants, render_carousel
 
     idea = make_built_idea()
     result = render_carousel(idea, settings, dry_run=True)
     out = settings.output_dir / "G-0001"
-    assert load_brand().generation.variants_first == 1  # one image per slide
+    # Slide 1 is the scroll-stopper: it's rolled several ways so the human (and
+    # the scroll test) can pick the strongest; slides 2+ get one image each.
+    n_first = load_brand().generation.variants_first
+    assert n_first > 1
     assert (out / "bg_1.jpg").exists() and (out / "bg_5.jpg").exists()
-    assert not (out / "bg_1_a.jpg").exists()  # no default variant pairs
-    assert list_variants(idea, settings) == {}
+    assert (out / "bg_1_a.jpg").exists()      # slide 1 has variant options
+    assert not (out / "bg_2_a.jpg").exists()  # slides 2+ do not
+    variants = list_variants(idea, settings)
+    assert len(variants.get(0, [])) == n_first
+    assert set(variants) == {0}               # only slide 1 has variants
     assert len(result.paths) == 5
 
 
@@ -460,7 +475,8 @@ def test_design_prompt_carries_shared_system_and_continuity():
     }
 
     # Middle frame: must restate the shared system, reference the previous
-    # frame for continuity, carry the evolution beat and a progress indicator.
+    # frame for continuity, carry the evolution beat. Progress dots are OFF by
+    # default now (they read as ad furniture), so it's told NOT to add them.
     mid = compose_design_prompt(
         slides[2], brand, None, slides=slides, index=2, design_system=design_system
     )
@@ -470,7 +486,7 @@ def test_design_prompt_carries_shared_system_and_continuity():
     assert "frame 3 of 5" in mid
     assert "frame 1 subject" in mid  # continues from the previous slide (index 1)
     assert "heats toward red" in mid  # evolution beat
-    assert "3 of 5" in mid or "dot 3" in mid or "5 dots" in mid or "progress" in mid.lower()
+    assert "no page indicators" in mid.lower()  # dots off by default
 
     # Opening frame establishes the world instead of referencing a previous one.
     first = compose_design_prompt(
@@ -688,8 +704,8 @@ def test_slide_endpoints_roundtrip(client, settings):
     # copy change needs a full regenerate, not a free code re-overlay.
     r = client.post("/api/ideas/G-0001/slides/2/recompose")
     assert r.status_code == 400
-    # Variant pick works once options exist (explicitly requested — the
-    # default is one image per slide).
+    # Variant pick works once options exist (here requested explicitly at 2;
+    # slide 1 also rolls variants by default).
     render_slide(idea, 0, settings, dry_run=True, variants=2)
     r = client.post("/api/ideas/G-0001/slides/0/variant", data={"variant": "b"})
     assert r.status_code == 200
@@ -1990,7 +2006,7 @@ def test_brand_profile_blocks_render_and_stay_inert_when_empty():
     assert "CHRGD — gym brand" in eng
     assert "Never / avoid: no medical claims" in eng
     sty = profile_style_block(p)
-    assert "LOCKED BRAND LOOK" in sty
+    assert "BRAND RECOGNITION ACCENTS" in sty
     assert "flash-photo" in sty and "cobalt on black" in sty
 
 
@@ -2024,7 +2040,7 @@ def test_profile_reaches_takes_and_design_prompt(settings, store, monkeypatch):
         Slide(headline="h", image_prompt="a squat rack"),
         load_brand(), None, house_style=brand_style_note(store),
     )
-    assert "LOCKED BRAND LOOK" in prompt
+    assert "BRAND RECOGNITION ACCENTS" in prompt
     assert "gritty flash-photo realism" in prompt
 
 
@@ -2054,20 +2070,20 @@ def test_locked_look_recurring_character_reaches_image_and_build(settings, store
         Slide(headline="h", image_prompt="a squat rack"),
         load_brand(), None, house_style=brand_style_note(store),
     )
-    assert "LOCKED BRAND LOOK" in prompt
-    assert "IDENTICAL on every slide" in prompt
+    assert "BRAND RECOGNITION ACCENTS" in prompt
+    assert "SAME person every time they appear" in prompt
     assert "deadpan wiry UK gym bloke" in prompt
     assert "electric blue + hot magenta" in prompt
 
-    # The build call is told to fix its design_system to the locked look.
+    # The build call is told to draw its design_system from the brand accents.
     lock = profile_design_lock(load_profile(store))
-    assert "design_system" in lock and "match the locked values" in lock
+    assert "design_system" in lock and "MUST draw on the values below" in lock
 
     store.add_idea(Idea(idea_id="G-0001", concept_note="rack hoggers"))
     fake = FakeChat([good_post()])
     build_single_idea(store, settings, "G-0001", client=fake)
     _, user = fake.calls[0]
-    assert "LOCKED BRAND LOOK" in user
+    assert "BRAND RECOGNITION ACCENTS" in user
     assert "one battered kettlebell" in user
 
 
@@ -2158,7 +2174,10 @@ def test_character_portrait_attaches_only_to_person_slides(settings, monkeypatch
         return PILImage.new("RGB", (1080, 1350), (5, 5, 5))
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
-    images.render_carousel(idea, settings, character_ref_path=str(portrait))
+    images.render_carousel(
+        idea, settings, brand=_single_variant_brand(),
+        character_ref_path=str(portrait),
+    )
 
     first_prompt, first_refs = calls[0]
     # The person slide gets the portrait as a pose-free identity reference.
@@ -2187,7 +2206,9 @@ def test_reference_continuity_anchors_later_slides(settings, monkeypatch):
         return PILImage.new("RGB", (100, 150), (10, 20, 30))
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
-    images.render_carousel(make_built_idea(), settings, dry_run=False)  # 5 slides
+    images.render_carousel(
+        make_built_idea(), settings, dry_run=False, brand=_single_variant_brand()
+    )  # 5 slides
     assert len(calls) == 5
     assert calls[0] is False        # slide 1 is generated plain — it's the anchor
     assert all(calls[1:])           # every later slide is generated FROM it
@@ -2273,7 +2294,8 @@ def test_pan_mode_passes_two_references_for_edge_continuity(settings, monkeypatc
 
     monkeypatch.setattr(images, "_generate_background", fake_gen)
     images.render_carousel(
-        make_built_idea(), settings, dry_run=False, swipe_style="pan"
+        make_built_idea(), settings, dry_run=False, swipe_style="pan",
+        brand=_single_variant_brand(),
     )
     assert ref_counts[0] == 0        # slide 1: no reference, it's the anchor
     assert ref_counts[1] == 2        # slide 2: anchor + previous slide
@@ -2294,7 +2316,8 @@ def test_cohesive_mode_passes_only_the_anchor(settings, monkeypatch):
         ) or PILImage.new("RGB", (100, 150)),
     )
     images.render_carousel(
-        make_built_idea(), settings, dry_run=False, swipe_style="cohesive"
+        make_built_idea(), settings, dry_run=False, swipe_style="cohesive",
+        brand=_single_variant_brand(),
     )
     assert ref_counts[0] == 0
     assert all(c == 1 for c in ref_counts[1:])  # anchor only, no pan

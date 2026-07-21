@@ -194,8 +194,9 @@ _DESIGN_TEXT_RULES = (
     "\n- Use EXACTLY the text provided above, spelled correctly, complete —"
     " never truncate, abbreviate or cut off a word."
     "\n- Do not add any extra words, labels, logos, captions, watermarks,"
-    " numeric page numbers or random text. The ONLY non-copy graphic allowed"
-    " is the small progress-dot indicator described above (dots, not numbers)."
+    " numeric page numbers or random text. The only non-copy graphic allowed is"
+    " the small progress indicator described above, and only if one is described"
+    " there."
     "\n- Make the text large, high-contrast and readable at a glance on a phone."
 )
 
@@ -221,8 +222,8 @@ _EMBEDDED_TEXT_RULES = (
     "\n- Use EXACTLY the text provided above, spelled correctly and complete —"
     " never truncate, abbreviate, add or invent words."
     "\n- No caption bars, logos, watermarks, page numbers or any random text"
-    " beyond the copy above and the small progress-dot indicator described"
-    " above (dots, not numbers)."
+    " beyond the copy above and the small progress indicator described above,"
+    " and only if one is described there."
 )
 
 
@@ -299,6 +300,7 @@ def _sequence_block(
     slides: list[Slide] | None,
     index: int,
     design_system: dict | None,
+    show_dots: bool = False,
 ) -> str:
     """Where this frame sits in the swipe journey + how it continues/evolves."""
     if not slides or len(slides) <= 1:
@@ -333,12 +335,20 @@ def _sequence_block(
             "Leave clear visual momentum pulling the viewer to swipe to the next "
             "frame; do not resolve everything here."
         )
-    out.append(
-        f"Include a small, consistent progress indicator in the same corner on "
-        f"every slide — a discreet row of {total} dots with dot {index + 1} "
-        "highlighted — so the viewer feels their place in the journey. Keep it "
-        "tiny and tasteful; it is the only extra graphic element allowed."
-    )
+    if show_dots:
+        out.append(
+            f"Include a small, consistent progress indicator in the same corner "
+            f"on every slide — a discreet row of {total} dots with dot "
+            f"{index + 1} highlighted — so the viewer feels their place in the "
+            "journey. Keep it tiny and tasteful; it is the only extra graphic "
+            "element allowed."
+        )
+    else:
+        out.append(
+            "Add NO page indicators, dot rows, slide numbers or frame counters "
+            "of any kind — TikTok's own UI shows the viewer's position, and a "
+            "carousel-indicator graphic makes the frame read as a designed ad."
+        )
     return " ".join(out)
 
 
@@ -501,7 +511,9 @@ def compose_design_prompt(
     ds_block = _design_system_block(design_system)
     if ds_block:
         parts.append(ds_block)
-    seq_block = _sequence_block(slide, slides, index, design_system)
+    seq_block = _sequence_block(
+        slide, slides, index, design_system, show_dots=brand.generation.progress_dots
+    )
     if seq_block:
         parts.append(seq_block)
     # Fall back to the generic clause only when there's no real design system

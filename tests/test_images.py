@@ -180,8 +180,10 @@ def test_non_dry_run_without_key_errors(settings):
 
 def test_per_slide_quality_selection():
     brand = load_brand()
-    # Slide 1 = medium (scroll-stopper), slides 2+ = low, to keep spend down.
-    assert brand.generation.quality_for(0) == "medium"
+    # Slide 1 is the scroll-stopper and gets the best quality; slides 2+ stay
+    # low to keep spend down.
+    assert brand.generation.quality_for(0) == brand.generation.quality_first
+    assert brand.generation.quality_for(0) == "high"
     assert brand.generation.quality_for(1) == "low"
     assert brand.generation.quality_for(4) == "low"
 
@@ -194,8 +196,12 @@ def test_non_dry_run_cost_first_medium_rest_low(settings, monkeypatch):
         images, "_generate_background", lambda *a, **k: Image.new("RGB", (100, 150))
     )
     result = images.render_carousel(make_idea(), settings, dry_run=False)
-    n_first = load_brand().generation.variants_first
-    expected = n_first * images._IMAGE_COST["medium"] + 4 * images._IMAGE_COST["low"]
+    gen = load_brand().generation
+    n_first = gen.variants_first
+    expected = (
+        n_first * images._IMAGE_COST[gen.quality_first]
+        + 4 * images._IMAGE_COST[gen.quality_rest]
+    )
     assert result.generated == 4 + n_first
     assert result.spend_usd == pytest.approx(expected)
     if n_first > 1:

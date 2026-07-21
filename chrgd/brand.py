@@ -32,11 +32,12 @@ class Canvas(BaseModel):
 
 class Generation(BaseModel):
     size: str = "1024x1536"
-    # Slide 1 is the scroll-stopper (medium); the rest are low to keep spend down.
-    quality_first: str = "medium"
+    # Slide 1 is the whole scroll-stop; give it the best quality. Rest stay low.
+    quality_first: str = "high"
     quality_rest: str = "low"
-    # Options generated for slide 1 (paid each). Default: one image per slide.
-    variants_first: int = 1
+    # Options generated for slide 1 (paid each). Slide 1 decides reach, so roll
+    # it a few ways and pick the strongest.
+    variants_first: int = 3
     # How slides are produced. Only "ai_design" is real:
     #   "ai_design" — gpt-image-2 designs the WHOLE slide, every word of text
     #                 baked into the artwork by the image API, never overlaid
@@ -58,6 +59,11 @@ class Generation(BaseModel):
     # than just words. The single biggest lever on the swipe feeling like one
     # connected piece. Costs a touch more per image; set false to disable.
     reference_continuity: bool = True
+    # A small progress-dot row on every slide. OFF by default: to a cold viewer
+    # it reads as carousel-ad furniture, and TikTok's own UI already shows the
+    # viewer's position in the set. Turn on only for a deliberately "designed"
+    # brand look.
+    progress_dots: bool = False
 
     def quality_for(self, slide_index: int) -> str:
         return self.quality_first if slide_index == 0 else self.quality_rest

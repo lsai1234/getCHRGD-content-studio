@@ -128,6 +128,11 @@ def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
     result = render_idea(
         store, settings, idea, dry_run=dry_run, on_slide=on_slide, notify=notify
     )
+    # Every real render earns the adversarial slide-1 verdict, automatically —
+    # the only independent check in the pipeline shouldn't wait for a button.
+    # (Dry runs paint placeholders, so there's nothing honest to judge.)
+    if not dry_run and result.paths:
+        enqueue_scroll_test(store, idea.idea_id)
     return {
         "paths": result.paths,
         "variants": result.variants,
@@ -328,6 +333,9 @@ def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
     if len(paths) > result.slide_index:
         paths[result.slide_index] = result.path
         store.save_asset_paths(idea.idea_id, paths)
+    # Regenerating slide 1 changes the whole scroll-stop — re-judge it.
+    if result.slide_index == 0 and result.generated and result.path:
+        enqueue_scroll_test(store, idea.idea_id)
     if result.generated:
         run_id = store.start_run("render")
         store.finish_run(
@@ -443,6 +451,17 @@ def _handle_scroll_test(store: Store, settings: Settings, job: dict) -> dict:
         result_json=json.dumps({"note": "scroll-testing your finished slide 1"}),
     )
     verdict = run_scroll_test(idea, settings, store)
+    # Persist onto the idea so the review UI, the calendar and the learning
+    # loop can all see it — a verdict that lives only in a job row teaches
+    # nothing and is invisible the moment the job scrolls off the queue.
+    fresh = store.get_idea(idea.idea_id)
+    route = json.loads(fresh.route_json) if fresh and fresh.route_json else {}
+    route["scroll_verdict"] = verdict.model_dump(mode="json")
+    store.conn.execute(
+        "UPDATE ideas SET route_json = ? WHERE idea_id = ?",
+        (json.dumps(route), idea.idea_id),
+    )
+    store.conn.commit()
     return {"verdict": verdict.model_dump(mode="json")}
 
 

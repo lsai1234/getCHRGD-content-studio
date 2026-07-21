@@ -160,15 +160,17 @@ def profile_style_block(profile: BrandProfile) -> str:
     if not rows:
         return ""
     return (
-        "LOCKED BRAND LOOK — this is the account's fixed visual identity and "
-        "must be IDENTICAL on every slide of every post (same aesthetic, same "
-        "colours, same typography). Do NOT reinvent it or drift — only the "
-        "specific scene changes post to post. If a recurring character is "
-        "named, they are the SAME person every time they appear (same face, "
-        "build, clothing) — but they do NOT belong in every frame: show them "
-        "only on slides where a person is genuinely the point, and when they do "
-        "appear, frame them for that moment (their own angle, distance and "
-        "pose), never the same shot repeated:\n" + _bullet(rows)
+        "BRAND RECOGNITION ACCENTS — carry these so the account is recognisable "
+        "over time, but as ACCENTS woven into native-looking content, never as a "
+        "poster template stamped over the frame. The frame must pass as native "
+        "TikTok content FIRST, brand asset second. Apply them like this: the "
+        "palette shows up as an accent (a prop, a light, one graphic element), "
+        "not a wall-to-wall colour scheme; the typography treatment applies "
+        "where text is genuinely designed, never forced onto a candid photo; the "
+        "recurring character, if named, is the SAME person every time they "
+        "appear (same face, build, clothing) but belongs ONLY on slides where a "
+        "person is the point, framed for that moment (their own angle, distance "
+        "and pose), never the same shot repeated:\n" + _bullet(rows)
     )
 
 
@@ -179,12 +181,15 @@ def profile_design_lock(profile: BrandProfile) -> str:
     if not rows:
         return ""
     return (
-        "LOCKED BRAND LOOK — the account has a FIXED visual identity. When you "
-        "produce the design_system for this post, its palette, type_style, "
-        "motif and any character MUST match the locked values below exactly "
-        "(do not invent new ones); only `layout`/`evolution` (the scene and "
-        "how it moves) may vary. This is what makes every post recognisably "
-        "the same brand rather than random AI art:\n" + _bullet(rows)
+        "BRAND RECOGNITION ACCENTS — the account carries fixed identity accents. "
+        "When you produce the design_system for this post, its palette, "
+        "type_style, motif and any character MUST draw on the values below (do "
+        "not invent a new brand look); `layout`/`evolution` (the scene and how "
+        "it moves) are yours. But weave these accents into NATIVE-looking frames "
+        "— the palette as an accent, the character where the scene calls for "
+        "them — never as a poster template stamped on every slide. The set "
+        "should read as recognisably this brand AND as native content a stranger "
+        "wouldn't clock as an ad:\n" + _bullet(rows)
     )
 
 

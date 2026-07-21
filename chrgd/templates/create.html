@@ -1679,6 +1679,10 @@ async function openImagesStep(){
   if (d.active_jobs.render || d.active_jobs.render_slide) {
     document.getElementById('img-wait').style.display = '';
     pollRender();
+  } else if (d.scroll_verdict && d.scroll_verdict.verdict) {
+    // Show the last persisted scroll-test verdict so a re-opened post lands
+    // on its honest read, not a blank card.
+    renderVerdict(d.scroll_verdict);
   }
 }
 
