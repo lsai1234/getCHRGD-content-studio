@@ -315,6 +315,8 @@ Plus: `loadLane`'s `if (!r.ok) return;` → render the same error panel; the dig
 
 ## Phase 3 — UX & mobile-first
 
+> **Status: shipped.** 3.1 the eight-door wall collapsed to three tiers — a "🎯 Find me today's post" hero that opens the radar on the last-used lane (persisted in `localStorage`), plus "Got a starting point?" (idea/facts) and "Prefer structure?" (format/manual). 3.2 touch targets to 44px (`.chip`, `.angle-actions button`, `.cj-back`). 3.3 tooltip-hidden info surfaced: format cards now show slide count + the opening beat inline, a visible "🎯 shows 5 directions first · ⚡ writes immediately" microcopy line, and length chips carry their slide counts ("Quick hit · 3–4" …, stale "1–2 slides" fixed). 3.4 the legacy `/trends` link now opens the Trending lane in-journey, and `--faint` was bumped for AA contrast. The bottom-tab-bar idea (3.4, marked optional) was deferred to avoid touching every page's header. Full suite: 277 passed.
+
 ### 3.1 Source screen: three groups + a default, not eight equal doors
 **Where:** `create.html:272-326`. Restructure (markup-only; all routes exist):
 - **Hero card — "🎯 Find me today's post"** → opens the radar on the **last-used lane** (persist in `localStorage`, 3 lines in `switchLane`). The four radar doors collapse into this one card — they already share one screen.

@@ -1742,7 +1742,9 @@ def test_ragebait_lane_seeds_fight_framed_ideas(client, settings):
 
 def test_create_page_offers_the_ragebait_flow(client):
     html = client.get("/create").text
-    assert "pickSource('ragebait'" in html          # the dedicated door
+    # The discovery doors collapsed into the hero (→ radar on the last-used
+    # lane); ragebait is reached via its radar tab + the bring-your-own-beef row.
+    assert "pickHero(" in html                      # the hero door
     assert 'data-lane="ragebait"' in html           # the radar lane tab
     assert 'id="ragebait-own"' in html              # bring-your-own-beef row
 

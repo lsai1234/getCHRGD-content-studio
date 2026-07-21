@@ -13,8 +13,10 @@
                    box-shadow: 0 0 14px var(--accent-glow);
                    transition: width .5s cubic-bezier(.22,1,.36,1); }
   .cj-top { display: flex; align-items: center; gap: 8px; margin: 12px 0 20px; min-height: 30px; }
-  .cj-back { background: none; border: 0; color: var(--muted); padding: 2px 10px 4px;
-             font-size: 20px; line-height: 1; cursor: pointer; border-radius: 8px; }
+  .cj-back { background: none; border: 0; color: var(--muted); padding: 8px 12px;
+             font-size: 22px; line-height: 1; cursor: pointer; border-radius: 8px;
+             min-width: 44px; min-height: 44px; display: inline-flex;
+             align-items: center; justify-content: center; }
   .cj-back:hover { color: var(--fg); background: #1a1a1f; filter: none; }
   .cj-back[hidden] { display: none; }
   .cj-count { margin-left: auto; color: var(--muted); font-size: 11.5px;
@@ -61,6 +63,12 @@
   .opt .chev { flex-shrink: 0; color: #4a4a52; font-size: 16px;
                transition: transform .15s, color .15s; }
   .opt:hover .chev { color: var(--accent); transform: translateX(2px); }
+  /* the hero door + tier labels on the source screen */
+  .opt-hero { border-color: var(--accent-line); background: linear-gradient(180deg, var(--accent-tint), var(--panel)); }
+  .opt-hero .ic { background: var(--accent-tint-2); border-color: var(--accent-line); font-size: 24px; }
+  .opt-hero .t { font-size: 16.5px; }
+  .tier-label { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+                color: var(--muted); margin: 20px 0 8px; }
   .optgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .optgrid .opt { margin: 0; padding: 13px 14px; border-radius: 12px; }
   .optgrid .opt .t { font-size: 13.5px; }
@@ -69,7 +77,8 @@
   /* small pill chips (quick picks / toggles) */
   .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip { background: transparent; border: 1px solid var(--line); color: var(--muted);
-          border-radius: 20px; padding: 7px 14px; font-size: 13px; font-weight: 600;
+          border-radius: 22px; padding: 10px 16px; font-size: 13px; font-weight: 600;
+          min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
           cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
   .chip:hover { border-color: var(--accent); color: var(--fg); filter: none; background: transparent; }
   .chip.sel { border-color: var(--accent); color: var(--fg); background: var(--accent-tint); }
@@ -101,7 +110,7 @@
   .angle-chip .a-type { font-size: 11px; color: var(--accent2); margin-right: 8px; }
   .angle-chip .a-hook { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
   .angle-actions { display: flex; gap: 6px; margin-top: 9px; }
-  .angle-actions button { padding: 7px 13px; font-size: 12.5px; }
+  .angle-actions button { padding: 11px 15px; font-size: 13px; min-height: 44px; }
   .custom-angle { border-style: dashed; }
   .custom-angle input { margin-top: 7px; font-size: 13px; padding: 8px 10px; }
 
@@ -273,56 +282,44 @@
   <section class="scr" id="scr-source">
     <p class="eyebrow">Create</p>
     <h2>What are we making today?</h2>
-    <p class="hint">Tap a starting point — you can amend everything later.</p>
+    <p class="hint">Start here — you can amend everything later.</p>
 
-    <button type="button" class="opt" onclick="pickSource('moments', this)">
-      <span class="ic">🇬🇧</span>
-      <span class="tx"><span class="t">Big moments happening now</span>
-        <span class="s">Matches, weather, telly, news — the events everyone's living through</span></span>
+    <!-- The default: one tap into what's hot (big moments, trending, facts,
+         ragebait) on whichever lane you used last. -->
+    <button type="button" class="opt opt-hero" onclick="pickHero(this)">
+      <span class="ic">🎯</span>
+      <span class="tx"><span class="t">Find me today's post</span>
+        <span class="s">What's hot right now — big UK moments, trending formats, facts worth sharing &amp; arguments worth starting. The fastest way in.</span></span>
       <span class="chev">›</span>
     </button>
-    <button type="button" class="opt" onclick="pickSource('trending', this)">
-      <span class="ic">📈</span>
-      <span class="tx"><span class="t">What's trending</span>
-        <span class="s">TikTok formats, memes &amp; gym-tok discourse the 18–30 crowd is on — spikes and waves</span></span>
-      <span class="chev">›</span>
-    </button>
-    <button type="button" class="opt" onclick="pickSource('evergreen', this)">
-      <span class="ic">🤯</span>
-      <span class="tx"><span class="t">A fact worth sharing</span>
-        <span class="s">Fascinating, shareable angles that work any week of the year</span></span>
-      <span class="chev">›</span>
-    </button>
-    <button type="button" class="opt" onclick="pickSource('ragebait', this)">
-      <span class="ic">🔥</span>
-      <span class="tx"><span class="t">Start an argument</span>
-        <span class="s">Ragebait — a divisive take stated with full confidence; the comment war does the distribution</span></span>
-      <span class="chev">›</span>
-    </button>
-    <button type="button" class="opt" onclick="pickSource('idea', this)">
-      <span class="ic">💡</span>
-      <span class="tx"><span class="t">My own idea</span>
-        <span class="s">You've got a one-liner — the engine turns it into a full carousel</span></span>
-      <span class="chev">›</span>
-    </button>
-    <button type="button" class="opt" onclick="pickSource('facts', this)">
-      <span class="ic">📚</span>
-      <span class="tx"><span class="t">From research</span>
-        <span class="s">Paste facts, stats or myths — get angles back and pick the winner</span></span>
-      <span class="chev">›</span>
-    </button>
-    <button type="button" class="opt" onclick="pickSource('format', this)">
-      <span class="ic">🧱</span>
-      <span class="tx"><span class="t">A proven format</span>
-        <span class="s">Start from a TikTok skeleton that already works</span></span>
-      <span class="chev">›</span>
-    </button>
-    <button type="button" class="opt" onclick="pickSource('manual', this)">
-      <span class="ic">✍️</span>
-      <span class="tx"><span class="t">Fully manual</span>
-        <span class="s">Skip the engine — write all five slides yourself</span></span>
-      <span class="chev">›</span>
-    </button>
+
+    <p class="tier-label">Got a starting point?</p>
+    <div class="optgrid">
+      <button type="button" class="opt" onclick="pickSource('idea', this)">
+        <span class="ic">💡</span>
+        <span class="tx"><span class="t">My own idea</span>
+          <span class="s">A one-liner → a full carousel</span></span>
+      </button>
+      <button type="button" class="opt" onclick="pickSource('facts', this)">
+        <span class="ic">📚</span>
+        <span class="tx"><span class="t">From research</span>
+          <span class="s">Paste facts → pick an angle</span></span>
+      </button>
+    </div>
+
+    <p class="tier-label">Prefer structure?</p>
+    <div class="optgrid">
+      <button type="button" class="opt" onclick="pickSource('format', this)">
+        <span class="ic">🧱</span>
+        <span class="tx"><span class="t">A proven format</span>
+          <span class="s">Start from a TikTok skeleton</span></span>
+      </button>
+      <button type="button" class="opt" onclick="pickSource('manual', this)">
+        <span class="ic">✍️</span>
+        <span class="tx"><span class="t">Fully manual</span>
+          <span class="s">Write every slide yourself</span></span>
+      </button>
+    </div>
   </section>
 
   <!-- The look step is gone — the engine designs a bespoke design_system per
@@ -373,6 +370,7 @@
       <button type="button" class="ghost" onclick="startIdea(false)"
               title="skip the fan-out — one straight write from your line">⚡ Just build it</button>
     </div>
+    <p class="hint" style="margin-top:8px; font-size:12px">🎯 shows 5 directions to pick from first (recommended) · ⚡ writes it immediately</p>
   </section>
 
   <!-- ═════════ 3c · FACTS ═════════ -->
@@ -382,8 +380,8 @@
     <p class="hint">Facts, stats or myths — one per line is fine. The engine proposes angles and you pick.</p>
     <textarea id="facts-text" style="min-height:120px"
       placeholder="Caffeine peaks in the blood ~45 min after ingestion&#10;Most 'toning' advice is just fat loss in disguise"></textarea>
-    <p class="muted" style="font-size:12.5px">Need topical material? Run the
-      <a href="/trends" target="_blank">Trend Scout</a> and paste the hooks here.</p>
+    <p class="muted" style="font-size:12.5px">Need topical material? Open the
+      <a href="#" onclick="state.source='trending'; show('radar'); switchLane('trending'); return false">📈 Trending lane</a> instead.</p>
     <div class="chip-row" data-len-slot style="margin-top:10px"></div>
     <div class="cta-row">
       <button type="button" onclick="startFacts()">Find angles →</button>
@@ -400,7 +398,8 @@
       <button type="button" class="opt" data-key="{{ m.key }}" title="{{ m.skeleton|join(' → ') }}"
               onclick="pickMech('{{ m.key }}', this)">
         <span class="tx"><span class="t">{{ m.label }}</span>
-          <span class="s">{{ m.description }}</span></span>
+          <span class="s">{{ m.description }}</span>
+          {% if m.skeleton %}<span class="s" style="color:var(--faint); margin-top:5px">{{ m.skeleton|length }} slides · opens: “{{ m.skeleton[0][:56] }}{% if m.skeleton[0]|length > 56 %}…{% endif %}”</span>{% endif %}</span>
         <span class="ck"></span>
       </button>
       {% endfor %}
@@ -414,6 +413,7 @@
       <button type="button" class="ghost" onclick="startBlank(false)"
               title="skip the fan-out — one straight write in this format">⚡ Just build it</button>
     </div>
+    <p class="hint" style="margin-top:8px; font-size:12px">🎯 shows 5 directions to pick from first (recommended) · ⚡ writes it immediately</p>
   </section>
 
   <!-- ═════════ 3e · ANGLES (from facts) ═════════ -->
@@ -734,6 +734,14 @@ function pickSource(src, el){
   state.source = src;
   tapThen(el, '#scr-source .opt', routeToDoor);
 }
+// The hero: open the radar on whichever discovery lane you used last.
+function pickHero(el){
+  let last = null;
+  try { last = localStorage.getItem('chrgd_lane'); } catch (e) { /* private mode */ }
+  state.source = ['moments', 'trending', 'evergreen', 'ragebait'].includes(last)
+    ? last : 'moments';
+  tapThen(el, '#scr-source .opt', routeToDoor);
+}
 function pickLength(len, el){
   state.length = len;
   document.querySelectorAll('[data-len]').forEach(c =>
@@ -890,6 +898,7 @@ async function warmLanes(){
 
 function switchLane(l){
   lane = l;
+  try { localStorage.setItem('chrgd_lane', l); } catch (e) { /* private mode */ }
   document.querySelectorAll('[data-lane]').forEach(t =>
     t.classList.toggle('sel', t.dataset.lane === l));
   document.getElementById('lane-hint').textContent = LANE_HINT[l];
@@ -2152,11 +2161,11 @@ document.querySelectorAll('[data-len-slot]').forEach(slot => {
     <button type="button" class="chip${state.length === '' ? ' sel' : ''}" data-len="" onclick="pickLength('', this)"
             title="the engine picks the slide count the idea deserves — a meme might be 1 slide, a deep-dive 10">Engine's call</button>
     <button type="button" class="chip" data-len="quick" onclick="pickLength('quick', this)"
-            title="a single punch built for sharing — roughly 1–2 slides">Quick hit</button>
+            title="a fast punch that still gives the algorithm swipes to count — roughly 3–4 slides">Quick hit · 3–4</button>
     <button type="button" class="chip" data-len="standard" onclick="pickLength('standard', this)"
-            title="a classic carousel with a proper arc — roughly 4–6 slides">Classic</button>
+            title="a classic carousel with a proper arc — roughly 4–6 slides">Classic · 4–6</button>
     <button type="button" class="chip" data-len="deep" onclick="pickLength('deep', this)"
-            title="a fuller story, roughly 7–10 slides — only as long as it stays good">Deep dive</button>`;
+            title="a fuller story, roughly 7–10 slides — only as long as it stays good">Deep dive · 7–10</button>`;
 });
 
 if (RESUME_IDEA) {
