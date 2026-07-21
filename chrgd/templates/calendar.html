@@ -135,6 +135,13 @@
         Tap a posted card → rate it <b>🔥 / 😐 / 💀</b>. After a few, you'll see
         which of your formats actually land — your judgement, made legible.
       </div>
+      <div style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <label for="csv-import" style="font-size:12px; font-weight:600; cursor:pointer">⬆️ Import TikTok analytics CSV</label>
+        <p class="muted" style="font-size:11px; margin:3px 0 6px">TikTok → Analytics → Content → Download data. Fills views/likes/etc. for every post at once, matched by caption.</p>
+        <input id="csv-import" type="file" accept=".csv,text/csv" onchange="importCsv(this)"
+               style="font-size:12px; width:100%">
+        <div id="csv-import-result" class="muted" style="font-size:11.5px; margin-top:6px"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -274,6 +281,12 @@ function cardEl(c, inTray){
     rt.textContent = {hit:'🔥', meh:'😐', flop:'💀'}[c.rating] || '';
     rt.title = 'rated ' + c.rating;
     el.appendChild(rt);
+  } else if (c.needs_rating) {
+    // Likely live but unrated — the loop needs this outcome. Nudge for it.
+    const nr = document.createElement('span'); nr.className = 'ready-dot';
+    nr.textContent = '⭐';
+    nr.title = 'posted — tap to rate it (🔥/😐/💀) so the engine can learn';
+    el.appendChild(nr);
   } else if (c.rendered) {
     const r = document.createElement('span'); r.className = 'ready-dot'; r.textContent = '📤';
     el.appendChild(r);
@@ -548,6 +561,26 @@ async function saveMetrics(){
   loadInsights();
 }
 
+async function importCsv(input){
+  const out = document.getElementById('csv-import-result');
+  const f = input.files && input.files[0];
+  if (!f) return;
+  out.textContent = 'Reading ' + f.name + '…';
+  const body = new FormData(); body.append('file', f);
+  try {
+    const r = await fetch('/api/metrics/import', {method:'POST', body});
+    const d = await r.json();
+    if (!r.ok || d.error) { out.textContent = '⚠ ' + (d.error || 'import failed'); }
+    else {
+      const nu = (d.unmatched || []).length;
+      out.innerHTML = `✓ Logged <b>${(d.updated||[]).length}</b> of ${d.rows} rows`
+        + (nu ? ` · ${nu} unmatched (log those by hand)` : '');
+      load(); loadInsights();
+    }
+  } catch(e){ out.textContent = '⚠ ' + e; }
+  input.value = '';
+}
+
 async function loadInsights(){
   const r = await fetch('/api/insights');
   if (!r.ok) return;
@@ -568,6 +601,12 @@ async function loadInsights(){
         <span class="muted">(${t.trait}) — ${t.flops}/${t.total} flop</span></div>`;
     });
     if (rated >= 3) html += `<div class="muted" style="margin-top:8px; font-size:11.5px">The engine now leans toward what hits when it fits the idea.</div>`;
+  }
+  // How well the pre-render scroll-test judge predicted your real outcomes.
+  const sc = d.scroll_calibration || {};
+  if (sc.n >= 3) {
+    const pct = Math.round(100 * (sc.agreed || 0) / sc.n);
+    html += `<div class="muted" style="margin-top:8px; font-size:11.5px">🔎 The slide-1 scroll test agreed with your ratings on ${sc.agreed}/${sc.n} posts (${pct}%).</div>`;
   }
   // Exact view numbers, if any were logged, shown as a secondary detail.
   const viewed = (d.top || []).filter(p => p.views > 0).slice(0, 2);

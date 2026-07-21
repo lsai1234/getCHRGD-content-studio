@@ -207,6 +207,8 @@ Pure UI/JSON — no model calls, no schema change. (Architecture note per the co
 
 ## Phase 3 — Structural: pillars + a feedback loop that actually learns
 
+> **Status: shipped.** 3.1 adds `BrandProfile.pillars` (settings textarea), rendered into `profile_engine_block` (so it reaches every concept + build), and a `pillar` field + rule in the takes fan-out that rides `route_json` with the chosen take. 3.2 expands the learning trait vocabulary from category/mechanic/style to **pillar, engagement_play and slide-count bucket** (`learning.SKEW_TRAITS`), adds a `needs_rating` nudge on calendar cards to stop the loop starving, and adds `scroll_calibration` (how often the pre-render scroll test agreed with real hit/flop ratings), surfaced in the insights panel. 3.3 adds `chrgd/analytics.py` + `POST /api/metrics/import` + a calendar upload control: a tolerant TikTok-analytics-CSV parser that matches rows to posts by caption and bulk-fills `metrics_json` (merging, so ratings survive), no LLM.
+
 ### 3.1 Content pillars, enforced at concept time
 **Lever:** #8. The audience-classification problem: scattered topics never build an audience profile.
 **Where:** `profile.py` + `pipeline.py` + `worker.py`.

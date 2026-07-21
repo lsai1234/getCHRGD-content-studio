@@ -38,6 +38,10 @@ class BrandProfile(BaseModel):
     audience: str = ""         # who it's for
     dos: str = ""              # always do / lean into (free text, newline list ok)
     donts: str = ""            # never do / avoid
+    # The content pillars the account posts within (newline/`·`/comma list).
+    # Every post is expected to belong to exactly one, so the audience — and the
+    # algorithm — can classify the account instead of seeing scattered topics.
+    pillars: str = ""
     handle: str = ""           # @handle for captions
     default_hashtags: str = ""  # space/comma separated, always-include tags
 
@@ -110,6 +114,15 @@ def profile_engine_block(profile: BrandProfile) -> str:
         rows.append(f"Always / lean into: {profile.dos.strip()}")
     if profile.donts.strip():
         rows.append(f"Never / avoid: {profile.donts.strip()}")
+    if profile.pillars.strip():
+        pillars = " · ".join(
+            p.strip() for p in profile.pillars.replace(",", "\n").splitlines()
+            if p.strip()
+        )
+        rows.append(
+            "Content pillars (EVERY post belongs to exactly ONE of these — name "
+            f"it, and don't drift outside them): {pillars}"
+        )
     tail = []
     if profile.handle.strip():
         tail.append(f"handle {profile.handle.strip()}")

@@ -67,6 +67,37 @@ def _route(idea: Idea) -> dict:
         return {}
 
 
+# The trait keys we hunt for winning/flopping patterns across — each post has
+# exactly one value per key. "hook"/"style" are kept on the post for display but
+# left out of the skew search (hook is free text; style is now almost always
+# blank since the picker was removed). Pillar, engagement play and slide-count
+# bucket are the levers the rubric says actually drive reach.
+SKEW_TRAITS = ("category", "mechanic", "pillar", "engagement_play", "slide_count")
+
+
+def _slide_bucket(idea: Idea) -> str:
+    """Coarse slide-count band, so 5- and 6-slide posts compare as one shape."""
+    try:
+        n = len(json.loads(idea.slides_json or "[]"))
+    except (json.JSONDecodeError, TypeError):
+        return ""
+    if n <= 0:
+        return ""
+    if n <= 3:
+        return "1-3 slides"
+    if n <= 6:
+        return "4-6 slides"
+    return "7-10 slides"
+
+
+def _pillar(route: dict) -> str:
+    """The content pillar for a post — from the chosen take, else route-level."""
+    take = route.get("take")
+    if isinstance(take, dict) and take.get("pillar"):
+        return take["pillar"]
+    return route.get("pillar", "")
+
+
 def _traits(idea: Idea) -> dict:
     """The comparable features of one post."""
     route = _route(idea)
@@ -74,6 +105,9 @@ def _traits(idea: Idea) -> dict:
         "category": idea.content_category or "uncategorised",
         "mechanic": route.get("mechanic", ""),
         "style": route.get("style", ""),
+        "pillar": _pillar(route),
+        "engagement_play": route.get("engagement_play", ""),
+        "slide_count": _slide_bucket(idea),
         "hook": idea.hook or "",
     }
 
@@ -87,6 +121,7 @@ def insights(store: Store, top_n: int = 5) -> dict:
     logged = [(i, m) for i, m in logged if m.get("views", 0) > 0]
     if not logged:
         return {"posts_logged": 0, "baseline_views": 0, "top": [], "traits": [],
+                "scroll_calibration": scroll_calibration(store),
                 **rating_summary(store)}
 
     views = [m["views"] for _, m in logged]
@@ -114,7 +149,7 @@ def insights(store: Store, top_n: int = 5) -> dict:
     # Which traits actually move the needle: median views per trait value,
     # only where we have 2+ posts to compare.
     traits: list[dict] = []
-    for key in ("category", "mechanic", "style"):
+    for key in SKEW_TRAITS:
         buckets: dict[str, list[int]] = {}
         for idea, m in logged:
             value = _traits(idea)[key]
@@ -138,6 +173,7 @@ def insights(store: Store, top_n: int = 5) -> dict:
         "baseline_views": baseline,
         "top": top,
         "traits": traits,
+        "scroll_calibration": scroll_calibration(store),
         **rating_summary(store),
     }
 
@@ -172,7 +208,7 @@ def rating_summary(store: Store) -> dict:
                 })
         return out
 
-    all_skew = _skew("category") + _skew("mechanic") + _skew("style")
+    all_skew = [t for key in SKEW_TRAITS for t in _skew(key)]
     hit_traits = sorted(
         [t for t in all_skew if t["hits"] > t["flops"]],
         key=lambda t: (t["hits"] - t["flops"], t["hits"]), reverse=True,
@@ -187,6 +223,27 @@ def rating_summary(store: Store) -> dict:
         "hit_traits": hit_traits,
         "flop_traits": flop_traits,
     }
+
+
+def scroll_calibration(store: Store) -> dict:
+    """How well the pre-render scroll test predicted real outcomes.
+
+    Among posts that carry BOTH a cold-scroll-test verdict and a hit/flop
+    rating, count how often the judge agreed with reality (a 'stop' that hit,
+    or a 'scroll' that flopped). Closes the loop: it tells the editor whether
+    the studio's own judge is worth trusting yet, without any ML.
+    """
+    n = agreed = 0
+    for idea in store.ideas_with_metrics():
+        rating = _rating(idea)
+        verdict = (_route(idea).get("scroll_verdict") or {}).get("verdict")
+        if rating in ("hit", "flop") and verdict in ("stop", "scroll"):
+            n += 1
+            if (verdict == "stop" and rating == "hit") or (
+                verdict == "scroll" and rating == "flop"
+            ):
+                agreed += 1
+    return {"n": n, "agreed": agreed}
 
 
 def _trait_phrase(t: dict) -> str:

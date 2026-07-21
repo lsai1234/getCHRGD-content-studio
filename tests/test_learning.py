@@ -111,6 +111,54 @@ def test_ratings_drive_notes_and_summary(store):
     assert "Tends to HIT" in notes and "Tends to FLOP" in notes
 
 
+def test_new_traits_tracked_pillar_play_slidecount(store):
+    # Two "save" posts of 5-6 slides on the same pillar that consistently hit,
+    # vs two "comment" posts that flop — the loop should surface all three trait
+    # kinds (pillar, engagement_play, slide_count).
+    def _post(idea_id, rating, *, pillar, play, n_slides):
+        store.add_idea(
+            Idea(
+                idea_id=idea_id, concept_note=idea_id,
+                slides_json=json.dumps([{"headline": "h"}] * n_slides),
+                route_json=json.dumps(
+                    {"engagement_play": play, "take": {"pillar": pillar}}
+                ),
+            )
+        )
+        store.merge_metrics(idea_id, {"rating": rating})
+
+    _post("G-0001", "hit", pillar="myths", play="save", n_slides=5)
+    _post("G-0002", "hit", pillar="myths", play="save", n_slides=6)
+    _post("G-0003", "flop", pillar="banter", play="comment", n_slides=2)
+    _post("G-0004", "flop", pillar="banter", play="comment", n_slides=2)
+
+    d = insights(store)
+    hit_vals = {t["value"] for t in d["hit_traits"]}
+    flop_vals = {t["value"] for t in d["flop_traits"]}
+    assert "myths" in hit_vals and "save" in hit_vals and "4-6 slides" in hit_vals
+    assert "banter" in flop_vals and "comment" in flop_vals and "1-3 slides" in flop_vals
+
+
+def test_scroll_calibration_counts_agreement(store):
+    from chrgd.learning import scroll_calibration
+
+    def _post(idea_id, rating, verdict, views=1000):
+        store.add_idea(
+            Idea(
+                idea_id=idea_id, concept_note=idea_id,
+                route_json=json.dumps({"scroll_verdict": {"verdict": verdict}}),
+            )
+        )
+        store.merge_metrics(idea_id, {"views": views, "rating": rating})
+
+    _post("G-0001", "hit", "stop")     # judge right
+    _post("G-0002", "flop", "scroll")  # judge right
+    _post("G-0003", "flop", "stop")    # judge wrong
+    cal = scroll_calibration(store)
+    assert cal["n"] == 3 and cal["agreed"] == 2
+    assert insights(store)["scroll_calibration"] == cal
+
+
 def test_rating_merge_keeps_views(store):
     _logged_post(store, "G-0001", 5000)
     store.merge_metrics("G-0001", {"rating": "hit"})

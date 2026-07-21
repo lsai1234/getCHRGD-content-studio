@@ -350,6 +350,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         audience: str = Form(""),
         dos: str = Form(""),
         donts: str = Form(""),
+        pillars: str = Form(""),
         handle: str = Form(""),
         default_hashtags: str = Form(""),
         house_style: str = Form(""),
@@ -377,7 +378,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             )
             profile = BrandProfile(
                 brand_name=brand_name, one_liner=one_liner, voice=voice,
-                audience=audience, dos=dos, donts=donts, handle=handle,
+                audience=audience, dos=dos, donts=donts, pillars=pillars,
+                handle=handle,
                 default_hashtags=default_hashtags, house_style=house_style,
                 palette=palette, type_style=type_style, character=character,
                 character_image=portrait, motif=motif,
@@ -1478,6 +1480,25 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         digest["feeding_engine"] = digest["posts_logged"] >= MIN_POSTS_FOR_NOTES
         return digest
 
+    @app.post("/api/metrics/import")
+    async def api_metrics_import(
+        request: Request,
+        file: UploadFile = File(...),
+        _: str = Depends(require_user),
+    ):
+        """Bulk-log results from a TikTok analytics CSV export (Content tab →
+        Download data), matched to posts by caption. Fills the learning loop in
+        one go instead of hand-typing every post."""
+        from .analytics import import_tiktok_csv
+
+        raw = await file.read()
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1", errors="replace")
+        with _store(settings) as store:
+            return import_tiktok_csv(store, text)
+
     # --- scheduling + calendar ------------------------------------------------
 
     @app.post("/api/ideas/{idea_id}/schedule")
@@ -1515,6 +1536,17 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 rating = m.get("rating")
             except (json.JSONDecodeError, TypeError, ValueError):
                 views = None
+        # Nudge the learning loop off starvation: a post that's likely live
+        # (exported, or its scheduled slot has passed) and is rendered but not
+        # yet rated wants a one-tap outcome. Without this the loop silently
+        # starves at small-account scale.
+        sched = idea.scheduled_for
+        if sched is not None and sched.tzinfo is None:
+            sched = sched.replace(tzinfo=timezone.utc)
+        posted_ish = bool(idea.exported_at) or (
+            sched is not None and sched < datetime.now(timezone.utc)
+        )
+        needs_rating = bool(paths) and rating is None and posted_ish
         return {
             "idea_id": idea.idea_id,
             "label": idea.hook or idea.concept_note,
@@ -1527,6 +1559,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "decay": idea.decay_speed.value if idea.decay_speed else None,
             "views": views,
             "rating": rating,
+            "needs_rating": needs_rating,
             "scheduled_for": (
                 idea.scheduled_for.isoformat() if idea.scheduled_for else None
             ),

@@ -298,7 +298,7 @@ def build_user_message(
             "a different interpretation:"
         )
         for key in ("title", "angle", "hook", "mechanic", "emotion",
-                    "share_identity", "precedent", "sketch"):
+                    "share_identity", "precedent", "pillar", "sketch"):
             if take.get(key):
                 lines.append(f"- {key}: {take[key]}")
         if take.get("tweak"):
@@ -950,6 +950,11 @@ will choose between. Rules:
 - If WHAT WORKS FOR THIS ACCOUNT notes are provided, weight the fan-out
   toward the shapes/categories that hit and away from the ones that flopped
   — the account's own history outranks generic instinct.
+- PILLAR: if the brand profile lists content pillars, every take names the ONE
+  pillar it belongs to (a take that fits no pillar is off-strategy — replace
+  it); across the fan-out, cover at least TWO different pillars so the editor
+  can steer the account's balance. If no pillars are given, leave `pillar` an
+  empty string.
 - Honour the seed's constraints (cultural moment as the star, trend format
   followed faithfully, format lock, claim safety) in every take.
 
@@ -965,6 +970,7 @@ Return a SINGLE JSON object, nothing else:
       "emotion": "the high-arousal target emotion",
       "share_identity": "sending this to a mate says ___ about me — completed",
       "precedent": "the playbook shape or live trend this take runs on + one line on why it has banged before and fits here",
+      "pillar": "the ONE content pillar from the brand profile this take belongs to (empty string if no pillars are defined)",
       "sketch": "the arc in 2-3 short beats, ' → ' separated",
       "concept_note": "1-2 sentence buildable brief for the full write"
     }}
@@ -987,6 +993,9 @@ class Take(BaseModel):
     # plus why it has banged before. "no precedent — experimental" is allowed
     # at most once per fan-out.
     precedent: str = ""
+    # The content pillar this take belongs to (from the brand profile). Rides
+    # route_json with the chosen take so the learning loop can track it.
+    pillar: str = ""
     sketch: str = ""
     concept_note: str = ""
 

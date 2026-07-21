@@ -1994,11 +1994,14 @@ def test_brand_profile_blocks_render_and_stay_inert_when_empty():
 
     p = BrandProfile(brand_name="CHRGD", one_liner="gym brand",
                      voice="dry", donts="no medical claims",
+                     pillars="gym culture & archetypes\nenergy & caffeine truths",
                      house_style="flash-photo", palette="cobalt on black")
     eng = profile_engine_block(p)
     assert "BRAND PROFILE" in eng
     assert "CHRGD — gym brand" in eng
     assert "Never / avoid: no medical claims" in eng
+    assert "Content pillars" in eng
+    assert "gym culture & archetypes · energy & caffeine truths" in eng
     sty = profile_style_block(p)
     assert "BRAND RECOGNITION ACCENTS" in sty
     assert "flash-photo" in sty and "cobalt on black" in sty
@@ -2095,12 +2098,14 @@ def test_settings_saves_character_field(client, settings):
     client.post("/settings", data={
         "brand_name": "CHRGD", "character": "deadpan gym bloke, grey hoodie",
         "type_style": "chunky condensed caps",
+        "pillars": "gym culture\nenergy truths\ntraining myths",
     }, follow_redirects=False)
     from chrgd.profile import load_profile
     with Store(settings.db_path) as store:
         p = load_profile(store)
     assert p.character == "deadpan gym bloke, grey hoodie"
     assert p.type_style == "chunky condensed caps"
+    assert "training myths" in p.pillars
     assert "deadpan gym bloke" in client.get("/settings").text
 
 
