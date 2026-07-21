@@ -393,10 +393,20 @@ def _handle_trends(store: Store, settings: Settings, job: dict) -> dict:
 
 def _handle_discover(store: Store, settings: Settings, job: dict) -> dict:
     """One discovery scan: 'moments', 'evergreen', 'trending' or 'ragebait'."""
-    from .trends import scout_discover
+    from .trends import OpenAITrendClient, scout_discover
 
     params = json.loads(job["params_json"] or "{}")
-    result = scout_discover(settings, job["kind"], int(params.get("count", 6)))
+    # Ragebait and trending live or die on the sharpness of the WRITTEN claim,
+    # so give them the creative model; moments/evergreen are research
+    # aggregation and stay on the cheap scout model.
+    client = (
+        OpenAITrendClient(settings, model=settings.openai_model)
+        if job["kind"] in ("ragebait", "trending")
+        else None
+    )
+    result = scout_discover(
+        settings, job["kind"], int(params.get("count", 6)), client=client
+    )
     return {
         "limitation": result.limitation,
         "moments": [m.model_dump(mode="json") for m in result.moments],

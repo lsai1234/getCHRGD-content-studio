@@ -24,7 +24,7 @@ skeleton = [
     "Mistake 1 + the fix in one line",
     "Mistake 2 + the fix in one line",
     "Mistake 3 + the fix in one line",
-    "The mistake NOBODY talks about + fix, then save-this prompt",
+    "The mistake that actually separates results + fix, then 'screenshot this before your next session'",
 ]
 
 [mechanics.before_after]
@@ -60,13 +60,13 @@ skeleton = [
     "Checklist recap + save-this-for-later prompt",
 ]
 
-[mechanics.nobody_tells_you]
-label = "Nobody tells you this"
-description = "Insider knowledge framing — makes the viewer feel let in on a secret."
+[mechanics.insider_mechanism]
+label = "The real reason"
+description = "Insider knowledge framing — the mechanism underneath what everyone gets told. Makes the viewer feel let in."
 skeleton = [
-    "'Nobody tells you this about <topic>' — conspiratorial hook",
-    "The surface story everyone gets told",
-    "The real mechanism underneath",
-    "How to use it to your advantage",
-    "The one-line version to remember + share prompt",
+    "'The real reason <X> works has nothing to do with what you were told' — a concrete, confident hook (no 'nobody tells you')",
+    "The surface story everyone repeats",
+    "The actual mechanism underneath, with a specific",
+    "How to use it — the practical move it unlocks",
+    "The one-line version to remember + 'send this to whoever still believes the old version'",
 ]

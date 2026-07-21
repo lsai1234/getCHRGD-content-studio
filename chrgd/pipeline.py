@@ -853,9 +853,18 @@ ANGLES_CONTRACT = """
 
 You are NOT building a post this run. The user gives you raw facts/research.
 For EACH promising fact, propose up to {count} distinct carousel ANGLES that
-would perform on TikTok for this brand. Angles must be genuinely different
-takes (myth-bust, "nobody tells you this", listicle, hot take, story...), not
-rewordings. Respect claim safety — drop facts that can't be made safe.
+would perform on TikTok for this brand. Angles must run on genuinely different
+ENGINES, not rewordings — anchor each to a named playbook shape (myth-bust,
+slightly-wrong ranking, "the unsaid thing", receipt breakdown, "wait WHAT"
+mechanism, archetype taxonomy, hot take). Do NOT open an angle with a banned
+generic hook ("nobody tells you this", "the truth about", "this changed
+everything"). Respect claim safety — drop facts that can't be made safe.
+
+For every angle, run stage 0 before you write it: name its ONE high-arousal
+target emotion (amusement / indignation / awe / recognition-shock /
+anxiety-relief — never "interested"), and complete the line "sending this to a
+mate says ___ about me". An angle whose emotion is "interested" or whose
+share line can't be completed doesn't belong in the list — replace it.
 
 Return a SINGLE JSON object, nothing else:
 
@@ -863,8 +872,10 @@ Return a SINGLE JSON object, nothing else:
   "angles": [
     {{
       "title": "short label for the picker UI",
-      "mechanic": "one of the virality mechanics",
-      "hook": "the slide-1 hook this angle would open with",
+      "mechanic": "one of the virality mechanics / playbook shapes",
+      "hook": "the slide-1 hook this angle would open with (thumb-stopping, not a blog title)",
+      "emotion": "the ONE high-arousal target emotion",
+      "share_identity": "sending this to a mate says ___ about me — completed",
       "concept_note": "1-2 sentence brief a builder could work from",
       "pain_point": "string",
       "core_tension": "string",
@@ -882,6 +893,8 @@ class Angle(BaseModel):
     title: str
     mechanic: str = ""
     hook: str = ""
+    emotion: str = ""
+    share_identity: str = ""
     concept_note: str
     pain_point: str = ""
     core_tension: str = ""

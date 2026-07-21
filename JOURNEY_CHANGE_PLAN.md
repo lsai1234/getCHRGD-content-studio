@@ -6,6 +6,8 @@ Companion to `JOURNEY_REVIEW.md`. Phase 1 is the virality engine (prompt rewrite
 
 ## Phase 1 — The virality engine (prompts + model routing)
 
+> **Status: shipped.** 1.1 ragebait is now the Argument Engineer (buyer-on-winning-side asymmetry test replacing the 50/50 split test, four threat levers, gap + receipt required per take). 1.2 trending is the Trend Hijacker (tier calls, obvious-take firewall, bridge formula; `obvious_take` rides the JSON and is dropped by the parser as planned). 1.3 ragebait/trending route to the creative model in `_handle_discover` (`OpenAITrendClient` gained an optional `model`). 1.4 `ANGLES_CONTRACT` + `Angle` now require a named emotion + completed share-identity and drop the banned "nobody tells you this". 1.5 `mechanics.toml` purged both banned hooks (`five_mistakes` slide 5; `nobody_tells_you` → `insider_mechanism`). 1.6 moments demand an insider-specific detail + one road-less-posted angle. 1.7 evergreen requires a completable share-identity per fact. Prompt-content tests updated to the new intent; routing test added. Both rewrites are drop-in (same `MomentsResult` schema).
+
 ### 1.1 Ragebait: full rewrite — from debate-finder to argument engineer
 **Lever:** identity threat + engineered asymmetry (buyer on the winning side) + receipts.
 **Where:** `chrgd/trends.py:RAGEBAIT_PROMPT` (lines 486-558). Drop-in: emits the exact same `MomentsResult` JSON shape — no model or parser change.

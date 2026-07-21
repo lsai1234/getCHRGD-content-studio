@@ -1527,15 +1527,46 @@ def test_trending_scout_hunts_participation_not_events(settings):
     result = scout_discover(settings, "trending", client=fake)
     assert [m.category for m in result.moments] == ["format", "challenge"]
     sys = fake.system
-    assert "TRENDING" in sys and "18-30" in sys
+    assert "Trend Hijacker" in sys and "18-30" in sys
     assert "NOT news/fixtures/weather" in sys  # events belong to the other lane
     assert "THE FEED TEST" in sys            # recognisable from the FYP, not trade press
-    assert '"spike"' in sys and '"wave"' in sys  # horizon called on every trend
+    # Hijack strategy: reject the obvious take, prefer rising over saturated.
+    assert "OBVIOUS-TAKE FIREWALL" in sys
+    assert "rising" in sys.lower() and "saturated" in sys.lower()
     assert "gym" in sys.lower() and "meme" in sys.lower()
     assert "never claim a specific sound" in sys  # the no-live-FYP limitation
     # Carousel-first: steer to buildable carousel trends, not video formats.
     assert "CAROUSEL TEST" in sys
     assert "swipe shape" in sys.lower()
+
+
+def test_claim_lanes_use_the_creative_model(settings, store, monkeypatch):
+    """Ragebait/trending ship written creative → creative model; moments/
+    evergreen are research aggregation → the cheap scout (client=None)."""
+    from chrgd import trends, worker
+
+    settings.openai_model = "gpt-5"
+    settings.scout_model = "gpt-4o-mini"
+    seen = {}
+
+    class RecClient:
+        def __init__(self, s, model=None):
+            seen["model"] = model
+
+    monkeypatch.setattr(trends, "OpenAITrendClient", RecClient)
+    monkeypatch.setattr(
+        trends, "scout_discover",
+        lambda s, kind, count, client=None: trends.MomentsResult(),
+    )
+
+    worker._handle_discover(store, settings, {"kind": "ragebait", "params_json": "{}"})
+    assert seen.get("model") == "gpt-5"          # creative model for the claim lane
+    seen.clear()
+    worker._handle_discover(store, settings, {"kind": "trending", "params_json": "{}"})
+    assert seen.get("model") == "gpt-5"
+    seen.clear()
+    worker._handle_discover(store, settings, {"kind": "moments", "params_json": "{}"})
+    assert seen == {}                            # no creative client built (scout default)
 
 
 def test_trending_lane_seeds_trend_framed_ideas(client, settings):
@@ -1606,8 +1637,11 @@ def test_ragebait_scout_hunts_divisive_but_defensible(settings):
     result = scout_discover(settings, "ragebait", client=fake)
     assert [m.category for m in result.moments] == ["etiquette", "training"]
     sys = fake.system
-    assert "ARGUMENTS WORTH STARTING" in sys
-    assert "SPLIT TEST" in sys            # both camps must be real and big
+    assert "Argument Engineer" in sys
+    # Engineered asymmetry (buyer on the winning side), not a balanced debate.
+    assert "ASYMMETRY TEST" in sys
+    assert "out-group" in sys             # rage comes from an out-group, not our buyers
+    assert "receipt" in sys.lower()       # every claim carries the fact we reply with
     assert "RULES OF THE FIGHT" in sys    # provocation, never harm
     # Opinions, not lies — and the punches land on behaviours, never people.
     assert "never a fabricated fact" in sys
