@@ -956,8 +956,9 @@ const CS_FLAVOUR = {
 };
 let csLoading = false;
 
+let csJob = null;
 async function loadConcepts(fresh){
-  if (csLoading) return;
+  if (csLoading && !fresh) return;  // a fresh spin supersedes an in-flight poll
   csLoading = true;
   const list = document.getElementById('concept-list');
   const btn = document.getElementById('cs-refresh');
@@ -965,19 +966,38 @@ async function loadConcepts(fresh){
   if (fresh || !list.querySelector('.concept'))
     list.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   const seed = document.getElementById('cs-seed-input').value.trim();
-  let data;
-  try { data = await post('/api/concepts', new URLSearchParams(seed ? {seed} : {})); }
-  catch (e) { data = null; }
+  // The creative model runs in the background worker (it can be slow), so we
+  // kick a job and poll it — the request itself returns instantly.
+  const r = await post('/api/concepts', new URLSearchParams(seed ? {seed} : {}));
+  if (!r || !r.job_id) { csLoading = false; csDone(); return renderConceptsEmpty(r); }
+  csJob = r.job_id;
+  pollConcepts(r.job_id);
+}
+function csDone(){
   csLoading = false;
+  const btn = document.getElementById('cs-refresh');
   btn.disabled = false; btn.textContent = '↻ Fresh set';
-  if (!data || !data.concepts || !data.concepts.length) return renderConceptsEmpty(data);
+  const seedBtn = document.getElementById('cs-seed-go');
+  seedBtn.disabled = false; seedBtn.textContent = 'Spin it';
+}
+async function pollConcepts(jobId){
+  if (jobId !== csJob) return;  // superseded by a newer spin
+  let job;
+  try { job = await (await fetch(`/api/jobs/${jobId}`)).json(); }
+  catch (e) { csDone(); return renderConceptsEmpty({error: 'lost the connection while thinking'}); }
+  if (job.status === 'ERROR') { csDone(); return renderConceptsEmpty({error: job.error || 'the idea engine failed'}); }
+  if (job.status !== 'COMPLETED') return setTimeout(() => pollConcepts(jobId), 1800);
+  csDone();
+  let data = {};
+  try { data = JSON.parse(job.result_json || '{}'); } catch (e) {}
+  if (!data.concepts || !data.concepts.length) return renderConceptsEmpty(data);
   renderConcepts(data.concepts);
 }
 
 function spinFromSeed(){
   const btn = document.getElementById('cs-seed-go');
-  btn.disabled = true; btn.textContent = 'Spinning…';
-  loadConcepts(true).finally(() => { btn.disabled = false; btn.textContent = 'Spin it'; });
+  btn.disabled = true; btn.textContent = 'Spinning…';   // csDone() re-enables it
+  loadConcepts(true);
 }
 
 function renderConceptsEmpty(data){

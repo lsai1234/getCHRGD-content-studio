@@ -142,16 +142,37 @@ def test_concepts_are_grounded_in_brand_evidence(store, settings, monkeypatch):
     assert "GOLD EXAMPLE: dry UK lifter voice" in gen.user
 
 
-def test_endpoint_returns_concepts(settings, store, monkeypatch):
-    # Endpoint wires generate_concepts and never 500s.
-    import chrgd.concepts as concepts_mod
-
-    monkeypatch.setattr(
-        concepts_mod, "generate_concepts",
-        lambda *a, **k: {"concepts": [{"title": "t", "angle": "a", "build_seed": "a"}], "seeded": False},
-    )
+def test_endpoint_enqueues_a_job(settings):
+    # The endpoint now kicks a background job (the creative call is too slow for
+    # the web request) and returns a job_id to poll.
     c = TestClient(create_app(settings))
     c.post("/login", data={"username": "admin", "password": "s3cret"})
     r = c.post("/api/concepts", data={})
     assert r.status_code == 200
-    assert r.json()["concepts"][0]["title"] == "t"
+    body = r.json()
+    assert body["kind"] == "concepts" and isinstance(body["job_id"], int)
+
+
+def test_no_seed_enqueue_is_deduped(settings, store):
+    from chrgd.worker import enqueue_concepts
+
+    a = enqueue_concepts(store, seed="")
+    b = enqueue_concepts(store, seed="")
+    assert a == b  # a reopened page shouldn't stack idle concept runs
+    c = enqueue_concepts(store, seed="Andy Burnham just became PM")
+    assert c != a  # a seeded spin is always fresh
+
+
+def test_worker_handles_concepts_job(settings, store, monkeypatch):
+    # The worker handler runs generate_concepts and stores concepts in result.
+    import chrgd.concepts as cm
+
+    monkeypatch.setattr(
+        cm, "generate_concepts",
+        lambda s, se, seed="": {"concepts": [{"title": "t", "angle": "a"}], "seeded": bool(seed)},
+    )
+    from chrgd.worker import _handle_concepts
+
+    job_id = store.create_job("concepts", params={"seed": ""})
+    out = _handle_concepts(store, settings, store.get_job(job_id))
+    assert out["concepts"][0]["title"] == "t"

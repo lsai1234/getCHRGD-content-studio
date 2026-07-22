@@ -467,6 +467,17 @@ def _handle_lane_angles(store: Store, settings: Settings, job: dict) -> dict:
     return {"angles": [a.model_dump(mode="json") for a in angles]}
 
 
+def _handle_concepts(store: Store, settings: Settings, job: dict) -> dict:
+    """The concept engine, off the web request. The creative model can be slow
+    (a reasoning-class model + a rich prompt), so running it inside the HTTP
+    request meant the proxy dropped the connection. Here it runs in the worker
+    and the create screen polls the job — same pattern as builds/takes."""
+    from .concepts import generate_concepts
+
+    params = json.loads(job["params_json"] or "{}")
+    return generate_concepts(store, settings, seed=str(params.get("seed", "")))
+
+
 def _handle_moment_detail(store: Store, settings: Settings, job: dict) -> dict:
     """Dig into one broad moment → its specific current headlines."""
     from .trends import scout_moment_detail
@@ -548,6 +559,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "moment_detail": _handle_moment_detail,
     "lane_angles": _handle_lane_angles,
     "concept": _handle_concept,
+    "concepts": _handle_concepts,
     "run": _handle_run,
 }
 
@@ -608,6 +620,22 @@ def enqueue_concept(store: Store, idea_id: str, *, feedback: str = "") -> int:
     if existing:
         return existing["job_id"]
     return store.create_job("concept", idea_id=idea_id, params={"feedback": feedback})
+
+
+def enqueue_concepts(store: Store, *, seed: str = "") -> int:
+    """Kick a concept-engine run on the worker. Deduped for the no-seed
+    auto-load (a reopened page shouldn't stack runs); a seeded spin is always
+    fresh because the editor asked for it."""
+    if not seed.strip():
+        active = store.conn.execute(
+            "SELECT job_id FROM jobs WHERE kind = 'concepts' "
+            "AND status IN ('QUEUED','PROCESSING') "
+            "AND COALESCE(params_json,'{}') LIKE '%\"seed\": \"\"%' "
+            "ORDER BY job_id DESC LIMIT 1"
+        ).fetchone()
+        if active:
+            return int(active["job_id"])
+    return store.create_job("concepts", params={"seed": seed})
 
 
 def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:

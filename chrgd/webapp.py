@@ -1244,17 +1244,17 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.post("/api/concepts")
     def api_concepts(seed: str = Form(""), _: str = Depends(require_user)):
-        """The concept engine (the hero of Create): finished, varied, ready-to-
-        build post concepts made by the creative leap from the live pool (+ an
-        optional editor seed). Concept/text only — renders nothing, no image
-        spend. Never 500s: any failure returns an empty list to fall back on."""
-        from .concepts import generate_concepts
+        """Kick the concept engine on the worker and return a job_id to poll.
+
+        The creative model can be slow (reasoning-class), so running it inside
+        the web request meant the proxy dropped the connection. It now runs in
+        the background — same as builds/scans — and the create screen polls
+        /api/jobs/{id} for the concepts in result_json."""
+        from .worker import enqueue_concepts
 
         with _store(settings) as store:
-            try:
-                return generate_concepts(store, settings, seed=seed)
-            except Exception as exc:  # noqa: BLE001 — the studio is never a blocker
-                return {"concepts": [], "seeded": bool(seed.strip()), "error": str(exc)}
+            job_id = enqueue_concepts(store, seed=seed)
+        return {"job_id": job_id, "kind": "concepts"}
 
     @app.post("/api/jobs/moments")
     def api_job_moments(
