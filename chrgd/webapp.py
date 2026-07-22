@@ -1242,6 +1242,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             except Exception:  # noqa: BLE001 — the card is a bonus, never a blocker
                 return {"status": "warming", "pick": None, "alternates": []}
 
+    @app.post("/api/concepts")
+    def api_concepts(seed: str = Form(""), _: str = Depends(require_user)):
+        """The concept engine (the hero of Create): finished, varied, ready-to-
+        build post concepts made by the creative leap from the live pool (+ an
+        optional editor seed). Concept/text only — renders nothing, no image
+        spend. Never 500s: any failure returns an empty list to fall back on."""
+        from .concepts import generate_concepts
+
+        with _store(settings) as store:
+            try:
+                return generate_concepts(store, settings, seed=seed)
+            except Exception as exc:  # noqa: BLE001 — the studio is never a blocker
+                return {"concepts": [], "seeded": bool(seed.strip()), "error": str(exc)}
+
     @app.post("/api/jobs/moments")
     def api_job_moments(
         count: int = Form(6), kind: str = Form("moments"), _: str = Depends(require_user)
