@@ -377,6 +377,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         character: str = Form(""),
         motif: str = Form(""),
         swipe_style: str = Form("cohesive"),
+        supporting_cast: str = Form(""),
+        casting_intensity: str = Form("off"),
         character_image: UploadFile | None = File(None),
         remove_character_image: str = Form(""),
         _: str = Depends(require_user_page),
@@ -386,6 +388,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             brand_asset_dir,
             load_profile,
             save_profile,
+            validate_supporting_cast,
+        )
+
+        # Hard guardrail: refuse an unsafe casting direction at save time.
+        blocked = validate_supporting_cast(supporting_cast)
+        if blocked:
+            return RedirectResponse(
+                "/settings?flash=Casting+direction+rejected%3A+remove+%22"
+                f"{blocked}%22+%E2%80%94+adults+in+gymwear+only", 303
+            )
+        casting_intensity = (
+            casting_intensity if casting_intensity in ("off", "natural", "elevated")
+            else "off"
         )
 
         with _store(settings) as store:
@@ -402,6 +417,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 palette=palette, type_style=type_style, character=character,
                 character_image=portrait, motif=motif,
                 swipe_style="pan" if swipe_style == "pan" else "cohesive",
+                supporting_cast=supporting_cast, casting_intensity=casting_intensity,
             )
             save_profile(store, profile)
         return RedirectResponse(

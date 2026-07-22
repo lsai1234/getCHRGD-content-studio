@@ -133,6 +133,27 @@
         leading-edge — results vary by topic, so build one and check the swipe before committing to it.</p>
     </div>
 
+    <div class="set-card">
+      <h2>Casting <span class="k" style="font-weight:400;font-size:12px;color:var(--muted)">— who's in the shots &amp; how they read</span></h2>
+      <p class="sub">Aspirational, attractive casting lifts engagement on fitness content. This describes everyone who
+        <b>isn't</b> your one locked recurring person (they're freshly cast each post) and how far to lean into it.
+        Off by default — set the level to switch it on. It only changes the image prompt on the images you already
+        generate, so it costs nothing extra.</p>
+
+      <label>Attractiveness level</label>
+      <select name="casting_intensity">
+        <option value="off"      {{ 'selected' if profile.casting_intensity != 'natural' and profile.casting_intensity != 'elevated' }}>Off — no casting direction</option>
+        <option value="natural"  {{ 'selected' if profile.casting_intensity == 'natural' }}>Natural — fit, attractive, aspirational (recommended)</option>
+        <option value="elevated" {{ 'selected' if profile.casting_intensity == 'elevated' }}>Elevated — lean harder into it</option>
+      </select>
+
+      <label>Supporting cast <span class="k">— describe the fresh (non-locked) people</span></label>
+      <textarea name="supporting_cast" placeholder="e.g. aspirational UK gym women early-20s to late-20s, plus the odd fit lad — confident, gym-fit, in normal fitted training kit">{{ profile.supporting_cast }}</textarea>
+      <p class="sub" style="margin:6px 0 0">Guardrails are always enforced and can't be turned off: adults only, real gym setting in
+        fitted gymwear, candid/native (not glamour or an obvious ad), nothing TikTok or the image API would flag —
+        which is also what keeps the reach (overtly sexual content gets suppressed). Anything unsafe is rejected on save.</p>
+    </div>
+
     <div class="save-row">
       <button type="submit">Save settings</button>
       <span class="muted" style="font-size:12.5px">Applies to your next build &amp; render.</span>

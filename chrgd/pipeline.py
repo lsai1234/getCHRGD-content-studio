@@ -484,10 +484,24 @@ def creation_prefs(idea: Idea) -> dict:
         k: route[k]
         for k in (
             "style", "mechanic_lock", "concept_brief",
-            "length_pref", "moment", "take",
+            "length_pref", "moment", "take", "casting_intensity",
         )
         if k in route
     }
+
+
+def _build_extra_route(store: Store, idea: Idea) -> dict:
+    """Creation prefs to re-apply on a build, plus the profile's casting level
+    stamped in on the first build so the learning loop can bucket by it. Once
+    stamped it rides route_json, so creation_prefs carries it forward after."""
+    extra = creation_prefs(idea)
+    if "casting_intensity" not in extra:
+        from .profile import load_profile
+
+        ci = load_profile(store).casting_intensity.strip().lower()
+        if ci in ("natural", "elevated"):
+            extra = {**extra, "casting_intensity": ci}
+    return extra
 
 
 def parse_post(content: str) -> Post:
@@ -657,7 +671,7 @@ def build_ideas(
 
             total_spend += result.spend_usd
             if result.post is not None:
-                fields = build_fields_from_post(result.post, creation_prefs(idea))
+                fields = build_fields_from_post(result.post, _build_extra_route(store, idea))
                 if result.status is Status.done:
                     store.save_build(idea.idea_id, fields)
                 else:
@@ -753,7 +767,7 @@ def build_single_idea(
         return BuildResult(idea_id=idea_id, status=Status.queued, error=str(exc))
 
     if result.post is not None:
-        fields = build_fields_from_post(result.post, creation_prefs(idea))
+        fields = build_fields_from_post(result.post, _build_extra_route(store, idea))
         if result.status is Status.done:
             store.save_build(idea_id, fields)
         else:

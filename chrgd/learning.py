@@ -72,7 +72,9 @@ def _route(idea: Idea) -> dict:
 # left out of the skew search (hook is free text; style is now almost always
 # blank since the picker was removed). Pillar, engagement play and slide-count
 # bucket are the levers the rubric says actually drive reach.
-SKEW_TRAITS = ("category", "mechanic", "pillar", "engagement_play", "slide_count")
+SKEW_TRAITS = (
+    "category", "mechanic", "pillar", "engagement_play", "slide_count", "casting",
+)
 
 
 def _slide_bucket(idea: Idea) -> str:
@@ -108,6 +110,7 @@ def _traits(idea: Idea) -> dict:
         "pillar": _pillar(route),
         "engagement_play": route.get("engagement_play", ""),
         "slide_count": _slide_bucket(idea),
+        "casting": route.get("casting_intensity", ""),
         "hook": idea.hook or "",
     }
 

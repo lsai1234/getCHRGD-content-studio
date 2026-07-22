@@ -139,6 +139,31 @@ def test_new_traits_tracked_pillar_play_slidecount(store):
     assert "banter" in flop_vals and "comment" in flop_vals and "1-3 slides" in flop_vals
 
 
+def test_casting_tracked_as_a_learning_trait(store):
+    # Cast-on posts that consistently hit vs cast-off posts that flop — the
+    # loop should surface "casting" as a trait so the account can learn whether
+    # leaning into casting actually earns the reach.
+    def _post(idea_id, rating, casting):
+        store.add_idea(
+            Idea(
+                idea_id=idea_id, concept_note=idea_id,
+                route_json=json.dumps({"casting_intensity": casting}),
+            )
+        )
+        store.merge_metrics(idea_id, {"rating": rating})
+
+    _post("G-0001", "hit", "natural")
+    _post("G-0002", "hit", "natural")
+    _post("G-0003", "flop", "off")
+    _post("G-0004", "flop", "off")
+
+    d = insights(store)
+    hit_vals = {t["value"] for t in d["hit_traits"]}
+    flop_vals = {t["value"] for t in d["flop_traits"]}
+    assert "natural" in hit_vals
+    assert "off" in flop_vals
+
+
 def test_scroll_calibration_counts_agreement(store):
     from chrgd.learning import scroll_calibration
 

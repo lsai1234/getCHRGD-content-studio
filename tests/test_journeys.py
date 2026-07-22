@@ -2071,6 +2071,53 @@ def test_settings_page_saves_and_reloads_profile(client, settings):
     assert "one battered kettlebell" in client.get("/settings").text
 
 
+def test_settings_saves_casting_lever(client, settings):
+    r = client.post("/settings", data={
+        "brand_name": "CHRGD",
+        "casting_intensity": "natural",
+        "supporting_cast": "aspirational UK gym women in their 20s",
+    }, follow_redirects=False)
+    assert r.status_code == 303
+
+    from chrgd.profile import load_profile
+    with Store(settings.db_path) as store:
+        p = load_profile(store)
+    assert p.casting_intensity == "natural"
+    assert p.supporting_cast == "aspirational UK gym women in their 20s"
+
+
+def test_settings_rejects_unsafe_casting_direction(client, settings):
+    r = client.post("/settings", data={
+        "brand_name": "CHRGD",
+        "casting_intensity": "elevated",
+        "supporting_cast": "teen girls in lingerie",
+    }, follow_redirects=False)
+    # Rejected on save — bounced back with a flash, nothing persisted.
+    assert r.status_code == 303
+    assert "flash" in r.headers.get("location", "")
+
+    from chrgd.profile import load_profile
+    with Store(settings.db_path) as store:
+        p = load_profile(store)
+    assert p.supporting_cast == ""
+    assert p.casting_intensity == "off"
+
+
+def test_build_stamps_casting_intensity_from_profile(settings, store):
+    from chrgd.profile import BrandProfile, save_profile
+
+    save_profile(store, BrandProfile(
+        brand_name="CHRGD", casting_intensity="natural",
+        supporting_cast="aspirational UK gym women",
+    ))
+    store.add_idea(Idea(idea_id="G-0001", concept_note="x"))
+    build_single_idea(store, settings, "G-0001", client=FakeChat([good_post()]))
+    route = json.loads(store.get_idea("G-0001").route_json)
+    # The build stamps the profile's casting level onto the post so the
+    # learning loop can compare cast-on vs cast-off outcomes later.
+    assert route["casting_intensity"] == "natural"
+
+
 def test_brand_profile_blocks_render_and_stay_inert_when_empty():
     from chrgd.profile import (
         BrandProfile, profile_engine_block, profile_style_block,

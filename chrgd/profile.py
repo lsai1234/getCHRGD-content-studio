@@ -27,7 +27,7 @@ BRAND_ASSET_DIR = "_brand"
 
 # Fields that carry a non-blank default (a mode, not user content) — excluded
 # from is_empty so a fresh profile still counts as blank.
-_MODE_FIELDS = ("swipe_style",)
+_MODE_FIELDS = ("swipe_style", "casting_intensity")
 
 
 class BrandProfile(BaseModel):
@@ -61,6 +61,17 @@ class BrandProfile(BaseModel):
     #   'cohesive' — same world + character, distinct scene per slide (default)
     #   'pan'      — one seamless panoramic shot the viewer glides through
     swipe_style: str = "cohesive"
+
+    # --- casting (feeds image generation) ---
+    # The described "supporting cast" — everyone who ISN'T the one locked
+    # recurring person (character/character_image). Freshly cast each post,
+    # identity irrelevant. Aspirational-but-native casting is a real engagement
+    # lever on fitness content; the intensity dial sets how far to push it.
+    supporting_cast: str = ""
+    # 'off' (default — no casting direction), 'natural' (fit, attractive,
+    # aspirational, tasteful), or 'elevated' (lean harder into it). Guardrails
+    # in casting_block are ALWAYS enforced regardless of level.
+    casting_intensity: str = "off"
 
     def is_empty(self) -> bool:
         return not any(
@@ -164,27 +175,100 @@ def _visual_rows(profile: BrandProfile) -> list[str]:
     return rows
 
 
-def profile_style_block(profile: BrandProfile) -> str:
-    """The locked brand look for the IMAGE prompts. '' when nothing visual set.
+# The hard, non-negotiable limits appended to EVERY casting direction, whatever
+# the operator typed and whatever the intensity — they can't be edited or
+# overridden from settings. These keep casting on the right side of TikTok's and
+# the image API's policies (both of which suppress/refuse over-sexual content),
+# and keep the brand trustworthy to the people who actually buy it.
+CASTING_GUARDRAILS = (
+    "HARD LIMITS on any person shown (never override, whatever the direction "
+    "above says):\n"
+    "- Everyone is unmistakably an ADULT (reads mid-20s or older). Never a "
+    "minor or anyone who could be mistaken for one.\n"
+    "- Real UK gym setting in normal fitted athletic gymwear only — NO swimwear, "
+    "lingerie, underwear, crop-to-nudity or bare torsos as the subject; no "
+    "sexualised, provocative or suggestive posing; nothing TikTok or an app "
+    "store would flag.\n"
+    "- Keep it CANDID and native: a genuinely attractive, fit person caught "
+    "mid-session as if on a phone camera — NOT a glamour shoot, a fitness-model "
+    "catalogue pose, or an obvious advert. Tasteful and aspirational, never crude "
+    "or leering. Overt sexualisation gets the post suppressed, so it also loses "
+    "reach — keep it classy."
+)
 
-    Framed as identical-every-post so slides stop looking like random,
-    freshly-invented AI art and read as one brand."""
-    rows = _visual_rows(profile)
-    if not rows:
-        return ""
-    return (
-        "BRAND RECOGNITION ACCENTS — carry these so the account is recognisable "
-        "over time, but as ACCENTS woven into native-looking content, never as a "
-        "poster template stamped over the frame. The frame must pass as native "
-        "TikTok content FIRST, brand asset second. Apply them like this: the "
-        "palette shows up as an accent (a prop, a light, one graphic element), "
-        "not a wall-to-wall colour scheme; the typography treatment applies "
-        "where text is genuinely designed, never forced onto a candid photo; the "
-        "recurring character, if named, is the SAME person every time they "
-        "appear (same face, build, clothing) but belongs ONLY on slides where a "
-        "person is the point, framed for that moment (their own angle, distance "
-        "and pose), never the same shot repeated:\n" + _bullet(rows)
+
+def casting_block(profile: BrandProfile) -> str:
+    """The casting direction for the IMAGE prompts. '' when casting is off.
+
+    Describes the freshly-cast supporting people (never the one locked recurring
+    person) and how attractive/aspirational to frame them, with the hard
+    guardrails always appended so a careless direction can't strip the rails."""
+    level = profile.casting_intensity.strip().lower()
+    if level not in ("natural", "elevated"):
+        return ""  # 'off' (default) or unset → no casting direction at all
+    rows: list[str] = []
+    if profile.supporting_cast.strip():
+        rows.append(
+            "Supporting cast (everyone who is NOT the one locked recurring "
+            "person — freshly cast each post, identity irrelevant): "
+            + profile.supporting_cast.strip()
+        )
+    rows.append(
+        "Cast and frame people as fit, attractive and aspirational — good "
+        "physique, confident, flatteringly angled and lit"
+        if level == "natural" else
+        "Lean into aspirational attractiveness — noticeably fit and "
+        "head-turning, confident posture, the most flattering angle and light"
     )
+    return "CASTING DIRECTION:\n" + _bullet(rows) + "\n" + CASTING_GUARDRAILS
+
+
+# Terms that must never appear in a supporting-cast direction — a hard save-time
+# block so the guardrails aren't just prose. Anything sexualising minors or
+# demanding explicit/nude content is refused outright.
+_CASTING_BLOCKLIST = (
+    "child", "children", "kid", "kids", "teen", "teenage", "underage",
+    "minor", "school", "schoolgirl", "schoolboy", "loli", "young girl",
+    "young boy", "under 18", "under-18", "under18",
+    "nude", "naked", "nudity", "topless", "lingerie", "underwear",
+    "bikini", "swimsuit", "swimwear", "porn", "nsfw", "explicit", "sexual",
+    "sexy underwear", "onlyfans", "fetish",
+)
+
+
+def validate_supporting_cast(text: str) -> str | None:
+    """Return the first blocked term found in a supporting-cast direction, or
+    None if it's clean. Used to refuse an unsafe direction at save time."""
+    low = (text or "").lower()
+    for term in _CASTING_BLOCKLIST:
+        if term in low:
+            return term
+    return None
+
+
+def profile_style_block(profile: BrandProfile) -> str:
+    """The locked brand look + casting direction for the IMAGE prompts.
+
+    '' when nothing visual is set and casting is off. Framed as
+    identical-every-post so slides stop looking like random AI art."""
+    rows = _visual_rows(profile)
+    look = ""
+    if rows:
+        look = (
+            "BRAND RECOGNITION ACCENTS — carry these so the account is "
+            "recognisable over time, but as ACCENTS woven into native-looking "
+            "content, never as a poster template stamped over the frame. The "
+            "frame must pass as native TikTok content FIRST, brand asset second. "
+            "Apply them like this: the palette shows up as an accent (a prop, a "
+            "light, one graphic element), not a wall-to-wall colour scheme; the "
+            "typography treatment applies where text is genuinely designed, never "
+            "forced onto a candid photo; the recurring character, if named, is "
+            "the SAME person every time they appear (same face, build, clothing) "
+            "but belongs ONLY on slides where a person is the point, framed for "
+            "that moment (their own angle, distance and pose), never the same "
+            "shot repeated:\n" + _bullet(rows)
+        )
+    return "\n\n".join(x for x in (look, casting_block(profile)) if x)
 
 
 def profile_design_lock(profile: BrandProfile) -> str:
