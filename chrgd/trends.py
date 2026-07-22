@@ -268,6 +268,32 @@ about passes.) There is NO quota: return three genuinely huge moments rather
 than six padded with niche events — every weak inclusion costs the editor a
 wasted post.
 
+THE "IS IT ACTUALLY LIVE?" GATE (apply before anything else): a date on the
+calendar is NOT a live moment. The moment must be genuinely happening NOW or
+within the next 7-10 days — something the UK is talking about THIS week. If it's
+weeks or months away, CUT IT, no matter how big it is (a World Cup that's four
+months out is not today's post). Sanity-check the actual date before you include
+anything seasonal or annual.
+
+NO GENERIC AWARENESS-DAY / HERITAGE-MONTH FILLER. Awareness days, weeks and
+months (Black History Month, Pride, Mental Health Awareness Week, Earth Day,
+International Women's Day, World Book Day, and the rest) are the classic content
+trap: they're a calendar entry, not a moment people are actually buzzing about,
+and a gym/supplement brand posting a bland "a celebration of X" carousel reads
+as hollow corporate box-ticking — low reach AND a brand risk. REJECT them by
+default. Include one ONLY if BOTH are true: (a) it is genuinely live this exact
+week, and (b) you have a sharp, specific, non-obvious, unmistakably-gym angle
+that a scrappy brand chasing virality would actually post — never a generic
+"various events and activities" summary. When in doubt, cut it and find a real
+moment instead.
+
+THINK OUTSIDE THE BOX. The safe, obvious, everyone-else-is-posting-it moment is
+the worst pick — it's invisible in a sea of identical brand posts. Favour the
+sharp, specific, slightly-unexpected angle a cynical 18-30 UK gym viewer would
+actually stop for: the overlooked detail, the contrarian read, the oddly-timed
+niche thing that's blowing up. If the strongest thing you can find is a generic
+calendar holiday, that is a sign to dig harder, not to settle.
+
 For EACH moment, propose 2-3 ready-to-build content angles for a gym/supplement
 audience: usually one practical/advice angle (genuinely useful, e.g. "how to
 survive the 3am kick-off"), one funny/relatable angle, and one natural product

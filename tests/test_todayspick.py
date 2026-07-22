@@ -119,6 +119,17 @@ def test_out_of_range_pick_index_falls_back(store, settings):
     assert out["pick"]["title"] == "only one"
 
 
+def test_selector_is_steered_off_calendar_filler(store, settings):
+    # The selection prompt must tell the strategist to reject generic
+    # awareness-day / heritage-month filler and think outside the box — the
+    # backstop for the Black-History-Month-in-July suggestion.
+    from chrgd.todayspick import SELECT_SYSTEM
+
+    assert "REJECT generic calendar filler" in SELECT_SYSTEM
+    assert "Black History Month" in SELECT_SYSTEM
+    assert "outside the box" in SELECT_SYSTEM
+
+
 def test_endpoint_warming_when_cold(settings):
     c = TestClient(create_app(settings))
     c.post("/login", data={"username": "admin", "password": "s3cret"})

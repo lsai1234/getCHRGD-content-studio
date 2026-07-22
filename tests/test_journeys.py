@@ -1228,6 +1228,12 @@ def test_moments_scout_has_hard_awareness_bar(settings):
     assert "NO quota" in fake.system
     # angles must keep the moment as the star, not a product post in a hat
     assert "the MOMENT stays the star" in fake.system
+    # It must reject stale/calendar filler: a date isn't a live moment, and
+    # awareness/heritage months (the Black-History-Month-in-July trap) are out
+    # unless genuinely live now with a sharp gym angle.
+    assert "IS IT ACTUALLY LIVE?" in fake.system
+    assert "AWARENESS-DAY" in fake.system and "Black History Month" in fake.system
+    assert "OUTSIDE THE BOX" in fake.system
 
 
 def test_engine_prompt_gains_relatability_and_density_rules():

@@ -166,6 +166,8 @@ You are shown a numbered list of REAL story candidates already scouted today (li
 Rules:
 - Pick ONLY from the numbered candidates — reference them by their exact index. Never invent a story that isn't listed.
 - Favour a live, specifically-UK moment a stranger would already feel, on-pillar, and matching what has hit for this account. A timeless evergreen fact is a weaker "today" pick than a moment that's live right now.
+- REJECT generic calendar filler. An awareness day/week/month or heritage month (Black History Month, Pride, Mental Health Awareness Week, Earth Day, and the rest) or any bland "a celebration of X with various events" entry is the WORST pick — it's what every corporate account posts, it's invisible, and for a gym/supplement brand it reads as hollow box-ticking. Only ever choose one if it's genuinely live this week AND carries a sharp, specific, unmistakably-gym angle. Otherwise pick a real, sharper candidate instead — even a good evergreen fact or a trending format beats a dead calendar holiday.
+- Think outside the box: favour the specific, slightly-unexpected, thumb-stopping angle a cynical 18-30 UK gym viewer would actually stop for, not the safe obvious one.
 - Frame slide 1 concretely (slide 1 is ~90% of reach): the opener idea AND what the image shows. Keep it native — a candid phone photo / screenshot / meme, never an advert.
 
 Return a SINGLE JSON object, no markdown, no commentary:
