@@ -25,6 +25,7 @@ so tests run offline with no key.
 from __future__ import annotations
 
 import json
+import logging
 
 from pydantic import BaseModel, ValidationError
 
@@ -258,5 +259,10 @@ def generate_concepts(
             ],
             "seeded": bool(seed.strip()),
         }
-    except (ConceptError, ValidationError, json.JSONDecodeError) as exc:
+    except Exception as exc:  # noqa: BLE001 — best-effort feature, never a blocker
+        # Catch broadly (LLM SDK errors, parse errors, anything) so the screen
+        # always gets a clean, readable reason instead of a 500. Logged so the
+        # real cause is visible server-side, and returned so the operator (this
+        # is a single-user internal tool) can see it too.
+        logging.getLogger(__name__).warning("concept engine failed: %s", exc)
         return {"concepts": [], "seeded": bool(seed.strip()), "error": str(exc)}

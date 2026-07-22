@@ -982,11 +982,15 @@ function spinFromSeed(){
 
 function renderConceptsEmpty(data){
   const list = document.getElementById('concept-list');
-  const msg = (data && data.error)
+  const headline = (data && data.error)
     ? "Couldn't reach the idea engine just now."
     : "No concepts came back — try a fresh set, drop your own spark in the box, or dig the raw feeds below.";
+  // Internal single-user tool: show the real reason so it can be diagnosed.
+  const detail = (data && data.error)
+    ? `<p class="concept-src" style="margin:0 0 10px; white-space:pre-wrap">${esc(data.error)}</p>` : '';
   list.innerHTML =
-    `<div class="concept"><p class="concept-why" style="margin:0 0 10px">${esc(msg)}</p>
+    `<div class="concept"><p class="concept-why" style="margin:0 0 8px">${esc(headline)}</p>
+       ${detail}
        <button type="button" class="chip" onclick="loadConcepts(true)">↻ Try again</button></div>`;
 }
 
