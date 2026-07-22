@@ -109,11 +109,37 @@ def test_bad_json_degrades_to_empty(store, settings):
 
 def test_system_prompt_encodes_the_creative_leap():
     # The prompt is what the operator signs off — assert the north-star rules.
-    assert "make the creative LEAP" in CONCEPT_SYSTEM or "creative LEAP" in CONCEPT_SYSTEM
+    assert "creative LEAP" in CONCEPT_SYSTEM
     assert "Burnham" in CONCEPT_SYSTEM              # the worked example
     assert "GROUND THE FACTS, INVENT THE ANGLE" in CONCEPT_SYSTEM
     assert "VARY the flavour" in CONCEPT_SYSTEM     # not rigid lanes
     assert "awareness-day" in CONCEPT_SYSTEM        # no calendar filler
+
+
+def test_system_prompt_is_grounded_in_real_engagement_mechanics():
+    # Not "be clever" hand-waving — the actual named drivers of why things spread,
+    # a real comedy/interest craft section, and a self-audit that kills lazy takes.
+    assert "WHY THINGS ACTUALLY SPREAD" in CONCEPT_SYSTEM
+    for driver in ("CURIOSITY GAP", "HIGH-AROUSAL EMOTION", "SOCIAL CURRENCY",
+                   "IDENTITY / TRIBE", "COMMENT WAR"):
+        assert driver in CONCEPT_SYSTEM
+    assert "FUNNY, DONE PROPERLY" in CONCEPT_SYSTEM
+    assert "INTERESTING, DONE PROPERLY" in CONCEPT_SYSTEM
+    assert "SELF-AUDIT" in CONCEPT_SYSTEM
+    assert "DELETE" in CONCEPT_SYSTEM              # it must bin the ones that don't land
+
+
+def test_concepts_are_grounded_in_brand_evidence(store, settings, monkeypatch):
+    # The engine stands on the brand's own voice/examples + proven shapes, not a
+    # blank slate — so the leaps sound like CHRGD, not generic AI banter.
+    import chrgd.concepts as cm
+
+    monkeypatch.setattr(cm, "load_brand_bible", lambda: "GOLD EXAMPLE: dry UK lifter voice", raising=False)
+    monkeypatch.setattr("chrgd.pipeline.load_brand_bible", lambda: "GOLD EXAMPLE: dry UK lifter voice")
+    gen = _FakeGen({"concepts": [{"title": "x", "angle": "y"}]})
+    generate_concepts(store, settings, generator=gen)
+    assert "GOLD-STANDARD EXAMPLES" in gen.user
+    assert "GOLD EXAMPLE: dry UK lifter voice" in gen.user
 
 
 def test_endpoint_returns_concepts(settings, store, monkeypatch):

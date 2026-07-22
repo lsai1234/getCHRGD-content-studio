@@ -73,7 +73,30 @@ More in that spirit:
 
 Draw from a MIXED pool and VARY the flavour across the set — a topical take, a surprising stat, a hot take, a lived observation. Never return four of the same shape, and never lead with the safe, obvious, everyone-else-is-posting-it idea.
 
-What actually performs (bake one in per concept): a real curiosity gap, instant self-recognition ("that's me / that's my mate"), a fight worth having in the comments, a genuinely surprising number, or a bold opinion people will want to argue with. Slide 1 is ~90% of reach, so the hook must be concrete and thumb-stopping — a named situation, an exact number or time — never a vague blog title.
+WHY THINGS ACTUALLY SPREAD — this is not vibes, it's mechanics. Every concept must be built on AT LEAST ONE of these real drivers, and you must be able to name which. A post that hits none of them dies in the feed, no matter how "nice" it is:
+- CURIOSITY GAP: open a specific question in the viewer's head they NEED closed, that only swiping answers ("your real odds of a free 6pm squat rack" — you HAVE to see slide 2). A gap is specific; "gym tips" opens no gap.
+- HIGH-AROUSAL EMOTION: the emotions that get shared are high-energy — real laughter, righteous anger, "OMG that's so me", awe at a mad number, indignation. Low-arousal (mild interest, gentle positivity) does NOT travel. Aim for a genuine spike, not a nod.
+- SOCIAL CURRENCY: reposting it must make the SHARER look good — funny, in-the-know, smart, right. "If I share this, what does it say about me?" needs a good answer.
+- IDENTITY / TRIBE: it lets the viewer plant a flag — "this is my kind of gym", "this is us", "this is what we think". People share what signals who they are.
+- SELF-RECOGNITION → THE TAG: "that's literally me / that's Dave" makes them tag Dave in the comments. The more SPECIFIC the behaviour, the harder the tag.
+- A SIDE TO TAKE → THE COMMENT WAR: a real, defensible opinion people will argue over. Never a lie — a take the brand can genuinely stand behind, sharp enough to split the room.
+
+FUNNY, DONE PROPERLY (if a concept is comedy it has to actually be funny — not just "gym-humour flavoured"):
+- SPECIFICITY is the joke. "The bloke who re-racks the 8kg dumbbells with a grunt" is funny; "annoying gym people" is not. Name the exact detail.
+- INCONGRUITY / SUBVERSION: set an expectation, then snap it — the twist is the laugh.
+- RECOGNITION: it lands because it's TRUE and nobody's said it out loud.
+- Exaggerate to the logical extreme, or play it deadpan. Punch UP (at the industry, the fads, ourselves) — NEVER down at the viewer.
+- If you can't say WHY it's funny in one line, it isn't. Bin it.
+
+INTERESTING, DONE PROPERLY (if it's a stat / fact / idea):
+- COUNTERINTUITIVE beats true-but-obvious — the best fact violates what people assume.
+- CONCRETE beats abstract — a specific number, time or name sticks; a rounded generality evaporates.
+- THE REFRAME: take something everyone knows and turn it 45 degrees so they go "I never thought about it like that".
+- It must be plausibly TRUE and claim-safe. A fake or dodgy stat is a brand risk, not a win.
+
+Slide 1 is ~90% of reach, so the hook must be concrete and thumb-stopping — a named situation, an exact number or time — never a vague blog title.
+
+THE SELF-AUDIT (run this on EVERY concept before you return it — this is the step that kills lazy, random takes). Silently answer for each: (1) which spread-driver above does it hit? (2) if it's meant to be funny, what is the actual joke in one line — and if it's meant to be interesting, what is the exact question or surprise? (3) would a cynical, hard-to-impress 18-30 UK gym-goer GENUINELY stop and react, or would they scroll past? If you can't answer (1) and (2), or the honest answer to (3) is "scroll", DELETE the concept and build a better one. Only return concepts that survive this. The `why` field must state the driver plus the joke/surprise — not a generic "this will perform well".
 
 Hard rules:
 - GROUND THE FACTS, INVENT THE ANGLE. Any topical/event concept must be based on the REAL live signal provided or the editor's seed — never invent news, fake fixtures or fake results. The leap (the gym angle) is yours to invent; the underlying fact is not. Stat/observation/hot-take concepts can come from real gym truth, but any number you cite must be plausibly true and claim-safe.
@@ -88,7 +111,7 @@ Return a SINGLE JSON object, no markdown, no commentary:
       "flavour": "topical | stat | hot_take | observation",
       "title": "the concept in one punchy line — the leap itself",
       "hook": "the slide-1 opener a scroller sees first (concrete, thumb-stopping)",
-      "why": "one line: why this will actually perform",
+      "why": "the SPECIFIC spread-driver it hits + the actual joke or surprise (not 'this will perform well')",
       "angle": "what to build — one clear line the carousel is written from",
       "source": "the real signal or seed this sprang from (or '' for an evergreen idea)"
     }
@@ -129,6 +152,32 @@ def _fuel(store: Store, seed: str) -> str:
             "observation concepts from real UK gym truth."
         )
     return "\n".join(lines)
+
+
+def _evidence(store: Store) -> str:
+    """The real 'what works' base the concepts must stand on — the brand's own
+    voice + gold-standard examples, the proven viral shapes, and THIS account's
+    actual hit/flop history. This is what stops it inventing in a vacuum and
+    keeps the leaps in CHRGD's voice, not generic AI banter."""
+    from .learning import performance_notes
+    from .pipeline import load_brand_bible, load_playbook
+
+    parts: list[str] = []
+    bible = load_brand_bible()
+    if bible:
+        parts.append(
+            "BRAND VOICE + GOLD-STANDARD EXAMPLES (match this exact voice and this "
+            "level of craft — imitate the how, not the topics):\n" + bible
+        )
+    playbook = load_playbook()
+    if playbook:
+        parts.append(
+            "PROVEN VIRAL SHAPES (anchor concepts in these where they fit):\n" + playbook
+        )
+    notes = performance_notes(store)  # '' until this account has real results
+    if notes:
+        parts.append(notes)
+    return "\n\n".join(parts)
 
 
 def _steering(store: Store) -> str:
@@ -188,12 +237,18 @@ def generate_concepts(
             from .pipeline import OpenAIChatClient
 
             generator = OpenAIChatClient(settings)  # creative model, high temp
-        user = (
-            _fuel(store, seed)
-            + "\n\n"
-            + _steering(store)
-            + f"\n\nManufacture up to {count} finished, varied, ready-to-build "
-            "concepts. Make the creative leap on each. Return the JSON object."
+        tail = (
+            f"Manufacture up to {count} finished, varied, ready-to-build concepts. "
+            "Make the creative leap on each, then run the SELF-AUDIT and drop any "
+            "that don't survive it. Return the JSON object."
+        )
+        user = "\n\n".join(
+            block for block in (
+                _fuel(store, seed),
+                _evidence(store),
+                _steering(store),
+                tail,
+            ) if block
         )
         result = generator.complete(CONCEPT_SYSTEM, user)
         concepts = _parse_concepts(result.content, count)
