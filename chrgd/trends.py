@@ -651,6 +651,16 @@ _HEADLINES_ONLY_SUFFIX = (
 )
 
 
+def _with_uk_spine(system: str) -> str:
+    """Append the UK market pack to a discovery system prompt (Bet 2), so the
+    scout scouts UK-native. Concatenated (not .format-ed) so the pack's £/&
+    characters never hit a format pass."""
+    from .uk import uk_context_block
+
+    spine = uk_context_block()
+    return system + "\n\n" + spine if spine else system
+
+
 def scout_discover(
     settings: Settings,
     kind: str = "moments",
@@ -670,7 +680,18 @@ def scout_discover(
     ask = _DISCOVER_ASKS[kind].format(count=count)
     if headlines_only:
         ask += _HEADLINES_ONLY_SUFFIX
-    result = parse_moments(client.search(_DISCOVER_PROMPTS[kind], ask))
+    system = _with_uk_spine(_DISCOVER_PROMPTS[kind])
+    # The moments lane opens knowing what week it is in Britain (Bet 2): the
+    # curated cultural calendar seeds the season so the scan spends its search
+    # budget on the specific live detail, not on rediscovering that it's, say,
+    # Six Nations weekend.
+    if kind == "moments":
+        from .uk import uk_calendar_seed
+
+        seed = uk_calendar_seed()
+        if seed:
+            ask += "\n\n" + seed
+    result = parse_moments(client.search(system, ask))
     result.moments = result.moments[:count]
     return result
 
@@ -698,7 +719,7 @@ def generate_lane_angles(
         "moment — this exact story — carrying the angles.\n\n"
         f"Story: {title.strip()}\n" + (f"Context: {why.strip()}\n" if why.strip() else "")
     )
-    result = parse_moments(client.search(_DISCOVER_PROMPTS[kind], ask))
+    result = parse_moments(client.search(_with_uk_spine(_DISCOVER_PROMPTS[kind]), ask))
     angles = result.moments[0].angles if result.moments else []
     return angles[:count]
 

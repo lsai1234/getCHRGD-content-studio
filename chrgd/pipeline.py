@@ -245,6 +245,12 @@ def engine_base() -> str:
             "these precedents, or in the live trend the seed carries)\n\n"
             + playbook
         )
+    # UK market spine — every reasoning call writes UK-native (Bet 2).
+    from .uk import uk_context_block
+
+    spine = uk_context_block()
+    if spine:
+        base += "\n---\n\n# " + spine
     return base
 
 

@@ -1229,6 +1229,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 pass
         return payload
 
+    @app.get("/api/todays-pick")
+    def api_todays_pick(_: str = Depends(require_user)):
+        """Today's single strongest pick from the already-warmed lane scans
+        (Bet 3). Concept/text only — reuses scans, renders nothing, no spend.
+        Never 500s the create screen: any failure degrades to 'warming'."""
+        from .todayspick import todays_pick
+
+        with _store(settings) as store:
+            try:
+                return todays_pick(store, settings)
+            except Exception:  # noqa: BLE001 — the card is a bonus, never a blocker
+                return {"status": "warming", "pick": None, "alternates": []}
+
     @app.post("/api/jobs/moments")
     def api_job_moments(
         count: int = Form(6), kind: str = Form("moments"), _: str = Depends(require_user)

@@ -74,6 +74,28 @@
   .optgrid .opt .t { font-size: 13.5px; }
   @media (max-width: 560px) { .optgrid { grid-template-columns: 1fr; } }
 
+  /* Today's pick — the ready recommendation the app opens on (Bet 3) */
+  .pick-card { border: 1px solid var(--accent-line); border-radius: 16px; padding: 16px 17px;
+               margin: 0 0 14px; background: linear-gradient(180deg, var(--accent-tint), var(--panel));
+               box-shadow: var(--sh-1); }
+  .pick-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+                  color: var(--accent); margin: 0 0 6px; display: flex; align-items: center; gap: 7px; }
+  .pick-lane { font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+  .pick-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 5px; line-height: 1.25; }
+  .pick-why { font-size: 13px; color: var(--muted); margin: 0 0 10px; line-height: 1.45; }
+  .pick-slide1 { font-size: 12.5px; line-height: 1.5; background: var(--raise); border: 1px solid var(--line);
+                 border-radius: 10px; padding: 9px 11px; margin: 0 0 8px; }
+  .pick-slide1 b { color: var(--fg); } .pick-slide1 .lbl { color: var(--accent); font-weight: 700; }
+  .pick-cast { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .pick-actions { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+  .pick-build { min-height: 44px; padding: 11px 20px; border-radius: 12px; border: none; cursor: pointer;
+                background: var(--accent); color: #111; font: inherit; font-weight: 700; font-size: 14px; }
+  .pick-build:hover { filter: brightness(1.06); }
+  .pick-more { background: transparent; border: none; color: var(--muted); font: inherit; font-size: 12.5px;
+               cursor: pointer; min-height: 44px; padding: 0 6px; }
+  .pick-more:hover { color: var(--fg); }
+  .pick-alts { margin: 10px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+
   /* small pill chips (quick picks / toggles) */
   .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .chip { background: transparent; border: 1px solid var(--line); color: var(--muted);
@@ -283,6 +305,11 @@
     <p class="eyebrow">Create</p>
     <h2>What are we making today?</h2>
     <p class="hint">Start here — you can amend everything later.</p>
+
+    <!-- Today's pick (Bet 3): the app opens on ONE ready recommendation, chosen
+         from the lanes already warmed on open. Hidden until it's ready; the hero
+         door below is always the fallback. -->
+    <div id="todays-pick" class="pick-card" style="display:none"></div>
 
     <!-- The default: one tap into what's hot (big moments, trending, facts,
          ragebait) on whichever lane you used last. -->
@@ -894,6 +921,72 @@ async function warmLanes(){
         post('/api/jobs/moments', new URLSearchParams({kind: l}));
     } catch (e) { /* warming is best-effort */ }
   }
+}
+
+// Today's pick (Bet 3): open on ONE ready recommendation drawn from the lanes
+// warmed above — concept-level, no render. Best-effort: on 'warming' or any
+// error the card stays hidden and the hero door remains the way in. If scans
+// are still warming on first open, retry a couple of times as they land.
+let pickTries = 0;
+async function loadTodaysPick(){
+  let data;
+  try { data = await (await fetch('/api/todays-pick')).json(); }
+  catch (e) { return; }
+  if (!data || data.status !== 'ready' || !data.pick) {
+    if (data && data.status === 'warming' && pickTries++ < 3)
+      setTimeout(loadTodaysPick, 4000);   // scans still landing — try again shortly
+    return;
+  }
+  renderTodaysPick(data);
+}
+
+function pickBuildRow(p, primary){
+  // One tap → the existing moment-use build path, carrying the shaped angle as
+  // a custom angle on the real scan job (no new scan, no extra render).
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = primary ? 'pick-build' : 'chip';
+  b.textContent = primary ? '⚡ Build this' : '⚡ Build';
+  b.onclick = () => useCustomMoment(p.job_id, p.moment, p.build_angle || p.title, false);
+  return b;
+}
+
+function renderTodaysPick(data){
+  const p = data.pick;
+  const card = document.getElementById('todays-pick');
+  const slide1 = p.slide1_concept
+    ? `<div class="pick-slide1"><span class="lbl">SLIDE 1</span> ${esc(p.slide1_concept)}</div>` : '';
+  const cast = p.cast ? `<p class="pick-cast">🎬 Cast: ${esc(p.cast)}</p>` : '';
+  card.innerHTML =
+    `<p class="pick-eyebrow">🎯 Today's pick <span class="pick-lane">· ${esc(p.lane)}</span></p>
+     <p class="pick-title">${esc(p.title)}</p>
+     ${p.why_today ? `<p class="pick-why">${esc(p.why_today)}</p>` : ''}
+     ${slide1}${cast}
+     <div class="pick-actions">
+       <span data-slot="build"></span>
+       ${data.alternates && data.alternates.length
+          ? '<button type="button" class="pick-more" id="pick-more-btn">Show me a couple more ›</button>' : ''}
+     </div>
+     <div class="pick-alts" id="pick-alts" style="display:none"></div>`;
+  card.querySelector('[data-slot="build"]').replaceWith(pickBuildRow(p, true));
+  if (data.alternates && data.alternates.length) {
+    const box = card.querySelector('#pick-alts');
+    data.alternates.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'angle-chip';
+      row.innerHTML = `<b>${esc(a.title)}</b>
+        <span class="a-hook pick-lane" style="text-transform:uppercase">${esc(a.lane)}</span>
+        <div class="angle-actions"><span data-slot="alt"></span></div>`;
+      row.querySelector('[data-slot="alt"]').replaceWith(pickBuildRow(a, false));
+      box.appendChild(row);
+    });
+    card.querySelector('#pick-more-btn').onclick = ev => {
+      const open = box.style.display !== 'none';
+      box.style.display = open ? 'none' : '';
+      ev.target.textContent = open ? 'Show me a couple more ›' : 'Fewer ‹';
+    };
+  }
+  card.style.display = '';
 }
 
 function switchLane(l){
@@ -2189,6 +2282,7 @@ if (RESUME_IDEA) {
 } else {
   show('source');
   warmLanes();  // start the radar scans now, before a door is even picked
+  loadTodaysPick();  // and surface today's ready pick from whatever's warmed
   if (PRESET_DAY) {
     document.getElementById('preset-day-note').style.display = '';
     document.getElementById('preset-day-label').textContent = PRESET_DAY;

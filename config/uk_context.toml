@@ -1,0 +1,69 @@
+# The UK market spine (Bet 2). CHRGD is UK-only for now, so Britain is
+# hardcoded here rather than modelled as one of several configurable markets —
+# expansion is a "cross it later" bridge, not a thing to engineer today.
+#
+# Two jobs:
+#   [context]   — a market pack threaded into every discovery scan, every take
+#                 and the build, so the engine reasons UK-native (named gyms, £
+#                 prices, GMT/BST, British spelling) instead of drifting American.
+#   [[calendar]]— recurring British cultural beats, each with a rough month-day
+#                 window, seeded into the MOMENTS scan BEFORE web search so it
+#                 opens knowing what week it is in Britain instead of paying a
+#                 scan to rediscover the season. It seeds CONTEXT, not live
+#                 fixtures — the scan still web-searches for the exact result.
+#
+# Edit freely: this is a curated knowledge file, not code.
+
+[context]
+market   = "United Kingdom — write for a British gym audience, never American."
+spelling = "British English throughout (colour, kerb, mum, trainers, telly, knackered, 'gym not the club')."
+currency = "£ pounds — price things in £ (the £3.50 meal deal, a £39.99/mo gym, £4 protein flapjack), never $."
+time     = "GMT/BST and the UK clock — the 6pm car-park queue, a 22:47 kick-off, Sunday-night dread, the Monday-morning weigh-in."
+gyms     = "Real UK chains by name: PureGym, The Gym Group, JD Gyms, Bannatyne, David Lloyd (the premium one), plus the indie 'spit-and-sawdust' units. Gymshark is the culture reference, not a gym."
+texture  = "Everyday British gym life: meal deals, payday Friday, Freshers, the 6pm rush, a leg-day limp to the Tube, protein from Holland & Barrett, Maccies after, the PT you're avoiding eye contact with, 'new year new me' January."
+
+# --- the cultural calendar ----------------------------------------------------
+# `window` is an inclusive month-day range "MM-DD:MM-DD"; it may wrap the year
+# end (e.g. "12-27:02-10"). A beat with no window is always live. Keep beats to
+# the genuinely national ones a stranger would already feel — the awareness test
+# still applies.
+
+[[calendar]]
+title  = "The January gym rush ('new year new me')"
+window = "12-27:02-10"
+note   = "resolution crowd floods every gym, all the treadmills taken, everyone's suddenly a beginner, the March drop-off looming."
+
+[[calendar]]
+title  = "Six Nations rugby season"
+window = "02-01:03-21"
+note   = "Saturday fixtures, pub-and-gym crowd, England/Scotland/Wales/Ireland banter — a shared national weekend ritual."
+
+[[calendar]]
+title  = "Spring cut / lighter evenings"
+window = "03-15:05-15"
+note   = "clocks forward, 'summer body' panic kicks in, the first run outside, everyone suddenly training again."
+
+[[calendar]]
+title  = "Summer: heatwave, holidays abroad & Love Island"
+window = "06-01:08-10"
+note   = "first proper hot weekend, 'holiday body', training in a heatwave, Love Island on every night — peak shared-telly season."
+
+[[calendar]]
+title  = "Wimbledon fortnight"
+window = "06-24:07-14"
+note   = "national tennis moment, a British hopeful, strawberries-and-cream, the polite-obsession energy."
+
+[[calendar]]
+title  = "Back-to-routine / Freshers"
+window = "08-25:09-30"
+note   = "summer's over, term starts, uni Freshers hit the campus gym, everyone 'locking back in' after the holidays."
+
+[[calendar]]
+title  = "Dark-evenings motivation dip / winter bulk"
+window = "10-25:12-05"
+note   = "clocks back, pitch black by 5pm, motivation craters, the 'might as well bulk' season, cold-and-flu excuses."
+
+[[calendar]]
+title  = "Party season & the pre-January reckoning"
+window = "12-01:12-26"
+note   = "Christmas nights out, the works do, mince pies and 'I'll start in January', total training write-off — everyone knows it."
