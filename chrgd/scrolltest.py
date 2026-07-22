@@ -112,33 +112,46 @@ class OpenAIScrollJudge:
         self._model = settings.judge_model
 
     def judge(self, system: str, user: str, image_b64: str, mime: str) -> str:
-        try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                temperature=0.2,  # a judge should be steady, not creative
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": system},
+        from .pipeline import _describe_llm_error, _temperature_unsupported
+
+        messages = [
+            {"role": "system", "content": system},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user},
                     {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": user},
-                            {
-                                "type": "image_url",
-                                # "auto" detail ≈ the small, fast in-feed view.
-                                "image_url": {
-                                    "url": f"data:{mime};base64,{image_b64}",
-                                    "detail": "auto",
-                                },
-                            },
-                        ],
+                        "type": "image_url",
+                        # "auto" detail ≈ the small, fast in-feed view.
+                        "image_url": {
+                            "url": f"data:{mime};base64,{image_b64}",
+                            "detail": "auto",
+                        },
                     },
                 ],
-            )
-        except Exception as exc:  # noqa: BLE001
-            from .pipeline import _describe_llm_error
+            },
+        ]
 
-            raise ScrollTestError(_describe_llm_error(exc)) from exc
+        def _call(temp):
+            kwargs = {
+                "model": self._model,
+                "response_format": {"type": "json_object"},
+                "messages": messages,
+            }
+            if temp is not None:
+                kwargs["temperature"] = temp
+            return self._client.chat.completions.create(**kwargs)
+
+        try:
+            resp = _call(0.2)  # a judge should be steady, not creative
+        except Exception as exc:  # noqa: BLE001
+            if _temperature_unsupported(exc):
+                try:
+                    resp = _call(None)  # model only allows the default temperature
+                except Exception as exc2:  # noqa: BLE001
+                    raise ScrollTestError(_describe_llm_error(exc2)) from exc2
+            else:
+                raise ScrollTestError(_describe_llm_error(exc)) from exc
         return resp.choices[0].message.content or ""
 
 

@@ -238,7 +238,11 @@ def generate_concepts(
             from .pipeline import OpenAIChatClient
 
             generator = OpenAIChatClient(settings)  # creative model, high temp
+        from datetime import date
+
         tail = (
+            f"TODAY IS {date.today():%A, %-d %B %Y} — any topical concept must be "
+            "genuinely live around now, never a past-year story treated as current. "
             f"Manufacture up to {count} finished, varied, ready-to-build concepts. "
             "Make the creative leap on each, then run the SELF-AUDIT and drop any "
             "that don't survive it. Return the JSON object."

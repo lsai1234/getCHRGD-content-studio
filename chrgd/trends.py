@@ -677,6 +677,22 @@ _HEADLINES_ONLY_SUFFIX = (
 )
 
 
+def _today_preamble() -> str:
+    """State the real current date up front. Without it a web-search model has
+    no anchor for "now" and drifts back to its training cutoff (why the scout
+    was surfacing 2023-era stories). Forces it to search for what's live TODAY."""
+    from datetime import date
+
+    today = date.today()
+    return (
+        f"TODAY'S DATE IS {today:%A, %-d %B %Y}. This is the real current date — "
+        "everything you surface must be genuinely live around NOW. Use web search "
+        "for what is happening this week; do NOT rely on training knowledge, and "
+        "never return anything from a previous year as if it were current. If a "
+        "search result is old, discard it."
+    )
+
+
 def _with_uk_spine(system: str) -> str:
     """Append the UK market pack to a discovery system prompt (Bet 2), so the
     scout scouts UK-native. Concatenated (not .format-ed) so the pack's £/&
@@ -703,7 +719,7 @@ def scout_discover(
     if kind not in _DISCOVER_PROMPTS:
         raise TrendError(f"unknown discover kind '{kind}'")
     client = client or OpenAITrendClient(settings)
-    ask = _DISCOVER_ASKS[kind].format(count=count)
+    ask = _today_preamble() + "\n\n" + _DISCOVER_ASKS[kind].format(count=count)
     if headlines_only:
         ask += _HEADLINES_ONLY_SUFFIX
     system = _with_uk_spine(_DISCOVER_PROMPTS[kind])
@@ -740,7 +756,8 @@ def generate_lane_angles(
         raise TrendError("no story to write angles for")
     client = client or OpenAITrendClient(settings)
     ask = (
-        f"Write {count} ready-to-build carousel angles for this ONE story, "
+        _today_preamble() + "\n\n"
+        + f"Write {count} ready-to-build carousel angles for this ONE story, "
         "following every rule above. Return the JSON object with a SINGLE "
         "moment — this exact story — carrying the angles.\n\n"
         f"Story: {title.strip()}\n" + (f"Context: {why.strip()}\n" if why.strip() else "")

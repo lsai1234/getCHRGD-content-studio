@@ -155,6 +155,44 @@ def _describe_llm_error(exc: Exception) -> str:
     return msg
 
 
+def _temperature_unsupported(exc: Exception) -> bool:
+    """Newer OpenAI models reject an explicit `temperature` (only the default
+    is allowed) with a 400 like: "'temperature' does not support 0.9 with this
+    model. Only the default (1) value is supported." Detect that specific case
+    so we can retry without the parameter."""
+    s = str(exc).lower()
+    return "temperature" in s and (
+        "does not support" in s or "unsupported" in s or "only the default" in s
+    )
+
+
+def chat_json_create(client, *, model, system, user, temperature):
+    """A JSON-mode chat completion that survives models which only accept the
+    default temperature. Tries with the requested temperature; on the specific
+    "temperature unsupported" 400, retries once WITHOUT it. Every JSON chat call
+    in the app routes through here so one restrictive model can't break builds,
+    the judges, the selector or the concept engine at once."""
+    def _call(temp):
+        kwargs = {
+            "model": model,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        }
+        if temp is not None:
+            kwargs["temperature"] = temp
+        return client.chat.completions.create(**kwargs)
+
+    try:
+        return _call(temperature)
+    except Exception as exc:  # noqa: BLE001
+        if temperature is not None and _temperature_unsupported(exc):
+            return _call(None)  # this model only allows the default — drop it
+        raise
+
+
 @dataclass
 class LLMResult:
     content: str
@@ -192,14 +230,9 @@ class OpenAIChatClient:
 
     def complete(self, system: str, user: str) -> LLMResult:
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
+            resp = chat_json_create(
+                self._client, model=self._model, system=system, user=user,
                 temperature=self._temperature,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
             )
         except Exception as exc:  # noqa: BLE001 - surface any SDK failure uniformly
             raise LLMError(_describe_llm_error(exc)) from exc

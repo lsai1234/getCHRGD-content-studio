@@ -66,19 +66,14 @@ class OpenAIPickSelector:
         self._model = settings.scout_model
 
     def select(self, system: str, user: str) -> str:
+        from .pipeline import _describe_llm_error, chat_json_create
+
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
+            resp = chat_json_create(
+                self._client, model=self._model, system=system, user=user,
                 temperature=0.4,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
             )
         except Exception as exc:  # noqa: BLE001
-            from .pipeline import _describe_llm_error
-
             raise TodaysPickError(_describe_llm_error(exc)) from exc
         return resp.choices[0].message.content or ""
 
