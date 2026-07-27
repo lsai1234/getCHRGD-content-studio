@@ -36,6 +36,7 @@ from .worker import (
     enqueue_render_slide,
     enqueue_revise,
     enqueue_scroll_test,
+    enqueue_video,
 )
 
 # Days a topical idea stays fresh before the calendar flags it as going stale.
@@ -118,26 +119,33 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     async def lifespan(app: FastAPI):
         workers: list[Worker] = []
         if run_worker:
-            from .worker import RESEARCH_KINDS
+            from .worker import RESEARCH_KINDS, VIDEO_KINDS
 
-            # Recover interrupted jobs ONCE, before either worker starts, so a
-            # starting worker can't reap the other's in-flight job.
+            # Recover interrupted jobs ONCE, before any worker starts, so a
+            # starting worker can't reap the other's in-flight job. Video jobs
+            # are requeued (they resume from persisted state) rather than reaped.
             with _store(settings) as store:
                 store.recover_interrupted_jobs()
-            # Two lanes: research (slow web-search scans) can never delay the
-            # fast lane (builds, renders, takes) — the split that stops "check
-            # trending" blocking everything else.
+                store.requeue_interrupted_video_jobs()
+            # Three lanes: research (slow web-search scans) and video (minutes of
+            # provider polling per clip) each get their own worker so neither can
+            # delay the fast lane (builds, renders, takes).
             fast = Worker(
-                settings, exclude=RESEARCH_KINDS,
+                settings, exclude=RESEARCH_KINDS | VIDEO_KINDS,
                 name="chrgd-fast", recover_on_start=False,
             )
             research = Worker(
                 settings, kinds=RESEARCH_KINDS,
                 name="chrgd-research", recover_on_start=False,
             )
+            video = Worker(
+                settings, kinds=VIDEO_KINDS,
+                name="chrgd-video", recover_on_start=False,
+            )
             fast.start()
             research.start()
-            workers = [fast, research]
+            video.start()
+            workers = [fast, research, video]
             app.state.workers = workers
         try:
             yield
@@ -686,6 +694,28 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 raise HTTPException(404, "no such idea")
             job_id = enqueue_render(store, idea_id, dry_run=dry_run)
         return {"job_id": job_id, "kind": "render", "idea_id": idea_id}
+
+    @app.post("/api/jobs/video/{idea_id}")
+    def api_job_video(idea_id: str, _: str = Depends(require_user)):
+        """Queue a reel render for a rendered carousel (image-to-video).
+
+        Guarded by the feature flag: OFF → 409 with the enable hint, so the UI
+        can surface it without the request 500-ing.
+        """
+        from .video import VideoDisabledError, ensure_video_enabled
+
+        try:
+            ensure_video_enabled(settings)
+        except VideoDisabledError as exc:
+            raise HTTPException(409, str(exc))
+        with _store(settings) as store:
+            idea = store.get_idea(idea_id)
+            if idea is None:
+                raise HTTPException(404, "no such idea")
+            if not idea.asset_paths_json:
+                raise HTTPException(400, "render the carousel before making a reel")
+            job_id = enqueue_video(store, idea_id)
+        return {"job_id": job_id, "kind": "video", "idea_id": idea_id}
 
     @app.post("/api/scroll-test/{idea_id}")
     def api_scroll_test(idea_id: str, _: str = Depends(require_user)):

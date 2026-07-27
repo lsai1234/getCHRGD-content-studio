@@ -536,6 +536,22 @@ class Store:
         self.conn.commit()
         return cur.rowcount
 
+    def requeue_interrupted_video_jobs(self) -> int:
+        """On startup, put any PROCESSING video job back to QUEUED so it resumes.
+
+        Video jobs are pollable and persist per-clip provider ids + downloaded
+        paths, so re-running the handler re-polls/re-stitches from where it left
+        off rather than re-submitting paid clips. (Non-pollable build/render jobs
+        are reaped to ERROR by `recover_interrupted_jobs` instead.)
+        """
+        cur = self.conn.execute(
+            "UPDATE jobs SET status = 'QUEUED', updated_at = ? "
+            "WHERE status = 'PROCESSING' AND kind = 'video'",
+            (datetime.now().astimezone().isoformat(),),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
     def list_jobs(self, limit: int = 50) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM jobs ORDER BY job_id DESC LIMIT ?", (limit,)

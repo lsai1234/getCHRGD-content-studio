@@ -230,7 +230,7 @@ def render(
     from .images import ImageError
     from .models import PostType
     from .services import render_idea
-    from .video import VideoDisabledError, render_video
+    from .video import VideoDisabledError, VideoError, render_video
 
     settings = get_settings()
     with _store() as store:
@@ -240,15 +240,24 @@ def render(
             raise typer.Exit(code=1)
 
         if idea.post_type == PostType.video:
-            # Video plumbing exists but the feature is off (see ROADMAP M6).
+            # Video posts render into a reel via the image-to-video pipeline.
+            # A job carries the resumable per-clip state (no re-bill on retry).
+            job_id = store.create_job("video", idea_id=idea_id, provider="higgsfield")
             try:
-                render_video(idea, settings, store)
+                path = render_video(
+                    idea, settings, store, job_id=job_id,
+                    notify=lambda note: typer.secho(f"  … {note}", fg=typer.colors.BLUE),
+                )
             except VideoDisabledError as exc:
+                store.update_job(job_id, status="ERROR", error=str(exc))
                 typer.secho(f"Video disabled: {exc}", fg=typer.colors.YELLOW)
                 raise typer.Exit(code=2)
-            except NotImplementedError as exc:
-                typer.secho(f"Video not built yet: {exc}", fg=typer.colors.YELLOW)
-                raise typer.Exit(code=2)
+            except VideoError as exc:
+                store.update_job(job_id, status="ERROR", error=str(exc))
+                typer.secho(f"Video error: {exc}", fg=typer.colors.RED)
+                raise typer.Exit(code=1)
+            store.update_job(job_id, status="COMPLETED", progress=100, output_path=path)
+            typer.secho(f"\n  ✓ {path}", fg=typer.colors.GREEN)
             return
 
         try:

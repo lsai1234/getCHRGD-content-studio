@@ -2,8 +2,9 @@
 
 The plan to build the whole thing: a hosted website at
 `contentstudio.getchrgd.co.uk` with the content engine behind it. Milestones
-1–4 (the core loop) are **done**. Higgsfield video **infrastructure is now in
-place but switched off** — enabling it later is a small, contained step.
+1–4 (the core loop) are **done**. The Higgsfield image-to-video pipeline (M6) is
+now **built but switched off by default** — flip `CHRGD_VIDEO_ENABLED=true` with a
+key to turn it on; no paid video call runs while the flag is off.
 
 Sizing: **S** ≈ half a session · **M** ≈ one session · **L** ≈ multiple sessions.
 
@@ -17,20 +18,20 @@ Sizing: **S** ≈ half a session · **M** ≈ one session · **L** ≈ multiple 
 | 2 | Pipeline runner (OpenAI) + QA gate | `chrgd build`, `chrgd review` |
 | 3 | Carousel image builder (gpt-image-2) | `chrgd render` — slide 1 `high`, rest `low` (see `brand.toml [generation]`) |
 | 4 | Metricool CSV export | `chrgd export` (+ `--sample`) |
-| — | **Higgsfield video infra (OFF)** | feature flag, provider client skeleton, `jobs` table, guarded CLI path |
+| 6 | **Higgsfield image-to-video (built, OFF)** | `chrgd render` on a `video` post + `POST /api/jobs/video/{id}` → a stitched 9:16 reel |
 
-60-ish tests, all offline. The weekly loop already replaces the daily grind.
+Tests all offline. The weekly loop already replaces the daily grind.
 
-### What "video infra, off" means concretely
-- `CHRGD_VIDEO_ENABLED=false` master switch (config + `.env.example`).
-- `chrgd/video.py`: `VideoProvider` interface + `HiggsfieldProvider` skeleton
-  (submit→poll→download lifecycle, Segmind base-URL override), all guarded by
-  the flag. Calling any of it while off raises a clear `VideoDisabledError`.
-- `jobs` table + store methods for resumable async state (reused by the web
-  worker too) — so a future video job can never double-bill after a crash.
-- `chrgd render` on a `video` post routes to the video path and reports it's
-  disabled, rather than rendering a carousel.
-- **No paid video code runs, and none is callable, until M6 flips it on.**
+### What "video built, off" means concretely
+- `CHRGD_VIDEO_ENABLED=false` master switch (config + `.env.example`). While off,
+  every entry point raises a clear `VideoDisabledError`; no paid call is callable.
+- `chrgd/video.py`: `HiggsfieldProvider` (submit→poll→download, Segmind base-URL
+  override) + ffmpeg assembly + a resumable `render_video` orchestrator.
+- `jobs` table + store methods for resumable async state (per-clip ids + paths),
+  its own worker lane, and startup requeue — so a video job never double-bills
+  after a crash.
+- Turn it on: set the flag + `HIGGSFIELD_API_KEY`, install `ffmpeg`, and
+  reconcile the documented API shapes against the live account (see Phase C).
 
 ---
 
@@ -108,21 +109,32 @@ OpenAI key to confirm the exact image model id and real per-image cost
 
 ---
 
-## Phase C — Turn on video (M6)
+## Phase C — Video (M6) — ✅ built, feature-flagged off
 
-Everything here plugs into infra that already exists.
-- Implement `HiggsfieldProvider.submit/poll/download` against the live API;
-  reconcile request/response shapes.
-- Orchestrate via the `jobs` table: submit → poll `QUEUED/PROCESSING/COMPLETED/
-  FAILED/ERROR` → download, with retries/timeouts, **resumable, no re-bill**.
-  Reuse one seed/Soul mode for character consistency.
-- **ffmpeg assembly:** stitch clips in slide order, burn text overlays (same
-  safe zones), add audio bed.
-- **Audio modes:** `auto` (neutral bed, schedulable) + `draft` (visuals only,
-  add trending sound in-app). Trend-driven → `draft`.
-- Flip `CHRGD_VIDEO_ENABLED=true`; extend the exporter's video column (already
-  scaffolded).
-- **Needs from you:** a Higgsfield (or Segmind) key + an audio-bed source.
+Implemented in `chrgd/video.py` + wired through the worker/CLI/web:
+- `HiggsfieldProvider.submit/poll/download` against the documented image2video
+  lifecycle (base-URL override supports the Segmind aggregator). Request/response
+  field names are isolated in `_submit_payload` / `_parse_*` helpers — the one
+  place to reconcile against the live API when you add a key.
+- Orchestrated via the `jobs` table: submit → poll `QUEUED/PROCESSING/COMPLETED/
+  FAILED/ERROR` → download, with a poll timeout, **resumable and no re-bill**
+  (per-clip ids + downloaded paths persist on the job; a crash requeues and
+  resumes). One `seed` is reused across every slide for character consistency.
+- **ffmpeg assembly:** normalise each clip to 9:16 → concat in slide order →
+  optional audio bed. No text burn-in — this engine bakes copy into the slide
+  artwork at image-gen time, so clips already carry their text.
+- **Audio modes:** `auto` (neutral bed under the reel) + `draft` (silent, add
+  trending sound in-app). Trend-driven → `draft`.
+- Own worker lane (`VIDEO_KINDS`) so minutes of polling never delay a build.
+- Trigger: `chrgd render <id>` on a `video` post, or `POST /api/jobs/video/{id}`.
+
+**Still needs from you to go live:**
+- A Higgsfield (or Segmind) API key + reconcile the request/response shapes in
+  `video.py` against the live API (they follow the docs but are unverified).
+- `ffmpeg` on the host (`apt-get install ffmpeg`) — the assembly step shells out
+  to the binary.
+- An audio-bed file for `auto` mode (`CHRGD_VIDEO_AUDIO_BED`).
+- Extend the exporter's video column when you want reels in the Metricool CSV.
 
 ---
 
@@ -148,10 +160,10 @@ Everything here plugs into infra that already exists.
 ---
 
 ## Suggested order
-**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 ✅ → B2 ✅ → C (video) → D.**
-The full web app, trend scout, and orchestration are built. Everything through
-M7 (bar video) is done. Next: get it live on the VPS (DEPLOY.md), then Phase C
-(turn video on) when you have a Higgsfield key.
+**A1 ✅ → A2 ✅ → A3 ✅ (deploy kit) → A4 ✅ → B1 ✅ → B2 ✅ → C ✅ (video) → D.**
+The full web app, trend scout, orchestration, and the M6 video pipeline are
+built. Next: get it live on the VPS (DEPLOY.md), then flip video on when you have
+a Higgsfield key + ffmpeg on the host (reconcile the API shapes at that point).
 
 ---
 

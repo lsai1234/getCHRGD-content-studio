@@ -36,6 +36,11 @@ RESEARCH_KINDS = frozenset({
     "moment_detail", "lane_angles", "trends", "meta_scan",
 })
 
+# Video renders poll the provider for minutes per clip. Put them on their own
+# lane so a reel can never delay a build/render on the fast lane (the same split
+# that keeps slow research scans out of the fast lane).
+VIDEO_KINDS = frozenset({"video"})
+
 
 class Worker:
     def __init__(
@@ -382,10 +387,23 @@ def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
 
 
 def _handle_video(store: Store, settings: Settings, job: dict) -> dict:
+    """Render one idea's carousel into a reel (submit → poll → download → stitch).
+
+    Resumable: the orchestrator persists per-clip provider ids + downloaded
+    paths on this job, so a crash-requeued job re-polls/re-stitches instead of
+    re-submitting paid clips. Guarded by the feature flag (OFF → VideoDisabled).
+    """
     from .video import render_video
 
-    render_video(store.get_idea(job["idea_id"]), settings, store)  # raises: OFF/M6
-    return {}
+    idea = store.get_idea(job["idea_id"])
+    if idea is None:
+        raise ValueError(f"no such idea {job['idea_id']}")
+
+    def notify(note: str) -> None:
+        store.update_job(job["job_id"], result_json=json.dumps({"note": note}))
+
+    path = render_video(idea, settings, store, job_id=job["job_id"], notify=notify)
+    return {"output_path": path}
 
 
 def _active_meta_scan(store: Store) -> dict | None:
@@ -584,6 +602,15 @@ def enqueue_render(store: Store, idea_id: str, *, dry_run: bool) -> int:
     if existing:
         return existing["job_id"]  # don't double-queue the same render
     return store.create_job("render", idea_id=idea_id, params={"dry_run": dry_run})
+
+
+def enqueue_video(store: Store, idea_id: str) -> int:
+    """Queue a reel render — reuse an in-flight video job so we never re-submit
+    paid clips for the same idea."""
+    existing = store.active_job_for(idea_id, "video")
+    if existing:
+        return existing["job_id"]
+    return store.create_job("video", idea_id=idea_id, provider="higgsfield")
 
 
 def enqueue_trends(store: Store, *, count: int) -> int:

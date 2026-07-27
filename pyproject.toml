@@ -15,7 +15,10 @@ dependencies = [
 # stays lean and testable without paid SDKs or heavy media libraries.
 llm = ["openai>=1.40", "httpx>=0.27"]
 media = ["pillow>=10.0", "httpx>=0.27"]
-video = ["moviepy>=1.0.3", "ffmpeg-python>=0.2"]
+# Video (M6) drives the `ffmpeg` binary directly (subprocess) and downloads
+# clips over httpx — no heavy Python media wrapper needed. The one host
+# requirement is ffmpeg on PATH (e.g. `apt-get install ffmpeg`).
+video = ["httpx>=0.27"]
 web = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",

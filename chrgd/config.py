@@ -75,6 +75,31 @@ class Settings(BaseSettings):
     # Default audio mode for video: "draft" (visuals only, add sound in-app) or
     # "auto" (render with a neutral bed). Trend-driven videos should stay draft.
     audio_mode: str = Field(default="draft", alias="CHRGD_AUDIO_MODE")
+    # Assembly target (M6). The finished reel is normalised to this size/fps so
+    # clips from any provider stitch into one consistent 9:16 file. 1080x1920 is
+    # the TikTok/Reels native frame.
+    video_size: str = Field(default="1080x1920", alias="CHRGD_VIDEO_SIZE")
+    video_fps: int = Field(default=30, alias="CHRGD_VIDEO_FPS")
+    # Target motion length per slide-clip, in seconds (passed to the provider and
+    # used when a clip must be trimmed/padded during assembly).
+    video_clip_seconds: float = Field(default=5.0, alias="CHRGD_VIDEO_CLIP_SECONDS")
+    # Audio bed used only in "auto" mode: a local path (or URL the provider can
+    # read) to a neutral music/ambience track muxed under the finished reel. In
+    # "draft" mode the reel ships silent and sound is added in-app.
+    video_audio_bed: str | None = Field(default=None, alias="CHRGD_VIDEO_AUDIO_BED")
+    # Async poll cadence + ceiling for a single clip (submit → poll → download).
+    video_poll_interval: float = Field(default=5.0, alias="CHRGD_VIDEO_POLL_INTERVAL")
+    video_poll_timeout: float = Field(default=600.0, alias="CHRGD_VIDEO_POLL_TIMEOUT")
+
+    def video_target_size(self) -> tuple[int, int]:
+        """Parse `video_size` ("WxH") into an (width, height) int pair."""
+        try:
+            w, h = self.video_size.lower().split("x", 1)
+            return int(w), int(h)
+        except (ValueError, AttributeError) as exc:
+            raise ValueError(
+                f"CHRGD_VIDEO_SIZE must look like '1080x1920', got {self.video_size!r}"
+            ) from exc
 
     # --- Slide-1 concept gate (pre-image quality control) ---
     # Slide 1 is generated ONCE at high quality, so we validate its concept hard
