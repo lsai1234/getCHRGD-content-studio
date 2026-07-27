@@ -220,6 +220,23 @@
                           background: rgba(86,211,100,.12); }
   .role-tag.role-cta { color: var(--warn); border-color: rgba(227,179,65,.5);
                        background: rgba(227,179,65,.12); }
+  /* Amp's charge rail — the per-slide charge %, shown only on Amp posts.
+     The little bar fills as the arc climbs, so the drained -> charged story is
+     readable at a glance down the slide list. */
+  .charge-tag { flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+                font-size: 10.5px; font-weight: 600; padding: 2px 8px;
+                border-radius: 20px; vertical-align: middle;
+                background: rgba(41,194,242,.12); color: var(--accent2);
+                border: 1px solid var(--accent-line); }
+  .charge-tag .charge-bar { display: inline-block; width: 26px; height: 4px;
+                            border-radius: 2px; background: rgba(255,255,255,.16);
+                            overflow: hidden; }
+  .charge-tag .charge-bar > span { display: block; height: 100%; border-radius: 2px;
+                                   background: currentColor; }
+  .charge-tag.charge-drained { color: var(--muted); border-color: var(--line);
+                               background: rgba(255,255,255,.05); }
+  .charge-tag.charge-charged { color: var(--good); border-color: rgba(86,211,100,.5);
+                               background: rgba(86,211,100,.12); }
   /* the through-line: the single journey the swipe takes the viewer on */
   .throughline { font-size: 13px; color: var(--fg); margin: -6px 0 14px;
                  padding: 9px 13px; border-radius: 10px;
@@ -1677,14 +1694,24 @@ function roleTag(role){
 /* The slide list is flexible — 1 to 10 slides, add and remove freely. The
    DOM is the source of truth; indexes renumber on every change and saveCopy
    sends slide_count so the server resizes to match. */
-function slideAccItem(s, i){
+/* Amp's charge rail: on a charge-cycle post each slide shows the charge % the
+   images are rendered at, so the drained -> charged arc is visible while
+   editing. Empty (and invisible) on every other post. */
+function chargeTag(charge){
+  if (charge === undefined || charge === null) return '';
+  const state = charge <= 30 ? 'drained' : (charge >= 80 ? 'charged' : 'charging');
+  return ` <span class="charge-tag charge-${state}" title="Amp is ${state} here">`
+       + `<span class="charge-bar"><span style="width:${charge}%"></span></span>${charge}%</span>`;
+}
+
+function slideAccItem(s, i, charge){
   const item = document.createElement('div');
   item.className = 'acc-item' + (!(s.headline || '').trim() ? ' open' : '');
   item.innerHTML = `
     <button type="button" class="acc-head" onclick="toggleAcc(this)">
       <span class="acc-n">${i+1}</span>
       <span class="acc-p">${slidePreview(s, i)}</span>
-      ${roleTag(s.role)}
+      ${roleTag(s.role)}${chargeTag(charge)}
       <span class="acc-c">▾</span>
     </button>
     <div class="acc-body">
@@ -1817,7 +1844,8 @@ async function openWriteStep(autoJump = true){
   // slide copy — accordion per slide, closed unless it's empty (manual)
   const sf = document.getElementById('slide-acc');
   sf.innerHTML = '';
-  (d.slides || []).forEach((s, i) => sf.appendChild(slideAccItem(s, i)));
+  const arc = d.charge_arc || [];
+  (d.slides || []).forEach((s, i) => sf.appendChild(slideAccItem(s, i, arc[i])));
   syncSlideControls();
   document.getElementById('f-caption').value = d.caption || '';
   document.getElementById('f-trigger').value = d.comment_trigger || '';

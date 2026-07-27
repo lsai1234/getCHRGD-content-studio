@@ -14,6 +14,7 @@ from chrgd.character import (
     MECHANIC_KEY,
     SIGN_OFF,
     CHARGE_STATES,
+    build_brief,
     character_block,
     charge_arc,
     charges_for_route,
@@ -155,6 +156,55 @@ def test_non_amp_prompt_is_completely_unchanged():
     assert compose_design_prompt(_slide(), brand, None, charge=None) == without
 
 
+def test_route_from_the_real_create_flow_is_detected():
+    """Regression: the create journey stores the mechanic's LABEL as `name`.
+
+    Detection originally keyed only on the mechanic key, so a post made through
+    the UI got Amp's skeleton but no charge states and no locked character —
+    the journey silently half-worked. Both spellings must match.
+    """
+    from chrgd.character import MECHANIC_LABEL
+
+    as_stored_by_the_ui = {
+        "mechanic_lock": {"key": MECHANIC_KEY, "name": MECHANIC_LABEL,
+                          "skeleton": ["a", "b"]},
+    }
+    assert is_amp_route(as_stored_by_the_ui) is True
+    # An idea created BEFORE the key was stored carries the label alone.
+    assert is_amp_route({"mechanic_lock": {"name": MECHANIC_LABEL}}) is True
+    # A different mechanic stored the same way is still not Amp.
+    assert is_amp_route({"mechanic_lock": {"key": "myth_fact",
+                                           "name": "Myth vs fact"}}) is False
+
+
+def test_build_brief_makes_the_cycle_the_story():
+    brief = build_brief(5)
+    assert "Amp" in brief
+    assert SIGN_OFF in brief             # the sign-off is mandated
+    assert "10%" in brief and "100%" in brief  # the arc is spelled out
+    assert "drain" in brief.lower()
+    assert "dry British humour" in brief  # the voice, not a brand voice doing fun
+
+
+def test_build_prompt_carries_amp_only_for_amp_posts():
+    from chrgd.character import MECHANIC_LABEL
+    from chrgd.pipeline import build_user_message
+
+    amp = Idea(idea_id="G-1", concept_note="3pm slump", route_json=json.dumps(
+        {"mechanic_lock": {"key": MECHANIC_KEY, "name": MECHANIC_LABEL,
+                           "skeleton": ["drain", "why", "fix", "payoff"]}}))
+    msg = build_user_message(amp)
+    assert "AMP POST" in msg
+    assert SIGN_OFF in msg
+
+    # Every other mechanic is untouched.
+    normal = Idea(idea_id="G-2", concept_note="x", route_json=json.dumps(
+        {"mechanic_lock": {"key": "myth_fact", "name": "Myth vs fact",
+                           "skeleton": ["a", "b"]}}))
+    other = build_user_message(normal)
+    assert "AMP POST" not in other and "Amp" not in other
+
+
 def test_charge_threading_from_an_idea_route():
     from chrgd.images import _charge_for
 
@@ -169,3 +219,63 @@ def test_charge_threading_from_an_idea_route():
 
     # No route at all → no charge, no behaviour change.
     assert _charge_for(Idea(idea_id="G-3", concept_note="x"), 0, 4) is None
+
+
+# --- end-to-end through the real create flow ---------------------------------
+
+
+def test_create_amp_post_end_to_end(tmp_path):
+    """The journey as the editor actually uses it: pick Amp in the gallery →
+    the idea carries the charge arc → the detail endpoint exposes the rail."""
+    from fastapi.testclient import TestClient
+
+    from chrgd.config import Settings
+    from chrgd.db import Store
+    from chrgd.webapp import create_app
+
+    settings = Settings(
+        CHRGD_DB_PATH=tmp_path / "t.db", CHRGD_OUTPUT_DIR=tmp_path / "out",
+        CHRGD_WEB_USERNAME="admin", CHRGD_WEB_PASSWORD="s3cret",
+        CHRGD_SECRET_KEY="test-secret-key",
+    )
+    client = TestClient(create_app(settings))
+    client.post("/login", data={"username": "admin", "password": "s3cret"})
+
+    # Pick Amp from the blank-canvas gallery.
+    r = client.post("/api/create/start",
+                    data={"mode": "blank", "manual": "true",
+                          "mechanic": MECHANIC_KEY})
+    assert r.status_code == 200
+    idea_id = r.json()["idea_id"]
+
+    with Store(settings.db_path) as store:
+        route = json.loads(store.get_idea(idea_id).route_json)
+    # The key is stored, so the post is recognisable as Amp downstream.
+    assert route["mechanic_lock"]["key"] == MECHANIC_KEY
+    assert is_amp_route(route) is True
+
+    # The detail endpoint hands the review UI a full rising charge rail.
+    d = client.get(f"/api/ideas/{idea_id}/detail").json()
+    arc = d["charge_arc"]
+    assert arc and arc[-1] == 100 and arc == sorted(arc)
+    assert len(arc) == len(d["slides"])
+
+
+def test_detail_charge_arc_empty_for_normal_posts(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from chrgd.config import Settings
+    from chrgd.webapp import create_app
+
+    settings = Settings(
+        CHRGD_DB_PATH=tmp_path / "t2.db", CHRGD_OUTPUT_DIR=tmp_path / "out2",
+        CHRGD_WEB_USERNAME="admin", CHRGD_WEB_PASSWORD="s3cret",
+        CHRGD_SECRET_KEY="test-secret-key",
+    )
+    client = TestClient(create_app(settings))
+    client.post("/login", data={"username": "admin", "password": "s3cret"})
+    r = client.post("/api/create/start",
+                    data={"mode": "blank", "manual": "true",
+                          "mechanic": "myth_fact"})
+    d = client.get(f"/api/ideas/{r.json()['idea_id']}/detail").json()
+    assert d["charge_arc"] == []  # the rail stays hidden on every other post

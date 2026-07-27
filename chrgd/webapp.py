@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+from .character import charges_for_route
 from .config import Settings, get_settings
 from .db import Store
 from .models import MAX_SLIDES, MIN_SLIDES, Idea, PostType, Status
@@ -836,7 +837,15 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             mech = get_mechanic(mechanic_key)
             if mech is None:
                 raise HTTPException(400, f"unknown mechanic '{mechanic_key}'")
-            route["mechanic_lock"] = {"name": mech.label, "skeleton": mech.skeleton}
+            # `key` rides along with the human label so downstream code can
+            # identify the mechanic itself (the Amp journey keys off it); the
+            # label stays as `name` because the build prompt and detail view
+            # both show it to a human.
+            route["mechanic_lock"] = {
+                "key": mech.key,
+                "name": mech.label,
+                "skeleton": mech.skeleton,
+            }
         idea = Idea(
             idea_id=store.next_idea_id(settings.id_prefix),
             concept_note=concept_note,
@@ -1102,6 +1111,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "concept_brief": route.get("concept_brief"),
             "mechanic": (route.get("mechanic_lock") or {}).get("name")
             or route.get("mechanic", ""),
+            # Per-slide charge % on an Amp post (empty for every other post) —
+            # the review page's charge rail reads this.
+            "charge_arc": charges_for_route(route, len(slides)) or [],
             "assets": assets,
             "variants": {
                 str(k): v for k, v in list_variants(idea, settings, brand=brand).items()

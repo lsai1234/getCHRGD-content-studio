@@ -487,6 +487,15 @@ def _seed_context(idea: Idea, prefs: dict) -> list[str]:
             for i, step in enumerate(skeleton, 1):
                 lines.append(f"  {i}. {step}")
 
+        # An Amp post needs the mascot in the WORDS too — without this the
+        # engine writes a normal carousel that only looks like Amp once the
+        # images render. Pass-through for every other mechanic.
+        from .character import build_brief, is_amp_route
+
+        if is_amp_route(prefs):
+            lines.append("")
+            lines.append(build_brief(len(skeleton) or 5))
+
     # Blank-canvas builds (mechanic picked, no subject given) are where the
     # engine drifts into obscure trivia nobody holds — pin it to the middle
     # of the audience's actual lived experience instead.

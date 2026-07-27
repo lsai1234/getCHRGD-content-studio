@@ -35,6 +35,11 @@ from __future__ import annotations
 # The mechanic key in config/mechanics.toml. An idea whose route carries this
 # (as `mechanic_lock`) is an Amp post and gets the locked character prefix.
 MECHANIC_KEY = "amp_charge_cycle"
+# The human label the same mechanic is stored under. The create journey records
+# a mechanic as {key, name, skeleton}, but older ideas (and any path that only
+# had the label to hand) carry the label alone — match either so an Amp post is
+# never silently treated as a normal carousel.
+MECHANIC_LABEL = "Amp's charge cycle"
 
 BRAND = "getCHRGD"
 NAME = "Amp"
@@ -153,6 +158,44 @@ def character_block(charge: int, *, include_world: bool = False) -> str:
     return "\n".join(parts)
 
 
+#: Who Amp is as a personality — the voice the copy is written in. Deliberately
+#: not a superhero: he gets wrecked by leg day too, which is what makes the
+#: drain half of the cycle land.
+PERSONA = (
+    "Amp is upbeat but never annoying — a lovable try-hard on the journey WITH "
+    "the audience, not a superhero who has it sorted. He gets wrecked by leg "
+    "day, dodgy sleep and the 3pm slump like everyone else. Cheeky, dry British "
+    "humour. Never corporate, never a brand voice doing 'fun'."
+)
+
+
+def build_brief(slide_count: int) -> str:
+    """The copy brief injected into the build prompt for an Amp post.
+
+    Without this the engine writes a normal carousel that merely *looks* like
+    Amp once the images render. This makes the charge cycle the story: the words
+    have to travel drained → charging → charged too.
+    """
+    arc = charge_arc(slide_count)
+    beats = ", ".join(f"slide {i + 1} at {c}%" for i, c in enumerate(arc))
+    return "\n".join([
+        f"AMP POST: this is an '{MECHANIC_LABEL}' carousel starring {NAME}, "
+        f"the {BRAND} mascot — an electric-blue lightning bolt with a face, "
+        "stubby arms and legs.",
+        f"VOICE: {PERSONA}",
+        "THE CYCLE IS THE STORY: the post is ONE charge cycle. Open on a real "
+        "drain event that flattens Amp (write the drain, don't explain it), "
+        "let the middle slides genuinely turn it around, and land the final "
+        "slide on the payoff with Amp fully charged.",
+        f"CHARGE ARC (the images follow this — write copy that matches the "
+        f"energy at each step): {beats}.",
+        f"SIGN-OFF: end the final slide with '{SIGN_OFF}'",
+        "Write Amp as a mate, in first person where it helps. The product/"
+        "hydration/recovery payoff should feel like the thing that recharged "
+        "him, never an ad read.",
+    ])
+
+
 def is_amp_route(route: dict | None) -> bool:
     """True when an idea's route marks it as an Amp charge-cycle post.
 
@@ -164,10 +207,11 @@ def is_amp_route(route: dict | None) -> bool:
         return False
     if route.get("amp") is True:
         return True
+    names = {MECHANIC_KEY, MECHANIC_LABEL}
     lock = route.get("mechanic_lock")
     if isinstance(lock, dict):
-        return lock.get("key") == MECHANIC_KEY or lock.get("name") == MECHANIC_KEY
-    return route.get("mechanic") == MECHANIC_KEY
+        return lock.get("key") in names or lock.get("name") in names
+    return route.get("mechanic") in names
 
 
 def charges_for_route(route: dict | None, slide_count: int) -> list[int] | None:
