@@ -70,3 +70,19 @@ skeleton = [
     "How to use it — the practical move it unlocks",
     "The one-line version to remember + 'send this to whoever still believes the old version'",
 ]
+
+# Amp's charge cycle — the mascot journey. Every post is ONE charge cycle:
+# a relatable drain event flattens Amp, the middle slides charge him back up,
+# and the final slide lands fully charged on the product benefit. Selectable
+# (not default) until test carousels prove it out; the per-slide charge arc and
+# the locked character prompt live in chrgd/character.py.
+[mechanics.amp_charge_cycle]
+label = "Amp's charge cycle"
+description = "Amp gets drained, gets charged, ends on the payoff. The mascot journey — one post, one charge cycle."
+skeleton = [
+    "The drain event, stated as Amp living it — the moment that flattens everyone (3pm slump, leg day, bad sleep, 2am match)",
+    "Why it wipes you out — name the real mechanism, no lecture",
+    "The fix starting to land — what actually turns it around",
+    "The fix paying off — Amp visibly coming back up",
+    "Fully charged payoff + CTA, signed off 'Stay amped.'",
+]

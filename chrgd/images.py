@@ -393,6 +393,7 @@ def compose_design_prompt(
     character_ref: bool = False,
     feature_character: bool | None = None,
     has_character: bool = False,
+    charge: int | None = None,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -408,8 +409,17 @@ def compose_design_prompt(
     whether a person belongs in this slide's scene at all (the engine's
     per-slide call; falls back to a cue scan); `has_character` says the account
     has a recurring character configured, so a person-free slide can be told
-    explicitly not to invent one."""
+    explicitly not to invent one. `charge` (0-100) marks this as an Amp
+    charge-cycle slide and leads the prompt with the locked mascot description
+    at that charge state — omitted for every other post, which is what keeps
+    this a pass-through for the rest of the engine."""
     parts = []
+    # Amp posts lead with the LOCKED character block: it outranks the slide's
+    # own brief, so a topic can add a scene but never restyle the mascot.
+    if charge is not None:
+        from .character import character_block
+
+        parts.append(character_block(charge))
     # Does a person belong in THIS slide's scene? The engine's per-slide call
     # wins; otherwise infer from the brief. A portrait being attached always
     # means yes.
@@ -554,6 +564,20 @@ def _route_of(idea: Idea) -> dict:
         return json.loads(idea.route_json)
     except json.JSONDecodeError:
         return {}
+
+
+def _charge_for(idea: Idea, slide_index: int, slide_count: int) -> int | None:
+    """This slide's Amp charge %, or None when the idea isn't an Amp post.
+
+    None is the pass-through for every other journey — no existing post changes
+    behaviour because of this hook.
+    """
+    from .character import charges_for_route
+
+    arc = charges_for_route(_route_of(idea), slide_count)
+    if arc is None or not 0 <= slide_index < len(arc):
+        return None
+    return arc[slide_index]
 
 
 def style_for_idea(idea: Idea) -> str | None:
@@ -958,6 +982,7 @@ def render_slide(
                     character_ref=attach_portrait,
                     feature_character=wants_character,
                     has_character=has_character,
+                    charge=_charge_for(idea, slide_index, len(slides)),
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)

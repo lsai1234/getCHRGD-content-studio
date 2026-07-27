@@ -1,0 +1,171 @@
+"""Tests for Amp — the mascot character bible and the charge-cycle arc.
+
+Amp is additive and opt-in: these cover the arc/state maths, the locked prompt
+prefix, and (critically) that a non-Amp post's image prompt is completely
+unchanged by the hook.
+"""
+
+from __future__ import annotations
+
+import json
+
+from chrgd.brand import load_brand
+from chrgd.character import (
+    MECHANIC_KEY,
+    SIGN_OFF,
+    CHARGE_STATES,
+    character_block,
+    charge_arc,
+    charges_for_route,
+    is_amp_route,
+    state_for_charge,
+)
+from chrgd.images import compose_design_prompt
+from chrgd.mechanics import load_mechanics
+from chrgd.models import Idea, Slide
+
+
+# --- the charge arc ----------------------------------------------------------
+
+
+def test_arc_rises_monotonically_to_full_charge():
+    arc = charge_arc(5)
+    assert arc[0] < arc[-1]
+    assert arc[-1] == 100  # every post ends fully charged
+    assert arc == sorted(arc)  # never dips back down mid-swipe
+    assert len(arc) == 5
+
+
+def test_arc_matches_the_concept_shape_for_four_slides():
+    # Drained opener → two charging beats → fully charged payoff.
+    assert charge_arc(4) == [10, 40, 70, 100]
+
+
+def test_arc_edge_cases():
+    assert charge_arc(1) == [100]  # a single slide is just the payoff
+    assert charge_arc(2) == [10, 100]
+    assert charge_arc(0) == [100]  # degenerate input never crashes a render
+
+
+def test_state_bands():
+    assert state_for_charge(0) == "drained"
+    assert state_for_charge(10) == "drained"
+    assert state_for_charge(50) == "charging"
+    assert state_for_charge(100) == "charged"
+    # Every band name resolves to a real state block.
+    for pct in (0, 25, 45, 85, 100):
+        assert state_for_charge(pct) in CHARGE_STATES
+
+
+# --- the locked character prefix ---------------------------------------------
+
+
+def test_character_block_locks_identity_and_reflects_charge():
+    drained = character_block(10)
+    charged = character_block(100)
+
+    # The immutable identity is present at both ends of the arc.
+    for block in (drained, charged):
+        assert "lightning bolt" in block
+        assert "#29C2F2" in block
+        assert "locked" in block.lower()
+        assert "flat vector" in block
+
+    # …but the state visibly differs.
+    assert "drained" in drained and "no glow" in drained
+    assert "charged" in charged and "unstoppable" in charged
+    assert "10% charge" in drained and "100% charge" in charged
+    # The swipe-to-charge retention hook rides on every slide.
+    assert "charge meter" in drained
+
+
+def test_character_block_can_add_the_world():
+    assert "The Cell" in character_block(50, include_world=True)
+    assert "The Cell" not in character_block(50)
+
+
+# --- route detection (what makes a post an Amp post) -------------------------
+
+
+def test_is_amp_route_reads_the_mechanic_lock_and_flag():
+    assert is_amp_route({"mechanic_lock": {"key": MECHANIC_KEY}}) is True
+    assert is_amp_route({"mechanic": MECHANIC_KEY}) is True
+    assert is_amp_route({"amp": True}) is True
+    # Everything else is not Amp.
+    assert is_amp_route({"mechanic": "myth_fact"}) is False
+    assert is_amp_route({}) is False
+    assert is_amp_route(None) is False
+
+
+def test_charges_for_route_is_none_for_normal_posts():
+    # The pass-through that keeps every other journey untouched.
+    assert charges_for_route({"mechanic": "myth_fact"}, 5) is None
+    assert charges_for_route(None, 5) is None
+
+
+def test_stored_arc_wins_and_is_topped_up():
+    route = {"amp": True, "charge_arc": [5, 50]}
+    # An editor's stored arc survives…
+    assert charges_for_route(route, 2) == [5, 50]
+    # …and slides added later are filled in rather than dropped.
+    arc = charges_for_route(route, 4)
+    assert arc[:2] == [5, 50] and len(arc) == 4
+
+
+# --- the mechanic is registered and selectable -------------------------------
+
+
+def test_amp_mechanic_is_available_but_not_default():
+    mechanics = load_mechanics()
+    assert MECHANIC_KEY in mechanics
+    amp = mechanics[MECHANIC_KEY]
+    assert amp.skeleton, "the charge cycle needs a slide skeleton"
+    # The arc's shape is baked into the skeleton: drained opener, charged close.
+    assert "drain" in amp.skeleton[0].lower()
+    assert SIGN_OFF.rstrip(".").lower() in amp.skeleton[-1].lower()
+
+
+# --- the render hook ---------------------------------------------------------
+
+
+def _slide():
+    return Slide(headline="3pm and I'm done", supporting="every single day",
+                 image_prompt="a desk at 3pm", visual_intent="slumped")
+
+
+def test_amp_prompt_leads_with_the_locked_character():
+    brand = load_brand()
+    prompt = compose_design_prompt(_slide(), brand, None, charge=10)
+    # The character block leads, so it outranks the scene brief that follows.
+    assert prompt.startswith("CHARACTER (locked")
+    assert "lightning bolt" in prompt
+    assert "10% charge" in prompt
+    # The slide's own brief still makes it in — Amp adds, it doesn't replace.
+    assert "a desk at 3pm" in prompt
+    assert "3pm and I'm done" in prompt
+
+
+def test_non_amp_prompt_is_completely_unchanged():
+    """The hook must be invisible to every other journey."""
+    brand = load_brand()
+    without = compose_design_prompt(_slide(), brand, None)
+    assert "Amp" not in without
+    assert "charge" not in without.lower()
+    # Explicitly passing no charge is identical to not passing one at all.
+    assert compose_design_prompt(_slide(), brand, None, charge=None) == without
+
+
+def test_charge_threading_from_an_idea_route():
+    from chrgd.images import _charge_for
+
+    amp = Idea(idea_id="G-1", concept_note="x",
+               route_json=json.dumps({"amp": True}))
+    assert _charge_for(amp, 0, 4) == 10     # opens drained
+    assert _charge_for(amp, 3, 4) == 100    # closes charged
+
+    normal = Idea(idea_id="G-2", concept_note="x",
+                  route_json=json.dumps({"mechanic": "myth_fact"}))
+    assert _charge_for(normal, 0, 4) is None
+
+    # No route at all → no charge, no behaviour change.
+    assert _charge_for(Idea(idea_id="G-3", concept_note="x"), 0, 4) is None
