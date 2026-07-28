@@ -46,6 +46,7 @@ with the best concept it has.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -59,6 +60,20 @@ from .models import Idea
 
 class ConceptGateError(RuntimeError):
     pass
+
+
+# The four stages, in order, with the label the editor sees while each runs.
+# This is the single source of truth for the live checklist: the worker streams
+# these keys onto the render job and the create journey renders them, so the
+# editor can watch the opener being fought over rather than staring at a bar
+# that says "generating…". Keys are also what `route_json.concept_gate.stages`
+# records, so a finished post can show what it actually went through.
+GATE_STAGES: tuple[tuple[str, str], ...] = (
+    ("rivals", "Inventing rival openers"),
+    ("tournament", "Judging them head-to-head"),
+    ("score", "Scoring the winner"),
+    ("glance", "The half-second glance test"),
+)
 
 
 class ConceptVerdict(BaseModel):
@@ -141,8 +156,41 @@ class GateResult:
     # Stage D — the fraction-of-a-second test on the winner.
     glance: GlanceVerdict | None = None
     glance_fixed: bool = False
+    # The ordered stage log — what ran, what it found, what was skipped. Streamed
+    # live to the UI while the gate runs, then persisted with the verdict.
+    stages: list[dict] = field(default_factory=list)
     spend_usd: float = 0.0
     error: str | None = None
+
+
+class _Stager:
+    """Streams stage transitions to the editor and records them on the result.
+
+    One object so the live view and the persisted record can never disagree:
+    every stage transition goes through here, updates `result.stages` in place,
+    and is pushed to both the prose notify stream (which the job note and the
+    CLI already show) and the structured `on_stage` channel the create journey
+    renders as a checklist.
+    """
+
+    def __init__(self, result: GateResult, notify=None, on_stage=None):
+        self._result = result
+        self._notify = notify
+        self._on_stage = on_stage
+
+    def __call__(self, key: str, state: str, note: str = "", **extra) -> None:
+        entry = next((s for s in self._result.stages if s["key"] == key), None)
+        if entry is None:
+            entry = {"key": key, "label": dict(GATE_STAGES).get(key, key)}
+            self._result.stages.append(entry)
+        entry["state"] = state
+        if note:
+            entry["note"] = note
+        entry.update(extra)
+        if note and self._notify:
+            self._notify(note)
+        if self._on_stage:
+            self._on_stage(list(self._result.stages))
 
 
 # --- Stage A: rival openers --------------------------------------------------
@@ -549,6 +597,36 @@ def _extract_json(text: str, what: str) -> dict:
     return payload
 
 
+def concept_fingerprint(slide0: dict) -> str:
+    """Identifies the slide-1 CONCEPT — the words and the visual brief.
+
+    The gate stamps this alongside its verdict so every render path can ask the
+    only question that matters: has *this* opener been checked? It's what lets
+    "regenerate the image" reuse an approved concept (same fingerprint, no
+    re-run, no surprise rewrite) while a hand-edited hook or one the scroll test
+    invented gets checked properly before it goes anywhere near a paid image.
+    """
+    raw = "\n".join(
+        _slide_text(slide0, k) for k in ("headline", "supporting", "image_prompt")
+    )
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def needs_gate(idea: Idea) -> bool:
+    """True when slide 1's concept has not cleared the gate in its current form."""
+    if not idea.slides_json:
+        return False
+    try:
+        slides = json.loads(idea.slides_json)
+        route = json.loads(idea.route_json) if idea.route_json else {}
+    except json.JSONDecodeError:
+        return True
+    if not slides:
+        return False
+    seen = (route.get("concept_gate") or {}).get("fingerprint")
+    return seen != concept_fingerprint(slides[0])
+
+
 def _design_system(idea: Idea) -> dict:
     if not idea.route_json:
         return {}
@@ -687,7 +765,7 @@ def _run_tournament(
     judge: ConceptJudge,
     refiner,
     result: GateResult,
-    note,
+    stage: _Stager,
 ) -> None:
     """Stages A + B — invent rival openers and pick the one worth spending on.
 
@@ -697,16 +775,24 @@ def _run_tournament(
     """
     count = settings.concept_candidates
     if count < 1:
+        stage("rivals", "skipped", "")
+        stage("tournament", "skipped", "")
         return
-    note(f"inventing {count} rival openers before committing to one")
+    stage("rivals", "running", f"inventing {count} rival openers before committing to one")
     rivals, spend = invent_rivals(idea, slides, settings, count=count, client=refiner)
     result.spend_usd += spend
     if not rivals:
+        stage("rivals", "skipped", "no rival openers came back — scoring the built one")
+        stage("tournament", "skipped", "")
         return
+    stage("rivals", "done", f"{len(rivals)} rival openers on the table", count=len(rivals))
 
     field_ = [_incumbent(idea, slides[0]), *rivals]
     result.candidates = field_
-    note(f"judging {len(field_)} openers head-to-head on intrigue, originality and speed")
+    stage(
+        "tournament", "running",
+        f"judging {len(field_)} openers head-to-head on intrigue, originality and speed",
+    )
     verdict = parse_tournament_verdict(
         judge.judge(TOURNAMENT_SYSTEM, _tournament_payload(idea, field_, slides))
     )
@@ -716,9 +802,17 @@ def _run_tournament(
     if winner > 0:
         result.swapped = True
         _apply_candidate(idea, slides, field_[winner])
-        note(f"a sharper opener won: {field_[winner].headline}")
+        stage(
+            "tournament", "done",
+            f"a sharper opener won: {field_[winner].headline}",
+            beat=len(field_) - 1,
+        )
     else:
-        note("the opener the build wrote survived the field")
+        stage(
+            "tournament", "done",
+            "the opener the build wrote survived the field",
+            beat=len(field_) - 1,
+        )
 
 
 def _run_glance_test(
@@ -728,7 +822,7 @@ def _run_glance_test(
     judge: ConceptJudge,
     refiner,
     result: GateResult,
-    note,
+    stage: _Stager,
 ) -> None:
     """Stage D — does it land in the fraction of a second, with no explanation?
 
@@ -736,13 +830,21 @@ def _run_glance_test(
     re-glance once. We keep the second verdict either way — an honest "still
     doesn't land" is worth more to the editor than hiding it.
     """
-    note("glance test: what a stranger takes from it in half a second")
+    stage("glance", "running", "glance test: what a stranger takes from it in half a second")
     glance = parse_glance_verdict(judge.judge(GLANCE_SYSTEM, _glance_payload(slides[0])))
     result.glance = glance
     if glance.stops or not glance.fix.strip():
+        stage(
+            "glance", "done",
+            f"at a glance they got: “{glance.took_away}”" if glance.took_away else "",
+            stops=glance.stops,
+        )
         return
 
-    note(f"it didn't land at glance speed ({glance.took_away}) — fixing and re-checking")
+    stage(
+        "glance", "running",
+        f"it didn't land at glance speed ({glance.took_away}) — fixing and re-checking",
+    )
     rewrite, spend = refine_slide_one(
         idea,
         slides[0],
@@ -762,6 +864,12 @@ def _run_glance_test(
     result.glance = parse_glance_verdict(
         judge.judge(GLANCE_SYSTEM, _glance_payload(slides[0]))
     )
+    stage(
+        "glance", "done",
+        f"re-cut for glance speed — now they get: “{result.glance.took_away}”"
+        if result.glance.took_away else "re-cut for glance speed",
+        stops=result.glance.stops,
+    )
 
 
 def gate_slide_one(
@@ -772,6 +880,7 @@ def gate_slide_one(
     judge: ConceptJudge | None = None,
     refiner=None,
     notify=None,
+    on_stage=None,
 ) -> GateResult:
     """Develop, judge and (if needed) sharpen the slide-1 concept before rendering.
 
@@ -779,6 +888,10 @@ def gate_slide_one(
     Never raises for an LLM/parse failure — the gate is a quality booster, not a
     hard dependency, so on any judge/refiner error it logs and lets the render
     proceed with the best concept it has.
+
+    `notify` receives prose progress lines; `on_stage` receives the structured
+    stage log (a list of `{key, label, state, note}`) every time it changes, so
+    a UI can show which of the four stages is running right now.
     """
     result = GateResult(idea=idea)
     if not settings.concept_gate_enabled:
@@ -787,6 +900,8 @@ def gate_slide_one(
     if not idea.slides_json:
         result.skipped = True
         return result
+
+    stage = _Stager(result, notify, on_stage)
 
     def _note(msg: str) -> None:
         if notify:
@@ -812,18 +927,27 @@ def gate_slide_one(
         # Isolated so a failed tournament still leaves the solo score to run.
         if settings.concept_tournament_enabled:
             try:
-                _run_tournament(idea, slides, settings, judge, refiner, result, _note)
+                _run_tournament(idea, slides, settings, judge, refiner, result, stage)
             except (ConceptGateError, ValidationError, json.JSONDecodeError) as exc:
                 result.error = str(exc)
-                _note(f"couldn't run the opener tournament ({exc}) — scoring the built one")
+                stage("rivals", "failed", "")
+                stage(
+                    "tournament", "failed",
+                    f"couldn't run the opener tournament ({exc}) — scoring the built one",
+                )
+        else:
+            stage("rivals", "off", "")
+            stage("tournament", "off", "")
 
         # Stage C — the winner has to clear the bar on its own.
         verdict: ConceptVerdict | None = None
         for rnd in range(1, max_rounds + 1):
             result.rounds = rnd
-            _note(
+            stage(
+                "score", "running",
                 f"checking the slide 1 concept (round {rnd}) before spending on "
-                "the image"
+                "the image",
+                round=rnd, of=max_rounds,
             )
             verdict = parse_concept_verdict(
                 judge.judge(JUDGE_SYSTEM, _concept_payload(idea, slides[0]))
@@ -834,9 +958,11 @@ def gate_slide_one(
                 result.passed = True
                 break
             if rnd < max_rounds:
-                _note(
+                stage(
+                    "score", "running",
                     f"slide 1 concept scored {verdict.score}/{min_score} — "
-                    "sharpening it and re-checking"
+                    "sharpening it and re-checking",
+                    round=rnd, of=max_rounds,
                 )
                 rewrite, spend = refine_slide_one(
                     idea, slides[0], verdict, settings, client=refiner
@@ -844,14 +970,22 @@ def gate_slide_one(
                 result.spend_usd += spend
                 _apply_rewrite(idea, slides, rewrite)
                 result.refined = True
+        stage(
+            "score", "done",
+            f"scored {result.score}/{min_score}"
+            + (f" after {result.rounds} rounds" if result.rounds > 1 else ""),
+            score=result.score, passed=result.passed,
+        )
 
         # Stage D — prove it survives the half-second it will actually get.
         if settings.concept_glance_test:
             try:
-                _run_glance_test(idea, slides, settings, judge, refiner, result, _note)
+                _run_glance_test(idea, slides, settings, judge, refiner, result, stage)
             except (ConceptGateError, ValidationError, json.JSONDecodeError) as exc:
                 result.error = str(exc)
-                _note(f"couldn't run the glance test ({exc}) — rendering as is")
+                stage("glance", "failed", f"couldn't run the glance test ({exc}) — rendering as is")
+        else:
+            stage("glance", "off", "")
     except (ConceptGateError, ValidationError, json.JSONDecodeError) as exc:
         # Don't block the paid render on a gate hiccup — proceed with what we have.
         result.error = str(exc)
@@ -874,6 +1008,9 @@ def _persist(idea: Idea, store: Store, slides: list, result: GateResult) -> None
             "min_score": result.min_score,
             "passed": result.passed,
             "rounds": result.rounds,
+            # What this concept is, so the next render knows it's been checked.
+            "fingerprint": concept_fingerprint(slides[0]),
+            "stages": result.stages,
         }
         if result.verdict is not None:
             cg.update(

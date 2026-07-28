@@ -298,6 +298,19 @@
   .verdict-card .v-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
   .verdict-card .v-actions button { padding: 8px 14px; font-size: 12.5px; }
   .verdict-card .v-caveat { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
+  /* The concept gate running live: a four-step checklist that lights up as
+     each check happens, so "why is slide 1 slow?" answers itself. */
+  .gate-live .gate-steps { list-style: none; margin: 12px 0 0; padding: 0;
+                           display: flex; flex-direction: column; gap: 7px; }
+  .gate-live .gs { display: flex; align-items: baseline; gap: 9px; font-size: 13px;
+                   color: var(--faint); transition: color .2s; }
+  .gate-live .gs .gs-ic { width: 18px; flex: none; text-align: center; }
+  .gate-live .gs .gs-note { color: var(--muted); font-size: 12px;
+                            overflow-wrap: anywhere; }
+  .gate-live .gs.running { color: var(--fg); }
+  .gate-live .gs.done { color: var(--muted); }
+  .gate-live .gs.off, .gate-live .gs.skipped { opacity: .45; }
+  .gate-live .gs.failed .gs-note { color: #e6b800; }
   /* Concept-gate extras: the sub-scores, and the field of openers it beat. */
   .verdict-card .cg-subs { margin: 8px 0 0; display: flex; gap: 14px; flex-wrap: wrap; }
   .verdict-card .cg-sub { font-size: 12px; color: var(--muted); }
@@ -645,6 +658,9 @@
                title="placeholder backgrounds, no API spend — for testing">
           <input type="checkbox" id="img-dry" style="width:auto; margin:0"> test mode</label>
       </div>
+      <p class="hint" style="margin:8px 0 0; font-size:12.5px">⚡ Slide 1 goes through the
+        concept gate first — rival openers are invented and judged against yours, the winner
+        is scored, then glance-tested — so the image budget only goes on an opener that earned it.</p>
       <div class="cta-row" style="margin-top:8px">
         <button type="button" class="ghost" onclick="scheduleFirst()">📅 Schedule now — generate images in the background</button>
       </div>
@@ -658,6 +674,15 @@
     <h2>The carousel takes shape</h2>
     <p class="hint">Tap a thumbnail to inspect a slide — amend and regenerate anything.</p>
     <div id="img-wait" style="display:none">
+      <!-- The concept gate, live. Slide 1 is the whole first-pool verdict, so
+           before a penny goes on the image the engine fights over the opener —
+           and the editor gets to watch it happen rather than wonder why the
+           first image is taking longer than the rest. -->
+      <div class="job-panel gate-live" id="gate-live" style="display:none; margin-bottom:12px">
+        <p style="margin:0"><span class="spin">⚡</span> <b>Making slide 1 earn it</b>
+          — the opener is checked before any money is spent on the image</p>
+        <ol class="gate-steps" id="gate-steps"></ol>
+      </div>
       <div class="job-panel" style="margin-bottom:16px">
         <p style="margin:0"><span class="spin">🎨</span> <b>Generating the slides</b>
           — queued and running in the background; each appears below as it finishes</p>
@@ -2067,11 +2092,13 @@ async function pollRender(n){
       j.status === 'QUEUED' ? 'waiting in the job queue…' : (j.note || 'generating…');
     document.getElementById('img-elapsed').textContent =
       `${secs}s elapsed — roughly 15–30s per slide on real generations`;
+    drawGateSteps(j.gate_stages);
     drawImages(d);
     return setTimeout(() => pollRender((n || 0) + 1), pollWait(n));
   }
   renderStart = null;
   document.getElementById('img-wait').style.display = 'none';
+  drawGateSteps(null);
   if (d.last_error && !(d.assets || []).length) {
     toast('Image generation failed: ' + d.last_error.error);
   }
@@ -2159,6 +2186,31 @@ async function openImagesStep(){
     renderVerdict(d.scroll_verdict);
   }
   renderConceptGate(d.concept_gate);
+}
+
+/* The concept gate, live: the four checks slide 1 goes through before the
+   image is paid for. Keys come from conceptgate.GATE_STAGES; the label and the
+   note are written server-side, so this only decides how it looks. */
+const GATE_ICONS = {
+  rivals: '⚔️', tournament: '🏆', score: '🎯', glance: '👁️',
+};
+const GATE_STATE_IC = {
+  running: '<span class="spin">◐</span>', done: '✓', failed: '!', off: '–', skipped: '–',
+};
+function drawGateSteps(stages){
+  const box = document.getElementById('gate-live');
+  const list = document.getElementById('gate-steps');
+  if (!box || !list) return;
+  // Only show it while there's something to show — an ungated dry run or a
+  // concept that's already been checked shouldn't leave an empty panel behind.
+  if (!stages || !stages.length) { box.style.display = 'none'; list.innerHTML = ''; return; }
+  box.style.display = '';
+  list.innerHTML = stages.map(s => `
+    <li class="gs ${esc(s.state || '')}">
+      <span class="gs-ic">${GATE_STATE_IC[s.state] || '·'}</span>
+      <span>${GATE_ICONS[s.key] || ''} ${esc(s.label || s.key)}
+        ${s.note ? `<span class="gs-note">— ${esc(s.note)}</span>` : ''}</span>
+    </li>`).join('');
 }
 
 /* The pre-image concept gate on slide 1 (set server-side at render): the

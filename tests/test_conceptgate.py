@@ -20,6 +20,7 @@ from chrgd.conceptgate import (
     TournamentVerdict,
     _resolve_winner,
     gate_slide_one,
+    needs_gate,
     parse_concept_verdict,
     parse_glance_verdict,
     parse_tournament_verdict,
@@ -416,7 +417,106 @@ def test_sub_scores_are_persisted_for_the_editor(settings, store):
     assert cg["intrigue"] == 9 and cg["originality"] == 8 and cg["instant"] == 10
 
 
+# --- the live stage log ------------------------------------------------------
+
+
+def test_stage_log_streams_every_check(full_settings, store):
+    """The editor watches the four checks happen — each one reports twice."""
+    idea = _idea(store)
+    creative = FakeRefiner([_rivals("a rival", "another")])
+    judge = FakeJudge([
+        '{"winner": 0, "why": "the built one holds"}',
+        '{"score": 9, "note": "strong"}',
+        '{"took_away": "rack hoggers", "stops": true}',
+    ])
+    seen = []
+    result = gate_slide_one(
+        idea, full_settings, store, judge=judge, refiner=creative,
+        on_stage=lambda stages: seen.append([(s["key"], s["state"]) for s in stages]),
+    )
+    # Every stage ran and finished, in order.
+    assert [(s["key"], s["state"]) for s in result.stages] == [
+        ("rivals", "done"), ("tournament", "done"), ("score", "done"), ("glance", "done"),
+    ]
+    # ...and the UI saw it progress, not just the end state.
+    assert ("rivals", "running") in seen[0]
+    assert len(seen) > len(result.stages)
+    # Each carries the label the UI shows and a human note.
+    assert result.stages[0]["label"] == "Inventing rival openers"
+    assert "9" in result.stages[2]["note"]
+
+
+def test_stage_log_marks_disabled_stages_off(settings, store):
+    idea = _idea(store)
+    gate_slide_one(idea, settings, store, judge=FakeJudge(['{"score": 9}']))
+    saved = json.loads(store.get_idea("G-0001").route_json)["concept_gate"]
+    states = {s["key"]: s["state"] for s in saved["stages"]}
+    assert states == {"rivals": "off", "tournament": "off", "score": "done", "glance": "off"}
+
+
+def test_stage_log_reports_a_failed_stage(full_settings, store):
+    idea = _idea(store)
+    creative = FakeRefiner([{"not": "candidates"}])
+    judge = FakeJudge(['{"score": 9}', '{"took_away": "x", "stops": true}'])
+    result = gate_slide_one(idea, full_settings, store, judge=judge, refiner=creative)
+    states = {s["key"]: s["state"] for s in result.stages}
+    assert states["tournament"] == "failed"
+    assert states["score"] == "done"      # the check we could still do, still ran
+
+
+# --- "has this opener been checked?" ----------------------------------------
+
+
+def test_needs_gate_is_true_until_the_concept_is_checked(settings, store):
+    idea = _idea(store)
+    assert needs_gate(idea) is True
+    gate_slide_one(idea, settings, store, judge=FakeJudge(['{"score": 9}']))
+    assert needs_gate(store.get_idea("G-0001")) is False
+
+
+def test_needs_gate_reopens_when_slide_one_changes(settings, store):
+    """A hand-edited hook is a new concept, and gets checked like one."""
+    idea = _idea(store)
+    gate_slide_one(idea, settings, store, judge=FakeJudge(['{"score": 9}']))
+    checked = store.get_idea("G-0001")
+    slides = json.loads(checked.slides_json)
+    slides[0]["headline"] = "something the editor typed instead"
+    checked.slides_json = json.dumps(slides)
+    assert needs_gate(checked) is True
+
+
+def test_fingerprint_ignores_the_other_slides(settings, store):
+    """Editing slide 3 must not re-open the (expensive) slide-1 tournament."""
+    idea = _idea(store)
+    gate_slide_one(idea, settings, store, judge=FakeJudge(['{"score": 9}']))
+    checked = store.get_idea("G-0001")
+    slides = json.loads(checked.slides_json)
+    slides[1]["headline"] = "a different second slide"
+    checked.slides_json = json.dumps(slides)
+    assert needs_gate(checked) is False
+
+
 # --- services wiring --------------------------------------------------------
+
+
+def test_ensure_concept_gated_skips_an_already_checked_opener(settings, store, monkeypatch):
+    """Asking for new pixels on an approved opener must not rewrite the post."""
+    from chrgd import conceptgate, services
+    from chrgd.conceptgate import GateResult
+
+    idea = _idea(store)
+    gate_slide_one(idea, settings, store, judge=FakeJudge(['{"score": 9}']))
+    idea = store.get_idea("G-0001")
+
+    calls = {"n": 0}
+    monkeypatch.setattr(
+        conceptgate, "gate_slide_one",
+        lambda *a, **k: calls.__setitem__("n", calls["n"] + 1) or GateResult(idea=idea),
+    )
+    _, gate = services.ensure_concept_gated(store, settings, idea)
+    assert gate is None and calls["n"] == 0   # same opener → not fought over again
+    services.ensure_concept_gated(store, settings, idea, force=True)
+    assert calls["n"] == 1                    # ...unless explicitly asked for
 
 
 def test_render_idea_runs_gate_before_spending(settings, store, monkeypatch):
@@ -458,3 +558,142 @@ def test_render_idea_skips_gate_on_dry_run(settings, store, monkeypatch):
     )
     services.render_idea(store, settings, idea, dry_run=True)
     assert calls["gate"] == 0
+
+
+# --- every door into a paid slide 1 ------------------------------------------
+#
+# The gate is only worth having if there is no way round it. These cover the
+# render paths that don't go through the create journey's main button.
+
+
+@pytest.fixture()
+def gate_spy(monkeypatch):
+    """Counts gate runs and stands in for the real (paid) one."""
+    from chrgd import conceptgate
+    from chrgd.conceptgate import GateResult
+
+    calls = []
+
+    def fake_gate(idea, s, st, **kw):
+        calls.append(idea.idea_id)
+        # Mark the concept checked, exactly as the real gate does, so the
+        # "already checked" path is exercised honestly.
+        conceptgate._persist(
+            idea, st, json.loads(idea.slides_json),
+            GateResult(idea=idea, passed=True, score=9, min_score=9,
+                       verdict=conceptgate.ConceptVerdict(score=9)),
+        )
+        return GateResult(idea=idea, passed=True, score=9, min_score=9)
+
+    monkeypatch.setattr(conceptgate, "gate_slide_one", fake_gate)
+    return calls
+
+
+@pytest.fixture()
+def fake_images(monkeypatch):
+    from PIL import Image as PILImage
+
+    from chrgd import images
+
+    monkeypatch.setattr(
+        images, "_generate_background",
+        lambda *a, **k: PILImage.new("RGB", (100, 150)),
+    )
+
+
+def _regen_slide(store, settings, n):
+    """Run one render_slide job through its handler (no queue, no scroll test)."""
+    from chrgd.worker import _handle_render_slide
+
+    job_id = store.create_job("render_slide", idea_id="G-0001", params={"slide": n})
+    return _handle_render_slide(store, settings, store.get_job(job_id))
+
+
+def test_regenerating_slide_one_gates_a_changed_opener(settings, store, gate_spy, fake_images):
+    """The scroll test's 'use a sharper hook' rewrites slide 1 — that new
+    concept must be checked before it reaches a paid image."""
+    from chrgd import services
+
+    settings.openai_api_key = "sk-test"
+    idea = _idea(store)
+    services.render_idea(store, settings, idea, dry_run=False)
+    assert len(gate_spy) == 1          # the first render checked the opener
+
+    _regen_slide(store, settings, 0)
+    assert len(gate_spy) == 1          # same concept, new pixels — not re-fought
+
+    # ...but change the hook, and slide 1 is a new concept again.
+    slides = json.loads(store.get_idea("G-0001").slides_json)
+    slides[0]["headline"] = "a hook the scroll test invented"
+    store.save_build("G-0001", {"slides_json": json.dumps(slides)})
+    _regen_slide(store, settings, 0)
+    assert len(gate_spy) == 2
+
+
+def test_regenerating_a_later_slide_never_gates(settings, store, gate_spy, fake_images):
+    settings.openai_api_key = "sk-test"
+    _idea(store)
+    _regen_slide(store, settings, 1)
+    assert gate_spy == []
+
+
+def test_sync_render_endpoint_cannot_sidestep_the_gate(settings, store, gate_spy, fake_images):
+    """/api/render is a real door into a paid render — it goes through the gate."""
+    from fastapi.testclient import TestClient
+
+    from chrgd.webapp import create_app
+
+    settings.openai_api_key = "sk-test"
+    settings.web_password = "pw"
+    _idea(store)
+    client = TestClient(create_app(settings))
+    client.post("/login", data={"username": "admin", "password": "pw"})
+    r = client.post("/api/render/G-0001")
+    assert r.status_code == 200
+    assert gate_spy == ["G-0001"]
+
+
+def test_render_job_streams_the_stage_list_to_the_ui(settings, store, fake_images):
+    """The four checks reach the job the create journey is polling."""
+    from chrgd.worker import Worker, enqueue_render
+
+    settings.openai_api_key = "sk-test"
+    settings.concept_tournament_enabled = True
+    settings.concept_candidates = 1
+    settings.concept_glance_test = True
+    _idea(store)
+
+    import chrgd.conceptgate as cg
+
+    class _Judge:
+        def __init__(self):
+            self.n = 0
+
+        def judge(self, system, user):
+            self.n += 1
+            return [
+                '{"winner": 0, "why": "holds"}',
+                '{"score": 9}',
+                '{"took_away": "rack hoggers", "stops": true}',
+            ][min(self.n - 1, 2)]
+
+    orig = cg.OpenAIConceptJudge
+    cg.OpenAIConceptJudge = lambda s: _Judge()
+    orig_invent = cg.invent_rivals
+    cg.invent_rivals = lambda *a, **k: (
+        [cg.ConceptCandidate(headline="a rival", image_prompt="p")], 0.01
+    )
+    try:
+        job_id = enqueue_render(store, "G-0001", dry_run=False)
+        Worker(settings).run_once()
+    finally:
+        cg.OpenAIConceptJudge = orig
+        cg.invent_rivals = orig_invent
+
+    # The job carried the live stage list while it ran; the finished post keeps it.
+    saved = json.loads(store.get_idea("G-0001").route_json)["concept_gate"]
+    assert [s["key"] for s in saved["stages"]] == [
+        "rivals", "tournament", "score", "glance"
+    ]
+    assert all(s["state"] == "done" for s in saved["stages"])
+    assert store.get_job(job_id)["status"] == "COMPLETED"

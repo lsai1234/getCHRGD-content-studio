@@ -146,6 +146,31 @@ def _handle_build(store: Store, settings: Settings, job: dict) -> dict:
     }
 
 
+def _gate_reporters(store: Store, job: dict):
+    """The two progress channels a render job writes for the UI.
+
+    `notify` is the prose line already shown under the progress bar; `on_stage`
+    carries the concept gate's structured stage list alongside it, so the create
+    journey can show WHICH of the four checks is running rather than a bar that
+    just says "generating…". Both land in the same `result_json`, and the latest
+    stage list survives subsequent prose-only notes.
+    """
+    state: dict = {"note": "", "gate_stages": []}
+
+    def _write() -> None:
+        store.update_job(job["job_id"], result_json=json.dumps(state))
+
+    def notify(note: str) -> None:
+        state["note"] = note
+        _write()
+
+    def on_stage(stages: list) -> None:
+        state["gate_stages"] = stages
+        _write()
+
+    return notify, on_stage
+
+
 def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
     from .services import render_idea
 
@@ -158,12 +183,12 @@ def _handle_render(store: Store, settings: Settings, job: dict) -> dict:
     def on_slide(done: int, total: int) -> None:
         store.update_job(job["job_id"], progress=int(done * 100 / total))
 
-    def notify(note: str) -> None:
-        store.update_job(job["job_id"], result_json=json.dumps({"note": note}))
+    notify, on_stage = _gate_reporters(store, job)
 
     notify("starting — composing the design prompts")
     result = render_idea(
-        store, settings, idea, dry_run=dry_run, on_slide=on_slide, notify=notify
+        store, settings, idea, dry_run=dry_run, on_slide=on_slide, notify=notify,
+        on_stage=on_stage,
     )
     # Every real render earns the adversarial slide-1 verdict, automatically —
     # the only independent check in the pipeline shouldn't wait for a button.
@@ -346,19 +371,30 @@ def _handle_render_slide(store: Store, settings: Settings, job: dict) -> dict:
     """(Re)generate the background(s) for a single slide."""
     from .images import list_variants, render_slide
     from .profile import brand_character_ref, brand_style_note, brand_swipe_style
+    from .services import ensure_concept_gated
 
     params = json.loads(job["params_json"] or "{}")
     idea = store.get_idea(job["idea_id"])
     if idea is None:
         raise ValueError(f"no such idea {job['idea_id']}")
-    def notify(note: str) -> None:
-        store.update_job(job["job_id"], result_json=json.dumps({"note": note}))
+    slide_no = int(params.get("slide", 0))
+    dry_run = bool(params.get("dry_run", False))
+    notify, on_stage = _gate_reporters(store, job)
+
+    # Slide 1 gets the same gate here as it does on a full render — otherwise
+    # the sharper hook the scroll test invents, or one typed in by hand, reaches
+    # a paid image without a single check. Unchanged concepts are recognised and
+    # skipped, so "regenerate the background" stays exactly that.
+    if slide_no == 0 and not dry_run:
+        idea, _ = ensure_concept_gated(
+            store, settings, idea, notify=notify, on_stage=on_stage
+        )
 
     result = render_slide(
         idea,
-        int(params.get("slide", 0)),
+        slide_no,
         settings,
-        dry_run=bool(params.get("dry_run", False)),
+        dry_run=dry_run,
         variants=params.get("variants"),
         notify=notify,
         house_style=brand_style_note(store),

@@ -662,17 +662,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.post("/api/render/{idea_id}")
     def api_render(idea_id: str, dry_run: bool = False, _: str = Depends(require_user)):
-        from .images import ImageError, render_carousel
+        """Render synchronously. Goes through `render_idea` like every other
+        render path, so the slide-1 concept gate can't be sidestepped by using
+        this endpoint instead of the job queue."""
+        from .images import ImageError
+        from .services import render_idea
 
         with _store(settings) as store:
             idea = store.get_idea(idea_id)
             if idea is None:
                 raise HTTPException(404, "no such idea")
             try:
-                result = render_carousel(idea, settings, dry_run=dry_run)
+                result = render_idea(store, settings, idea, dry_run=dry_run)
             except ImageError as exc:
                 raise HTTPException(400, str(exc))
-            store.save_asset_paths(idea_id, result.paths)
         return {"idea_id": idea_id, "paths": result.paths, "spend_usd": result.spend_usd}
 
     # --- background jobs ----------------------------------------------------
@@ -796,14 +799,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         except ValueError:
             raise HTTPException(400, f"bad datetime: {raw!r}")
 
+    def _job_result(job: dict) -> dict:
+        """Whatever a running job last wrote into result_json ({} if nothing)."""
+        if not job.get("result_json"):
+            return {}
+        try:
+            payload = json.loads(job["result_json"])
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
     def _job_note(job: dict) -> str | None:
         """The live status note a running job last wrote into result_json."""
-        if not job.get("result_json"):
-            return None
-        try:
-            return json.loads(job["result_json"]).get("note")
-        except (json.JSONDecodeError, AttributeError):
-            return None
+        return _job_result(job).get("note")
 
     def _idea_or_404(store: Store, idea_id: str) -> Idea:
         idea = store.get_idea(idea_id)
@@ -1137,6 +1145,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     "status": j["status"],
                     "progress": j["progress"],
                     "note": _job_note(j),
+                    # The concept gate's live stage list, so the journey can show
+                    # which check is running instead of an opaque spinner.
+                    "gate_stages": _job_result(j).get("gate_stages") or [],
                 }
                 for k, j in jobs.items()
                 if j
