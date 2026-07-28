@@ -989,6 +989,7 @@ function pollWait(n){ return Math.min(350 * Math.pow(1.45, n || 0), 2500); }
 const CS_FLAVOUR = {
   topical: '📌 Topical take', stat: '📊 Stat that stops you',
   hot_take: '🔥 Hot take', observation: '👀 Lived observation',
+  amp: '⚡ Amp — charge cycle',
 };
 let csLoading = false;
 
@@ -1027,8 +1028,13 @@ async function loadConcepts(fresh){
   }
 
   // The sketch runs on the background worker, so we kick a job and poll it —
-  // the request itself returns instantly.
-  const r = await post('/api/concepts', new URLSearchParams(seed ? {seed} : {}));
+  // the request itself returns instantly. `fresh` is passed through: it tells
+  // the engine to ban the sets already pitched and rotate the live pool, so
+  // ↻ Fresh set returns new subjects rather than the same idea reworded.
+  const body = new URLSearchParams();
+  if (seed) body.set('seed', seed);
+  if (fresh) body.set('fresh', 'true');
+  const r = await post('/api/concepts', body);
   if (!r || !r.job_id) { csLoading = false; csDone(); return renderConceptsEmpty(r); }
   csJob = r.job_id;
   csSeed = seed;
@@ -1099,7 +1105,10 @@ function conceptCard(c, i){
   const el = document.createElement('div');
   el.className = 'concept' + (i === 0 ? ' lead' : '');
   el.dataset.index = i;
-  const flavour = CS_FLAVOUR[c.flavour] || (c.flavour ? esc(c.flavour) : '💡 Concept');
+  // An Amp card is labelled as Amp whatever flavour the model returned, so the
+  // one mascot slot in the set is always obvious at a glance.
+  const flavour = c.amp ? CS_FLAVOUR.amp
+    : (CS_FLAVOUR[c.flavour] || (c.flavour ? esc(c.flavour) : '💡 Concept'));
   el.innerHTML =
     `<p class="concept-flavour">${flavour}</p>
      <p class="concept-title">${esc(c.title || c.angle)}</p>
@@ -1152,8 +1161,10 @@ async function drillConcept(i){
   btn.disabled = true; btn.textContent = '🔎 drilling…';
   el.querySelector('[data-slot="detail"]').innerHTML = '<div class="skel"></div>';
   const body = new URLSearchParams({
-    flavour: c.flavour || '', title: c.title || '', hook: c.hook || '',
+    flavour: c.amp ? 'amp' : (c.flavour || ''),
+    title: c.title || '', hook: c.hook || '',
     angle: c.angle || '', source: c.source || '', seed: csSeed,
+    amp: c.amp ? 'true' : '',
   });
   const r = await post('/api/concepts/develop', body);
   if (!r || !r.job_id) { drillFailed(i, 'could not start the drill-down'); return; }
@@ -1196,6 +1207,10 @@ async function buildConcept(c, takes){
   const body = baseParams(false, takes);
   body.set('mode', 'idea');
   body.set('text', c.build_seed || c.angle || c.title || '');
+  // An Amp concept carries the charge-cycle mechanic into the build, so the
+  // copy follows the drain → charged arc and every slide renders the locked
+  // character. Without this it'd be a normal carousel that just mentions him.
+  if (c.amp) body.set('mechanic', 'amp_charge_cycle');
   const r = await post('/api/create/start', body);
   if (!r) return;
   afterStart(r, false, takes);

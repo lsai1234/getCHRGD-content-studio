@@ -177,7 +177,9 @@ def test_worker_handles_concepts_job(settings, store, monkeypatch):
 
     monkeypatch.setattr(
         cm, "sketch_concepts",
-        lambda s, se, seed="": {"concepts": [{"title": "t", "angle": "a"}], "seeded": bool(seed)},
+        lambda s, se, seed="", fresh=False: {
+            "concepts": [{"title": "t", "angle": "a"}], "seeded": bool(seed),
+        },
     )
     from chrgd.worker import _handle_concepts
 
@@ -355,3 +357,170 @@ def test_worker_handles_the_drill_job(settings, store, monkeypatch):
     job_id = store.create_job("concept_detail", params={"concept": {"title": "t"}, "seed": ""})
     out = _handle_concept_detail(store, settings, store.get_job(job_id))
     assert out["concept"]["title"] == "t" and out["concept"]["why"] == "w"
+
+
+# --- "Fresh set" must mean NEW ideas, not the same one reworded ---------------
+
+
+def _completed_set(store, titles, *, seed=""):
+    """A completed concepts job carrying these titles — the engine's memory."""
+    job_id = store.create_job("concepts", params={"seed": seed})
+    store.update_job(
+        job_id, status="COMPLETED",
+        result_json=json.dumps({"concepts": [
+            {"title": t, "source": "the same big story"} for t in titles
+        ]}),
+    )
+    return job_id
+
+
+def test_fresh_bans_what_was_already_pitched(store, settings):
+    # The bug: refreshing returned the same core idea in new words, because the
+    # engine never knew what it had already shown.
+    _completed_set(store, ["Make gyms free like Burnham's buses",
+                           "Your real odds of a 6pm squat rack"])
+    gen = _FakeGen({"concepts": [{"title": "something else entirely"}]})
+    sketch_concepts(store, settings, fresh=True, generator=gen)
+    assert "ALREADY PITCHED" in gen.user
+    assert "Make gyms free like Burnham's buses" in gen.user
+    assert "reworded" in gen.user            # a new headline is not a new idea
+    assert "THIS IS A REFRESH" in gen.user
+
+
+def test_normal_load_does_not_carry_the_ban_list(store, settings):
+    # Only an explicit refresh pays the prompt cost of the memory block.
+    _completed_set(store, ["Make gyms free like Burnham's buses"])
+    gen = _FakeGen({"concepts": [{"title": "x"}]})
+    sketch_concepts(store, settings, generator=gen)
+    assert "ALREADY PITCHED" not in gen.user
+
+
+def test_fresh_rotates_the_live_pool(store, settings):
+    # Same ranked pool every spin = same lead story every spin. A refresh starts
+    # the pool at a different offset so the raw material actually differs.
+    moments = [{"title": f"story {i}", "why": "w"} for i in range(12)]
+    _completed_scan(store, "moments", moments)
+    cold = _FakeGen({"concepts": [{"title": "x"}]})
+    sketch_concepts(store, settings, generator=cold)
+    _completed_set(store, ["a", "b", "c"])   # three concepts already pitched
+    warm = _FakeGen({"concepts": [{"title": "x"}]})
+    sketch_concepts(store, settings, fresh=True, generator=warm)
+
+    def lead(user):
+        for line in user.splitlines():
+            if line.startswith("- (moments)"):
+                return line
+        return ""
+
+    assert lead(cold.user) and lead(warm.user)
+    assert lead(cold.user) != lead(warm.user)
+
+
+def test_fresh_enqueue_is_never_deduped(settings, store):
+    from chrgd.worker import enqueue_concepts
+
+    a = enqueue_concepts(store, seed="")
+    assert enqueue_concepts(store, seed="") == a       # idle reopen still dedupes
+    fresh = enqueue_concepts(store, seed="", fresh=True)
+    assert fresh != a          # ↻ Fresh set must never join the in-flight run
+    assert enqueue_concepts(store, seed="", fresh=True) != fresh
+
+
+def test_fresh_flag_reaches_the_engine(settings, store, monkeypatch):
+    import chrgd.concepts as cm
+
+    seen = {}
+    monkeypatch.setattr(
+        cm, "sketch_concepts",
+        lambda s, se, seed="", fresh=False: seen.update(fresh=fresh) or {"concepts": []},
+    )
+    from chrgd.worker import _handle_concepts
+
+    job_id = store.create_job("concepts", params={"seed": "", "fresh": True})
+    _handle_concepts(store, settings, store.get_job(job_id))
+    assert seen["fresh"] is True
+
+
+# --- Amp always has a seat at the table ---------------------------------------
+
+
+def test_the_set_always_carries_an_amp_concept(store, settings):
+    # Even when the model ignores the instruction, the editor gets Amp.
+    gen = _FakeGen({"concepts": [
+        {"flavour": "topical", "title": "a"}, {"flavour": "stat", "title": "b"},
+    ]})
+    out = sketch_concepts(store, settings, generator=gen)
+    amps = [c for c in out["concepts"] if c["amp"]]
+    assert len(amps) == 1
+    assert amps[0]["flavour"] == "amp"
+    assert amps[0]["build_seed"]          # buildable without drilling down
+
+
+def test_a_model_supplied_amp_concept_is_kept(store, settings):
+    gen = _FakeGen({"concepts": [
+        {"flavour": "topical", "title": "a"},
+        {"flavour": "amp", "title": "Leg day left Amp on 4%", "amp": True},
+    ]})
+    out = sketch_concepts(store, settings, generator=gen)
+    amps = [c for c in out["concepts"] if c["amp"]]
+    assert len(amps) == 1 and amps[0]["title"] == "Leg day left Amp on 4%"
+    assert len(out["concepts"]) == 2      # no backstop card was bolted on
+
+
+def test_the_amp_slot_varies_between_spins(store, settings):
+    # A fixed fallback would give the same Amp post every day.
+    seen = set()
+    for i in range(3):
+        gen = _FakeGen({"concepts": [{"title": "a"}]})
+        out = sketch_concepts(store, settings, fresh=True, generator=gen)
+        seen.add([c for c in out["concepts"] if c["amp"]][0]["title"])
+        _completed_set(store, [f"pitched {i}"])
+    assert len(seen) > 1
+
+
+def test_the_sketch_prompt_asks_for_amp(store, settings):
+    gen = _FakeGen({"concepts": [{"title": "x"}]})
+    sketch_concepts(store, settings, generator=gen)
+    assert "AMP" in gen.system and "CHARGE CYCLE" in gen.system
+
+
+def test_drilling_an_amp_concept_uses_amps_persona(store, settings):
+    from chrgd.concepts import develop_concept
+
+    gen = _FakeGen({"title": "t", "why": "w", "angle": "a", "beats": ["b1"]})
+    out = develop_concept(store, settings, {"title": "Leg day left Amp on 4%", "amp": True},
+                          generator=gen)
+    assert "AMP POST" in gen.user
+    assert "lovable try-hard" in gen.user      # the persona from character.py
+    assert "drained → charging → charged" in gen.user
+    assert out["concept"]["amp"] is True       # survives the drill
+
+
+def test_drilling_a_normal_concept_stays_generic(store, settings):
+    from chrgd.concepts import develop_concept
+
+    gen = _FakeGen({"title": "t", "why": "w", "angle": "a"})
+    develop_concept(store, settings, {"title": "Your real odds of a squat rack"},
+                    generator=gen)
+    assert "AMP POST" not in gen.user
+
+
+def test_an_amp_concept_builds_through_the_charge_cycle_mechanic(settings):
+    # The whole point of the Amp slot: it must build as an Amp post, not a
+    # carousel that happens to mention him.
+    from chrgd.character import is_amp_route
+
+    c = TestClient(create_app(settings))
+    c.post("/login", data={"username": "admin", "password": "s3cret"})
+    r = c.post("/api/create/start", data={
+        "mode": "idea", "text": "Leg day left Amp on 4%",
+        "mechanic": "amp_charge_cycle",
+    })
+    assert r.status_code == 200
+    idea_id = r.json()["idea_id"]
+    s = Store(settings.db_path)
+    try:
+        route = json.loads(s.get_idea(idea_id).route_json or "{}")
+    finally:
+        s.close()
+    assert is_amp_route(route)

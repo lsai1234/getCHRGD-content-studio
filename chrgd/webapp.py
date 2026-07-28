@@ -909,6 +909,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 idea = _new_seed(
                     store, concept_note=text.strip(), style=style,
                     content_category="ragebait" if ragebait else "",
+                    # An Amp concept from the create screen carries the
+                    # charge-cycle mechanic through this door, so it builds and
+                    # renders as an Amp post instead of a carousel that merely
+                    # mentions him.
+                    mechanic_key=mechanic,
                     length=length, scheduled_for=when,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
@@ -1315,7 +1320,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         }
 
     @app.post("/api/concepts")
-    def api_concepts(seed: str = Form(""), _: str = Depends(require_user)):
+    def api_concepts(
+        seed: str = Form(""), fresh: bool = Form(False),
+        _: str = Depends(require_user),
+    ):
         """Kick the fast concept sketch on the worker and return a job_id to poll.
 
         Stage 1 only — five concepts at headline level, on the fast model. It
@@ -1325,13 +1333,14 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         from .worker import enqueue_concepts
 
         with _store(settings) as store:
-            job_id = enqueue_concepts(store, seed=seed)
+            job_id = enqueue_concepts(store, seed=seed, fresh=fresh)
         return {"job_id": job_id, "kind": "concepts"}
 
     @app.post("/api/concepts/develop")
     def api_concept_develop(
         flavour: str = Form(""), title: str = Form(""), hook: str = Form(""),
         angle: str = Form(""), source: str = Form(""), seed: str = Form(""),
+        amp: bool = Form(False),
         _: str = Depends(require_user),
     ):
         """Stage 2: drill one sketched concept down into a full brief. Runs on
@@ -1341,6 +1350,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         concept = {
             "flavour": flavour, "title": title, "hook": hook,
             "angle": angle, "source": source,
+            # An Amp card develops against Amp's persona and charge-cycle arc,
+            # not the generic brief.
+            "amp": amp or flavour == "amp",
         }
         if not (title.strip() or angle.strip()):
             raise HTTPException(400, "nothing to develop")

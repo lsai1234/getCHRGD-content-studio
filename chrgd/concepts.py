@@ -60,8 +60,19 @@ _MAX_CONCEPTS = 5
 # Most days the editor builds one concept, so four fifths of the old wait was
 # work nobody read.
 _SKETCH_CANDIDATES = 8    # live-signal lines handed to the sketch (was 14)
-_SKETCH_MAX_TOKENS = 700  # five short concepts fit easily; the cap keeps it quick
+_SKETCH_MAX_TOKENS = 900  # five short concepts fit easily; the cap keeps it quick
 _SKETCH_TITLE_CHARS = 110  # candidate titles are trimmed to keep the prompt lean
+
+# --- keeping "Fresh set" actually fresh ---------------------------------------
+# Left alone, every spin sees the same live pool in the same order and leads with
+# the same biggest story, so refreshing only ever reworded yesterday's top idea.
+# Two things fix that, and both are needed:
+#   * MEMORY — the concepts already pitched recently go into the prompt as a
+#     banned list, subject and all, not just as titles to avoid rewording.
+#   * ROTATION — each spin sees the candidate pool from a different starting
+#     point, so the raw material itself changes rather than the phrasing.
+_RECALL_SETS = 4          # how many recent sets are held as "already pitched"
+_RECALL_TITLES = 16       # ceiling on the banned list, so the prompt stays lean
 
 
 class ConceptError(RuntimeError):
@@ -76,6 +87,7 @@ class Concept(BaseModel):
     angle: str = ""        # what to build — the seed the carousel is written from
     source: str = ""       # the real signal/seed it sprang from (transparency)
     beats: list[str] = []  # the carousel's shape, filled in at drill-down
+    amp: bool = False      # stars Amp → builds through the charge-cycle mechanic
 
     def build_seed(self) -> str:
         """The text handed to the build (create/start, mode=idea)."""
@@ -102,6 +114,8 @@ SKETCH_SYSTEM = """You are the creative director for CHRGD, a premium UK gym/sup
 
 You are PITCHING, fast. Give the editor five headline-level concepts to choose from — the creative LEAP in one line each, plus the slide-1 hook. No essays, no reasoning out loud: the chosen one gets developed properly afterwards.
 
+FIVE GENUINELY DIFFERENT IDEAS — not one idea five ways. Each concept must have its own SUBJECT: a different story, a different observation, a different argument. Two concepts about the same event with different wording are ONE concept and you have wasted a slot. Before you return the set, check each pair: if you could describe two of them with the same sentence, replace one.
+
 THE LEAP is the whole job. Don't list what's happening — turn it into a gym idea nobody else would post. The operator's own example: Andy Burnham cutting bus fares to £2 → "make gyms free like he's making buses free". The policy is FUEL; the gym angle is the product.
 
 Each concept must run on at least one real driver of spread — a CURIOSITY GAP only swiping closes, HIGH-AROUSAL emotion (laughter, righteous anger, "that's so me"), SOCIAL CURRENCY (sharing it makes the sharer look good), TRIBE/identity, a self-recognition TAG, or a side worth arguing over. If it hits none, bin it and write another.
@@ -116,18 +130,21 @@ Fast quality rules:
 
 Slide 1 is ~90% of reach, so the hook must be concrete and thumb-stopping — never a vague blog title.
 
+ONE OF THE FIVE MUST STAR AMP, the getCHRGD mascot — mark it with "amp": true and flavour "amp". Amp is an electric-blue cartoon lightning bolt with a face, stubby arms and legs, and his posts run on ONE mechanic: the CHARGE CYCLE. He starts the post drained flat by a real, relatable drain event (leg day, a 4am flight, the 3pm slump, a night out before a session), the middle turns it around, and he ends fully charged. He is a lovable try-hard on the journey WITH the audience, never a superhero who has it sorted, and the humour is cheeky and dry-British. So an Amp concept is a SITUATION that drains him — pitch the drain event and the turnaround, not a slogan. Vary it every time: a new drain, a new setting, a new joke.
+
 Return a SINGLE JSON object, no markdown, no commentary. Keep every field to one short line:
 {
   "concepts": [
     {
-      "flavour": "topical | stat | hot_take | observation",
+      "flavour": "topical | stat | hot_take | observation | amp",
       "title": "the concept in one punchy line — the leap itself",
       "hook": "the slide-1 opener (concrete, thumb-stopping) — one line",
-      "source": "the real signal or seed it sprang from, or ''"
+      "source": "the real signal or seed it sprang from, or ''",
+      "amp": true only on the one Amp concept, otherwise omit it
     }
   ]
 }
-Exactly five, ordered best-first, strongest at the top."""
+Exactly five, ordered best-first — four made from the live pool plus the one Amp concept, which does not have to be last."""
 
 
 DEVELOP_SYSTEM = """You are the creative director for CHRGD, a premium UK gym/supplement brand on TikTok, developing ONE already-chosen concept into a ready-to-build brief.
@@ -223,19 +240,78 @@ Return a SINGLE JSON object, no markdown, no commentary:
 Return your strongest few (up to 5), ordered best-first. Quality over quantity — three brilliant concepts beat five with a dud."""
 
 
-def _fuel(store: Store, seed: str, *, limit: int = 14, brief: bool = False) -> str:
+def recent_concepts(store: Store, *, sets: int = _RECALL_SETS) -> list[dict]:
+    """Titles + sources from the last few concept sets, newest first.
+
+    This is the engine's short-term memory. Without it every spin starts from a
+    blank slate against an unchanged live pool, which is exactly why "Fresh set"
+    kept returning the same core idea in new words."""
+    rows = store.conn.execute(
+        "SELECT result_json FROM jobs WHERE kind = 'concepts' "
+        "AND status = 'COMPLETED' ORDER BY job_id DESC LIMIT ?",
+        (max(1, sets),),
+    ).fetchall()
+    out: list[dict] = []
+    seen: set[str] = set()
+    for row in rows:
+        try:
+            data = json.loads(row["result_json"] or "{}")
+        except json.JSONDecodeError:
+            continue
+        for c in data.get("concepts") or []:
+            title = str(c.get("title") or "").strip()
+            key = title.lower()
+            if not title or key in seen:
+                continue
+            seen.add(key)
+            out.append({"title": title, "source": str(c.get("source") or "").strip()})
+    return out[:_RECALL_TITLES]
+
+
+def _already_pitched(store: Store) -> str:
+    """The banned list: what the editor has already been shown, and why a new
+    wording of it doesn't count as a new idea."""
+    recent = recent_concepts(store)
+    if not recent:
+        return ""
+    lines = [
+        "ALREADY PITCHED TO THIS EDITOR (they have seen these and asked for "
+        "something else — do NOT return any of them, and do NOT return a "
+        "reworded, re-angled or narrower version of one. A different headline "
+        "on the same underlying story or observation is the SAME concept. Go to "
+        "different subject matter entirely):"
+    ]
+    for c in recent:
+        lines.append(
+            f"- {c['title']}" + (f"  [from: {c['source']}]" if c["source"] else "")
+        )
+    return "\n".join(lines)
+
+
+def _fuel(store: Store, seed: str, *, limit: int = 14, brief: bool = False,
+          rotate: int = 0) -> str:
     """The mixed live pool the leap is made from: real scouted signal + the UK
     calendar + whatever the editor just fed in. Grounds the topical concepts so
     the engine invents angles, not news.
 
     `brief` trims it for the fast sketch — fewer candidates, headlines only, no
     per-story rationale. Prompt size is the single biggest lever on how long the
-    first paint takes, and the sketch doesn't need the long tail."""
+    first paint takes, and the sketch doesn't need the long tail.
+
+    `rotate` starts the candidate list at a different offset (wrapping round).
+    The pool is ranked, so without this the same top story sat at the top of
+    every spin and the model kept leading with it — the set changed wording, not
+    subject. Rotating means a refresh genuinely looks at different material."""
     from .todayspick import gather_candidates
     from .uk import uk_calendar_seed
 
     lines: list[str] = []
-    cands = gather_candidates(store, limit=limit)
+    # Pull a wider pool than we show so rotation has somewhere to move to.
+    cands = gather_candidates(store, limit=max(limit * 2, limit))
+    if cands and rotate:
+        off = rotate % len(cands)
+        cands = cands[off:] + cands[:off]
+    cands = cands[:limit]
     if cands:
         lines.append(
             "LIVE SIGNAL scouted for the UK right now (REAL — use as fuel for "
@@ -383,6 +459,46 @@ def generate_concepts(
 
 # --- stage 1: the fast sketch --------------------------------------------------
 
+# Amp's posts are all one shape — a real drain event, then the charge back up —
+# so the reliable way to keep him varied is to vary the DRAIN. These are the
+# backstop: if the model returns a set with no Amp concept in it, one of these
+# becomes the fifth card rather than the editor losing him for that spin. Each
+# is a sketch, so drilling down still develops it properly on the creative model.
+_AMP_DRAINS = (
+    ("Leg day left Amp on 4%",
+     "Amp can't do the stairs. Amp lives on the ground floor."),
+    ("Amp at 6pm: 40 minutes waiting for a squat rack",
+     "Amp's been holding this rack queue since 5:22."),
+    ("The 3pm slump has Amp face-down on the desk",
+     "It's 3pm. Amp has achieved nothing since the meal deal."),
+    ("Amp tried to train the morning after a night out",
+     "Amp said 'one drink'. Amp is now doing bicep curls at 12%."),
+    ("Amp's pre-workout kicked in during the drive there",
+     "Peak energy: the car park. Actual session: 9%."),
+    ("Amp did January like everyone else and hit the wall in week 3",
+     "Amp's new year, new me lasted 19 days."),
+    ("Amp's 5am gym alarm vs Amp's 5am self",
+     "Amp set the alarm. Amp did not consult Amp."),
+    ("Amp forgot his headphones and had to train in silence",
+     "No headphones. Just Amp, the gym radio, and his own thoughts."),
+)
+
+
+def _ensure_amp(concepts: list[Concept], rotate: int = 0) -> list[Concept]:
+    """Guarantee the set carries an Amp concept.
+
+    The editor wants Amp on the table every day, so his slot can't depend on
+    the model remembering the instruction. If it did remember, this is a no-op;
+    if it didn't, the weakest card gives way to a rotating drain-event sketch."""
+    if any(c.amp for c in concepts):
+        return concepts
+    title, hook = _AMP_DRAINS[rotate % len(_AMP_DRAINS)]
+    amp = Concept(flavour="amp", title=title, hook=hook, amp=True,
+                  source="Amp — the charge cycle")
+    if len(concepts) >= _MAX_CONCEPTS:
+        concepts = concepts[: _MAX_CONCEPTS - 1]
+    return concepts + [amp]
+
 
 def sketch_concepts(
     store: Store,
@@ -390,6 +506,7 @@ def sketch_concepts(
     *,
     seed: str = "",
     count: int = _MAX_CONCEPTS,
+    fresh: bool = False,
     generator=None,
 ) -> dict:
     """Five headline-level concepts, FAST — the create screen's first paint.
@@ -398,6 +515,13 @@ def sketch_concepts(
     (no brand bible, no playbook, trimmed live signal) and a capped response.
     The heavy evidence base and the full creative treatment belong to
     `develop_concept`, which runs on the ONE concept the editor actually taps.
+
+    `fresh` is the ↻ Fresh set path and it means what it says: the recent sets
+    go in as a banned list and the live pool is rotated, so the editor gets new
+    SUBJECTS rather than the same idea reworded.
+
+    One of the five stars Amp (the mascot), so his charge-cycle format is always
+    on the table without the editor having to go and find it in the gallery.
 
     Never raises: on any LLM/parse failure returns an empty list with the error,
     so the create screen degrades to the manual doors."""
@@ -414,21 +538,33 @@ def sketch_concepts(
             )
         from datetime import date
 
+        # A different slice of the pool per spin, so a refresh has genuinely
+        # different raw material in front of it rather than the same ranked list.
+        rotate = len(recent_concepts(store)) if fresh else 0
         tail = (
             f"TODAY IS {date.today():%A, %-d %B %Y} — any topical concept must be "
             "genuinely live around now, never a past-year story treated as current. "
             f"Pitch {count} varied concepts, headline-level only (title + hook), "
-            "strongest first. Return the JSON object."
+            "strongest first. One of them stars Amp. Return the JSON object."
         )
+        if fresh:
+            tail += (
+                "\n\nTHIS IS A REFRESH — the editor rejected the last set. Five "
+                "NEW subjects: different stories, different observations, "
+                "different arguments. If your first instinct is one of the "
+                "already-pitched ideas above, that's the one to throw away."
+            )
         user = "\n\n".join(
             block for block in (
-                _fuel(store, seed, limit=_SKETCH_CANDIDATES, brief=True),
+                _fuel(store, seed, limit=_SKETCH_CANDIDATES, brief=True,
+                      rotate=rotate),
+                _already_pitched(store) if fresh else "",
                 _steering(store),
                 tail,
             ) if block
         )
         result = generator.complete(SKETCH_SYSTEM, user)
-        concepts = _parse_concepts(result.content, count)
+        concepts = _ensure_amp(_parse_concepts(result.content, count), rotate)
         return {
             "concepts": [c.as_payload() for c in concepts],
             "seeded": bool(seed.strip()),
@@ -461,6 +597,30 @@ def _parse_concept(text: str) -> Concept:
         return Concept.model_validate(data)
     except ValidationError as exc:
         raise ConceptError(f"could not develop the concept: {exc}") from exc
+
+
+def _amp_brief() -> str:
+    """Who Amp is and how his posts work, for the drill-down.
+
+    Pulled from `character.py` rather than restated here, so the concept engine
+    and the image/build path can never drift on who he is."""
+    from .character import MECHANIC_LABEL, PERSONA, SIGN_OFF
+
+    return "\n".join([
+        f"THIS IS AN AMP POST — the '{MECHANIC_LABEL}' format, starring the "
+        "getCHRGD mascot: an electric-blue cartoon lightning bolt with a face "
+        "and stubby limbs.",
+        f"VOICE: {PERSONA}",
+        "THE CYCLE IS THE STORY: slide 1 opens on Amp DRAINED by a real, "
+        "specific, relatable drain event (write the drain, don't explain it), "
+        "the middle slides genuinely turn it around, and the last slide lands "
+        "him fully charged with the payoff. The `beats` you return must follow "
+        "that arc, drained → charging → charged.",
+        f"The final beat ends on '{SIGN_OFF}'. The recovery/hydration payoff is "
+        "what recharged him — never an ad read.",
+        "`angle` must name the DRAIN EVENT and the TURNAROUND, so the build has "
+        "a story to write rather than a slogan.",
+    ])
 
 
 def develop_concept(
@@ -507,6 +667,7 @@ def develop_concept(
                 _fuel(store, seed),
                 _evidence(store),
                 _steering(store),
+                _amp_brief() if base.amp else "",
                 tail,
             ) if block
         )
@@ -521,6 +682,7 @@ def develop_concept(
             angle=out.angle or base.angle,
             source=out.source or base.source,
             beats=out.beats or base.beats,
+            amp=base.amp,  # the editor's card decides this, never the model
         )
         return {"concept": merged.as_payload(), "stage": "developed"}
     except Exception as exc:  # noqa: BLE001 — the drill is a bonus, never a blocker

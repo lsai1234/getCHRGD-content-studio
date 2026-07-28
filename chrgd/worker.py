@@ -495,7 +495,10 @@ def _handle_concepts(store: Store, settings: Settings, job: dict) -> dict:
     from .concepts import sketch_concepts
 
     params = json.loads(job["params_json"] or "{}")
-    return sketch_concepts(store, settings, seed=str(params.get("seed", "")))
+    return sketch_concepts(
+        store, settings,
+        seed=str(params.get("seed", "")), fresh=bool(params.get("fresh")),
+    )
 
 
 def _handle_concept_detail(store: Store, settings: Settings, job: dict) -> dict:
@@ -662,11 +665,13 @@ def enqueue_concept(store: Store, idea_id: str, *, feedback: str = "") -> int:
     return store.create_job("concept", idea_id=idea_id, params={"feedback": feedback})
 
 
-def enqueue_concepts(store: Store, *, seed: str = "") -> int:
+def enqueue_concepts(store: Store, *, seed: str = "", fresh: bool = False) -> int:
     """Kick a concept-engine run on the worker. Deduped for the no-seed
-    auto-load (a reopened page shouldn't stack runs); a seeded spin is always
-    fresh because the editor asked for it."""
-    if not seed.strip():
+    auto-load (a reopened page shouldn't stack runs); a seeded spin or an
+    explicit ↻ Fresh set is always a new run, because the editor asked for one
+    — handing back the in-flight job there is exactly how "refresh" ended up
+    showing the same set again."""
+    if not seed.strip() and not fresh:
         active = store.conn.execute(
             "SELECT job_id FROM jobs WHERE kind = 'concepts' "
             "AND status IN ('QUEUED','PROCESSING') "
@@ -675,7 +680,7 @@ def enqueue_concepts(store: Store, *, seed: str = "") -> int:
         ).fetchone()
         if active:
             return int(active["job_id"])
-    return store.create_job("concepts", params={"seed": seed})
+    return store.create_job("concepts", params={"seed": seed, "fresh": fresh})
 
 
 def enqueue_concept_detail(store: Store, concept: dict, *, seed: str = "") -> int:
