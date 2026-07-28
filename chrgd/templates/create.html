@@ -102,6 +102,13 @@
   .concept-why { font-size: 12.5px; color: var(--muted); margin: 0 0 6px; line-height: 1.45; }
   .concept-src { font-size: 11.5px; color: var(--muted); opacity: .8; margin: 0 0 11px; }
   .concept-actions { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
+  /* the drill-down: the full treatment, fetched only for the card you open */
+  .concept-detail { margin: 0 0 11px; }
+  .concept-detail .d-lbl { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
+                           text-transform: uppercase; color: var(--accent); margin: 0 0 3px; }
+  .concept-detail p { font-size: 12.5px; line-height: 1.45; margin: 0 0 8px; }
+  .concept-beats { margin: 0 0 8px; padding: 0 0 0 18px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+  .cs-note { font-size: 11.5px; color: var(--muted); opacity: .85; }
   .pick-build { min-height: 44px; padding: 11px 20px; border-radius: 12px; border: none; cursor: pointer;
                 background: var(--accent); color: #111; font: inherit; font-weight: 700; font-size: 14px; }
   .pick-build:hover { filter: brightness(1.06); }
@@ -342,7 +349,7 @@
         <p class="eyebrow" style="margin:0">🎯 Today's concepts</p>
         <button type="button" class="pick-more" id="cs-refresh" onclick="loadConcepts(true)">↻ Fresh set</button>
       </div>
-      <p class="hint" style="margin:2px 0 12px">Ready-to-build ideas, made from what the UK's actually talking about — pick one and build.</p>
+      <p class="hint" style="margin:2px 0 12px">Five quick ideas from what the UK's actually talking about — build one straight off, or drill into it first. <span id="cs-note" class="cs-note"></span></p>
 
       <div class="cs-seed">
         <input id="cs-seed-input" type="text" autocomplete="off"
@@ -854,7 +861,7 @@ function goTakes(jobId){
   pollTakes(jobId);
 }
 
-async function pollTakes(jobId){
+async function pollTakes(jobId, n){
   if (jobId !== state.takesJob) return;  // superseded by a re-fan
   const job = await (await fetch(`/api/jobs/${jobId}`)).json();
   if (job.status === 'ERROR') {
@@ -864,7 +871,8 @@ async function pollTakes(jobId){
       `<p class="muted">Couldn't fan out: ${esc(job.error || 'failed')} — try “Fresh takes” or “Skip — just build it”.</p>`;
     return;
   }
-  if (job.status !== 'COMPLETED') return setTimeout(() => pollTakes(jobId), 2000);
+  if (job.status !== 'COMPLETED')
+    return setTimeout(() => pollTakes(jobId, (n || 0) + 1), pollWait(n));
   drawTakes((JSON.parse(job.result_json || '{}').takes) || []);
 }
 
@@ -950,8 +958,10 @@ const laneJobs = {moments: null, trending: null, evergreen: null, ragebait: null
 // GETs populate the client cache; stale/empty lanes get a background scan fired
 // (deduped server-side) — these run on the research worker and never delay a
 // build. Fire-and-forget: no UI is touched (no lane is open yet).
+// All four lanes warm in PARALLEL — one at a time meant four round-trips
+// queued ahead of anything the editor is actually waiting for.
 async function warmLanes(){
-  for (const l of ['moments', 'trending', 'evergreen', 'ragebait']) {
+  await Promise.all(['moments', 'trending', 'evergreen', 'ragebait'].map(async l => {
     try {
       const data = await (await fetch(`/api/moments?kind=${l}`)).json();
       laneJobs[l] = data.job_id;
@@ -961,12 +971,21 @@ async function warmLanes(){
       if (!data.scanning && stale)
         post('/api/jobs/moments', new URLSearchParams({kind: l}));
     } catch (e) { /* warming is best-effort */ }
-  }
+  }));
 }
 
-// The concept engine (the hero of Create): finished, ready-to-build post
-// concepts made by the creative leap from the live pool + the editor's own seed.
-// Concept/text only, no render. Runs on the creative model server-side.
+// Ramped poll cadence, used by every poller on this screen. Most jobs finish
+// early, so check back fast at first and ease off — a fixed 2s meant even a
+// job that was already done sat there looking slow for up to two seconds.
+function pollWait(n){ return Math.min(350 * Math.pow(1.45, n || 0), 2500); }
+
+// The concept engine (the hero of Create). TWO STAGES, so nothing is ever
+// waited on that hasn't been chosen yet:
+//   1. the SKETCH — five headline-level concepts (the leap + the slide-1 hook)
+//      on the fast model. This is what the screen opens on.
+//   2. the DRILL-DOWN — the full treatment (why it travels, what to build, the
+//      beats), on the creative model, for the ONE card the editor opens.
+// A sketch is buildable as it stands, so ⚡ Build this never waits for stage 2.
 const CS_FLAVOUR = {
   topical: '📌 Topical take', stat: '📊 Stat that stops you',
   hot_take: '🔥 Hot take', observation: '👀 Lived observation',
@@ -974,6 +993,9 @@ const CS_FLAVOUR = {
 let csLoading = false;
 
 let csJob = null;
+let csConcepts = [];   // the current set — cards drill down by index
+let csSeed = '';       // the seed THIS set was made from (a drill-down reuses it,
+                       // not whatever's been typed in the box since)
 async function loadConcepts(fresh){
   if (csLoading && !fresh) return;  // a fresh spin supersedes an in-flight poll
   csLoading = true;
@@ -983,11 +1005,34 @@ async function loadConcepts(fresh){
   if (fresh || !list.querySelector('.concept'))
     list.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
   const seed = document.getElementById('cs-seed-input').value.trim();
-  // The creative model runs in the background worker (it can be slow), so we
-  // kick a job and poll it — the request itself returns instantly.
+
+  // Reopening /create shouldn't re-think the day from scratch: unless a fresh
+  // set was asked for, take the cached one (instant) or join whatever run is
+  // already in flight instead of stacking another.
+  if (!fresh && !seed) {
+    try {
+      const cached = await (await fetch('/api/concepts')).json();
+      if (cached.status === 'ready' && cached.concepts && cached.concepts.length) {
+        csJob = null;  // cancel any in-flight poll — this set supersedes it
+        csSeed = '';
+        csDone(); csNote(cached.age_hours);
+        return renderConcepts(cached.concepts);
+      }
+      if (cached.status === 'thinking' && cached.job_id) {
+        csJob = cached.job_id;
+        csSeed = '';
+        return pollConcepts(cached.job_id);
+      }
+    } catch (e) { /* fall through to a fresh run */ }
+  }
+
+  // The sketch runs on the background worker, so we kick a job and poll it —
+  // the request itself returns instantly.
   const r = await post('/api/concepts', new URLSearchParams(seed ? {seed} : {}));
   if (!r || !r.job_id) { csLoading = false; csDone(); return renderConceptsEmpty(r); }
   csJob = r.job_id;
+  csSeed = seed;
+  csNote(null);
   pollConcepts(r.job_id);
 }
 function csDone(){
@@ -997,13 +1042,23 @@ function csDone(){
   const seedBtn = document.getElementById('cs-seed-go');
   seedBtn.disabled = false; seedBtn.textContent = 'Spin it';
 }
-async function pollConcepts(jobId){
+// Says so when the set came off the shelf rather than being made just now.
+function csNote(ageHours){
+  const el = document.getElementById('cs-note');
+  if (!el) return;
+  if (ageHours === null || ageHours === undefined) { el.textContent = ''; return; }
+  el.textContent = ageHours < 1
+    ? 'Made minutes ago — ↻ Fresh set for new ones.'
+    : `From ${Math.round(ageHours)}h ago — ↻ Fresh set for new ones.`;
+}
+async function pollConcepts(jobId, n){
   if (jobId !== csJob) return;  // superseded by a newer spin
   let job;
   try { job = await (await fetch(`/api/jobs/${jobId}`)).json(); }
   catch (e) { csDone(); return renderConceptsEmpty({error: 'lost the connection while thinking'}); }
   if (job.status === 'ERROR') { csDone(); return renderConceptsEmpty({error: job.error || 'the idea engine failed'}); }
-  if (job.status !== 'COMPLETED') return setTimeout(() => pollConcepts(jobId), 1800);
+  if (job.status !== 'COMPLETED')
+    return setTimeout(() => pollConcepts(jobId, (n || 0) + 1), pollWait(n));
   csDone();
   let data = {};
   try { data = JSON.parse(job.result_json || '{}'); } catch (e) {}
@@ -1032,29 +1087,107 @@ function renderConceptsEmpty(data){
 }
 
 function renderConcepts(concepts){
+  csConcepts = concepts;
   const list = document.getElementById('concept-list');
   list.innerHTML = '';
-  concepts.forEach((c, i) => {
-    const el = document.createElement('div');
-    el.className = 'concept' + (i === 0 ? ' lead' : '');
-    const flavour = CS_FLAVOUR[c.flavour] || (c.flavour ? esc(c.flavour) : '💡 Concept');
-    el.innerHTML =
-      `<p class="concept-flavour">${flavour}</p>
-       <p class="concept-title">${esc(c.title || c.angle)}</p>
-       ${c.hook ? `<div class="concept-hook"><span class="lbl">SLIDE 1</span> ${esc(c.hook)}</div>` : ''}
-       ${c.why ? `<p class="concept-why">${esc(c.why)}</p>` : ''}
-       ${c.source ? `<p class="concept-src">↳ from: ${esc(c.source)}</p>` : ''}
-       <div class="concept-actions">
-         <span data-slot="build"></span>
-         <button type="button" class="ghost" title="see five different takes on this before it's written">🎯 Takes first</button>
-       </div>`;
-    const build = document.createElement('button');
-    build.type = 'button'; build.className = 'pick-build'; build.textContent = '⚡ Build this';
-    build.onclick = () => buildConcept(c, false);
-    el.querySelector('[data-slot="build"]').replaceWith(build);
-    el.querySelector('.ghost').onclick = () => buildConcept(c, true);
-    list.appendChild(el);
+  concepts.forEach((c, i) => list.appendChild(conceptCard(c, i)));
+}
+
+// One card. Headline-level by default; the treatment slots into [data-slot=
+// "detail"] when the editor drills in (or straight away if it's already there).
+function conceptCard(c, i){
+  const el = document.createElement('div');
+  el.className = 'concept' + (i === 0 ? ' lead' : '');
+  el.dataset.index = i;
+  const flavour = CS_FLAVOUR[c.flavour] || (c.flavour ? esc(c.flavour) : '💡 Concept');
+  el.innerHTML =
+    `<p class="concept-flavour">${flavour}</p>
+     <p class="concept-title">${esc(c.title || c.angle)}</p>
+     ${c.hook ? `<div class="concept-hook"><span class="lbl">SLIDE 1</span> ${esc(c.hook)}</div>` : ''}
+     ${c.source ? `<p class="concept-src">↳ from: ${esc(c.source)}</p>` : ''}
+     <div data-slot="detail"></div>
+     <div class="concept-actions">
+       <span data-slot="build"></span>
+       <button type="button" class="ghost" data-act="drill"
+               title="develop this one properly — why it'll travel, what to build, the slide beats">🔎 Drill down</button>
+       <button type="button" class="ghost" data-act="takes"
+               title="see five different takes on this before it's written">🎯 Takes first</button>
+     </div>`;
+  const build = document.createElement('button');
+  build.type = 'button'; build.className = 'pick-build'; build.textContent = '⚡ Build this';
+  build.onclick = () => buildConcept(csConcepts[i], false);
+  el.querySelector('[data-slot="build"]').replaceWith(build);
+  el.querySelector('[data-act="drill"]').onclick = () => drillConcept(i);
+  el.querySelector('[data-act="takes"]').onclick = () => buildConcept(csConcepts[i], true);
+  if (c.detailed) drawConceptDetail(el, c);
+  return el;
+}
+
+function conceptEl(i){ return document.querySelector(`.concept[data-index="${i}"]`); }
+
+// The treatment: why it travels, what to build, the slide beats.
+function drawConceptDetail(el, c){
+  const slot = el.querySelector('[data-slot="detail"]');
+  if (!slot) return;
+  const beats = (c.beats && c.beats.length)
+    ? `<span class="d-lbl">The shape</span>
+       <ol class="concept-beats">${c.beats.map(b => `<li>${esc(b)}</li>`).join('')}</ol>` : '';
+  slot.innerHTML =
+    `<div class="concept-detail">
+       ${c.why ? `<span class="d-lbl">Why it'll travel</span><p class="concept-why">${esc(c.why)}</p>` : ''}
+       ${c.angle ? `<span class="d-lbl">What to build</span><p>${esc(c.angle)}</p>` : ''}
+       ${beats}
+     </div>`;
+  const drill = el.querySelector('[data-act="drill"]');
+  if (drill && c.detailed) { drill.textContent = '🔎 Drilled'; drill.disabled = true; }
+}
+
+// Stage 2, on demand: the creative model develops just this concept. The card
+// stays buildable throughout — drilling in is a choice, not a wait.
+async function drillConcept(i){
+  const el = conceptEl(i);
+  const c = csConcepts[i];
+  if (!el || !c || c.detailed) return;
+  const btn = el.querySelector('[data-act="drill"]');
+  btn.disabled = true; btn.textContent = '🔎 drilling…';
+  el.querySelector('[data-slot="detail"]').innerHTML = '<div class="skel"></div>';
+  const body = new URLSearchParams({
+    flavour: c.flavour || '', title: c.title || '', hook: c.hook || '',
+    angle: c.angle || '', source: c.source || '', seed: csSeed,
   });
+  const r = await post('/api/concepts/develop', body);
+  if (!r || !r.job_id) { drillFailed(i, 'could not start the drill-down'); return; }
+  pollDrill(r.job_id, i);
+}
+
+async function pollDrill(jobId, i, n){
+  let job;
+  try { job = await (await fetch(`/api/jobs/${jobId}`)).json(); }
+  catch (e) { return drillFailed(i, 'lost the connection while developing'); }
+  if (job.status === 'ERROR') return drillFailed(i, job.error || 'the drill-down failed');
+  if (job.status !== 'COMPLETED')
+    return setTimeout(() => pollDrill(jobId, i, (n || 0) + 1), pollWait(n));
+  let data = {};
+  try { data = JSON.parse(job.result_json || '{}'); } catch (e) {}
+  const out = data.concept;
+  if (!out) return drillFailed(i, data.error || 'nothing came back');
+  // The developed brief replaces the sketch — including build_seed, so
+  // ⚡ Build this now carries the fuller angle.
+  csConcepts[i] = out;
+  const el = conceptEl(i);
+  if (!el) return;
+  el.replaceWith(conceptCard(out, i));
+  if (data.error) toast(`Developed as far as it could: ${data.error}`);
+}
+
+function drillFailed(i, msg){
+  const el = conceptEl(i);
+  if (el) {
+    const btn = el.querySelector('[data-act="drill"]');
+    if (btn) { btn.disabled = false; btn.textContent = '🔎 Try again'; }
+    el.querySelector('[data-slot="detail"]').innerHTML = '';
+  }
+  toast(`Couldn't develop that one: ${msg}`);
 }
 
 // One tap → the proven "my own idea" build path (create/start, mode=idea),
@@ -1131,12 +1264,12 @@ async function refreshLane(showSkeleton = true){
   pollLane(lane);
 }
 
-async function pollLane(forLane){
+async function pollLane(forLane, n){
   if (forLane !== lane) return;  // user switched tabs — that lane polls itself
   let data;
   try { data = await (await fetch(`/api/moments?kind=${forLane}`)).json(); }
   catch (e) { setRescanBusy(false); return renderLaneError('lost the connection mid-scan'); }
-  if (data.scanning) return setTimeout(() => pollLane(forLane), 2500);
+  if (data.scanning) return setTimeout(() => pollLane(forLane, (n || 0) + 1), pollWait(n));
   setRescanBusy(false);
   laneJobs[forLane] = data.job_id;
   if (forLane !== lane) return;
@@ -1210,7 +1343,7 @@ async function loadLaneAngles(scanJob, mi, el, lazy){
   if (r.angles) return renderLazyAngles(scanJob, mi, lazy, r.angles);   // cached inline
   pollLaneAngles(r.job_id, scanJob, mi, el, lazy);
 }
-async function pollLaneAngles(jobId, scanJob, mi, el, lazy){
+async function pollLaneAngles(jobId, scanJob, mi, el, lazy, n){
   const job = await (await fetch(`/api/jobs/${jobId}`)).json();
   if (job.status === 'ERROR') {
     lazy.innerHTML = `<p class="muted" style="font-size:12.5px; margin:0 0 6px">Couldn't write angles: ${esc(job.error||'failed')}.</p>`;
@@ -1218,7 +1351,8 @@ async function pollLaneAngles(jobId, scanJob, mi, el, lazy){
     b.onclick = ev => { ev.stopPropagation(); lazy.dataset.loaded = ''; loadLaneAngles(scanJob, mi, el, lazy); };
     lazy.appendChild(b); return;
   }
-  if (job.status !== 'COMPLETED') return setTimeout(() => pollLaneAngles(jobId, scanJob, mi, el, lazy), 1800);
+  if (job.status !== 'COMPLETED')
+    return setTimeout(() => pollLaneAngles(jobId, scanJob, mi, el, lazy, (n || 0) + 1), pollWait(n));
   renderLazyAngles(scanJob, mi, lazy, (JSON.parse(job.result_json||'{}').angles) || []);
 }
 function renderLazyAngles(scanJob, mi, lazy, angles){
@@ -1321,7 +1455,7 @@ async function digMoment(mi, cardEl){
   pollDig(r.job_id, deep, () => digMoment(mi, cardEl));
 }
 
-async function pollDig(jobId, deep, retry){
+async function pollDig(jobId, deep, retry, n){
   const job = await (await fetch(`/api/jobs/${jobId}`)).json();
   if (job.status === 'ERROR') {
     deep.innerHTML = `<p class="muted" style="font-size:12.5px">Couldn't dig in: ${esc(job.error||'failed')}. </p>`;
@@ -1329,7 +1463,8 @@ async function pollDig(jobId, deep, retry){
     b.onclick = retry || (() => {}); deep.appendChild(b);
     return;
   }
-  if (job.status !== 'COMPLETED') return setTimeout(() => pollDig(jobId, deep, retry), 2000);
+  if (job.status !== 'COMPLETED')
+    return setTimeout(() => pollDig(jobId, deep, retry, (n || 0) + 1), pollWait(n));
   const subs = (JSON.parse(job.result_json || '{}').moments) || [];
   deep.innerHTML = subs.length ? '<p class="muted" style="font-size:11.5px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.6px">Specific headlines right now</p>'
                               : '<p class="muted" style="font-size:12.5px">No specific headlines found — the broad angles above are your best bet.</p>';
@@ -1426,10 +1561,10 @@ async function startBlank(develop, manual = false, takes = false){
 function startManual(){ startBlank(false, true); }
 
 /* ---------- angles from facts ---------- */
-async function pollAngles(){
+async function pollAngles(n){
   const job = await (await fetch(`/api/jobs/${state.anglesJob}`)).json();
   if (job.status === 'ERROR') return fail('Angle generation failed: ' + job.error);
-  if (job.status !== 'COMPLETED') return setTimeout(pollAngles, 1500);
+  if (job.status !== 'COMPLETED') return setTimeout(() => pollAngles((n || 0) + 1), pollWait(n));
   const angles = (JSON.parse(job.result_json || '{}').angles) || [];
   const box = document.getElementById('angles-body');
   box.innerHTML = '';
@@ -1484,7 +1619,7 @@ function goDevelop(){
   pollDevelop();
 }
 
-async function pollDevelop(){
+async function pollDevelop(n){
   const d = await detail();
   const j = d.active_jobs.concept;
   if (!j) {
@@ -1510,7 +1645,7 @@ async function pollDevelop(){
         `${secs}s elapsed — a concept round usually takes 15–40s`;
     }
   }
-  setTimeout(pollDevelop, 2000);
+  setTimeout(() => pollDevelop((n || 0) + 1), pollWait(n));
 }
 
 async function retryDevelop(){
@@ -1632,7 +1767,7 @@ function showBuildError(msg){
     </div>`;
 }
 
-async function pollBuild(){
+async function pollBuild(n){
   if (!buildStart) showWriteWait('The engine is writing your carousel');
   const d = await detail();
   const j = d.active_jobs.build_one || d.active_jobs.revise;
@@ -1663,7 +1798,7 @@ async function pollBuild(){
       `${secs}s elapsed — a full write usually takes 30–90s`
       + (secs > 180 ? ' · this is unusually long; it may be worth a retry' : '');
   }
-  setTimeout(pollBuild, 2000);
+  setTimeout(() => pollBuild((n || 0) + 1), pollWait(n));
 }
 
 async function retryBuild(){
@@ -1899,7 +2034,7 @@ async function makeImages(){
 
 /* ---------- images ---------- */
 let renderStart = null;
-async function pollRender(){
+async function pollRender(n){
   if (!renderStart) renderStart = Date.now();
   const d = await detail();
   const j = d.active_jobs.render || d.active_jobs.render_slide;
@@ -1911,7 +2046,7 @@ async function pollRender(){
     document.getElementById('img-elapsed').textContent =
       `${secs}s elapsed — roughly 15–30s per slide on real generations`;
     drawImages(d);
-    return setTimeout(pollRender, 2000);
+    return setTimeout(() => pollRender((n || 0) + 1), pollWait(n));
   }
   renderStart = null;
   document.getElementById('img-wait').style.display = 'none';
@@ -1935,10 +2070,10 @@ async function runScrollTest(){
   if (!r || !r.job_id) { box.innerHTML = ''; return; }
   pollScrollTest(r.job_id);
 }
-async function pollScrollTest(jobId){
+async function pollScrollTest(jobId, n){
   const job = await (await fetch(`/api/jobs/${jobId}`)).json();
   if (job.status === 'QUEUED' || job.status === 'PROCESSING') {
-    return setTimeout(() => pollScrollTest(jobId), 1500);
+    return setTimeout(() => pollScrollTest(jobId, (n || 0) + 1), pollWait(n));
   }
   const box = document.getElementById('scroll-verdict');
   if (job.status === 'ERROR') {

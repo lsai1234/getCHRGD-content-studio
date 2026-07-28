@@ -131,8 +131,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             # Three lanes: research (slow web-search scans) and video (minutes of
             # provider polling per clip) each get their own worker so neither can
             # delay the fast lane (builds, renders, takes).
+            # The fast lane ticks quickly: a 1s idle wait added up to a second of
+            # dead time before every interactive job (concepts, takes, builds)
+            # even started. Claiming a job is one guarded UPDATE on a local
+            # SQLite file, so 5 ticks/sec costs nothing and the UI feels instant.
             fast = Worker(
-                settings, exclude=RESEARCH_KINDS | VIDEO_KINDS,
+                settings, poll_interval=0.2, exclude=RESEARCH_KINDS | VIDEO_KINDS,
                 name="chrgd-fast", recover_on_start=False,
             )
             research = Worker(
@@ -1284,19 +1288,65 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             except Exception:  # noqa: BLE001 — the card is a bonus, never a blocker
                 return {"status": "warming", "pick": None, "alternates": []}
 
+    @app.get("/api/concepts")
+    def api_concepts_cached(
+        max_age_hours: float = 8.0, _: str = Depends(require_user)
+    ):
+        """Today's concept set WITHOUT spending or waiting, when we already have
+        one: the last completed set if it's still fresh, otherwise whatever run
+        is already in flight so the screen can poll it instead of stacking a
+        second one. This is what makes a reopened /create paint instantly."""
+        from .concepts import cached_concepts
+
+        with _store(settings) as store:
+            cached = cached_concepts(store, max_age_hours=max_age_hours)
+            if cached:
+                return {"status": "ready", **cached}
+            active = store.conn.execute(
+                "SELECT job_id FROM jobs WHERE kind = 'concepts' "
+                "AND status IN ('QUEUED','PROCESSING') "
+                "AND COALESCE(params_json,'{}') LIKE '%\"seed\": \"\"%' "
+                "ORDER BY job_id DESC LIMIT 1"
+            ).fetchone()
+        return {
+            "status": "thinking" if active else "cold",
+            "concepts": [],
+            "job_id": int(active["job_id"]) if active else None,
+        }
+
     @app.post("/api/concepts")
     def api_concepts(seed: str = Form(""), _: str = Depends(require_user)):
-        """Kick the concept engine on the worker and return a job_id to poll.
+        """Kick the fast concept sketch on the worker and return a job_id to poll.
 
-        The creative model can be slow (reasoning-class), so running it inside
-        the web request meant the proxy dropped the connection. It now runs in
-        the background — same as builds/scans — and the create screen polls
+        Stage 1 only — five concepts at headline level, on the fast model. It
+        still runs as a job (not inline in this request) so a slow day can't
+        have the proxy drop the connection; the create screen polls
         /api/jobs/{id} for the concepts in result_json."""
         from .worker import enqueue_concepts
 
         with _store(settings) as store:
             job_id = enqueue_concepts(store, seed=seed)
         return {"job_id": job_id, "kind": "concepts"}
+
+    @app.post("/api/concepts/develop")
+    def api_concept_develop(
+        flavour: str = Form(""), title: str = Form(""), hook: str = Form(""),
+        angle: str = Form(""), source: str = Form(""), seed: str = Form(""),
+        _: str = Depends(require_user),
+    ):
+        """Stage 2: drill one sketched concept down into a full brief. Runs on
+        the creative model in the background; the card polls /api/jobs/{id}."""
+        from .worker import enqueue_concept_detail
+
+        concept = {
+            "flavour": flavour, "title": title, "hook": hook,
+            "angle": angle, "source": source,
+        }
+        if not (title.strip() or angle.strip()):
+            raise HTTPException(400, "nothing to develop")
+        with _store(settings) as store:
+            job_id = enqueue_concept_detail(store, concept, seed=seed)
+        return {"job_id": job_id, "kind": "concept_detail"}
 
     @app.post("/api/jobs/moments")
     def api_job_moments(

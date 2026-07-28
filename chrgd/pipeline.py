@@ -166,13 +166,30 @@ def _temperature_unsupported(exc: Exception) -> bool:
     )
 
 
-def chat_json_create(client, *, model, system, user, temperature):
-    """A JSON-mode chat completion that survives models which only accept the
-    default temperature. Tries with the requested temperature; on the specific
-    "temperature unsupported" 400, retries once WITHOUT it. Every JSON chat call
-    in the app routes through here so one restrictive model can't break builds,
-    the judges, the selector or the concept engine at once."""
-    def _call(temp):
+def _max_tokens_unsupported(exc: Exception) -> bool:
+    """Newer OpenAI models reject `max_tokens` and want `max_completion_tokens`
+    instead ("Unsupported parameter: 'max_tokens' is not supported with this
+    model. Use 'max_completion_tokens'"). Detect it so we can retry with the
+    other spelling rather than losing the cap (or the call)."""
+    s = str(exc).lower()
+    return "max_tokens" in s and (
+        "not supported" in s or "unsupported" in s or "max_completion_tokens" in s
+    )
+
+
+def chat_json_create(client, *, model, system, user, temperature, max_tokens=None):
+    """A JSON-mode chat completion that survives models with restrictive params.
+
+    Tries with the requested temperature and an optional output cap; on the
+    specific "temperature unsupported" 400 it retries WITHOUT the temperature,
+    and on the "use max_completion_tokens" 400 it retries with that spelling.
+    Every JSON chat call in the app routes through here so one restrictive model
+    can't break builds, the judges, the selector or the concept engine at once.
+
+    `max_tokens` is a latency lever as much as a cost one: a capped, short JSON
+    response comes back markedly faster, which is why the fast concept sketch
+    sets it."""
+    def _call(temp, token_key):
         kwargs = {
             "model": model,
             "response_format": {"type": "json_object"},
@@ -183,14 +200,22 @@ def chat_json_create(client, *, model, system, user, temperature):
         }
         if temp is not None:
             kwargs["temperature"] = temp
+        if max_tokens:
+            kwargs[token_key] = max_tokens
         return client.chat.completions.create(**kwargs)
 
-    try:
-        return _call(temperature)
-    except Exception as exc:  # noqa: BLE001
-        if temperature is not None and _temperature_unsupported(exc):
-            return _call(None)  # this model only allows the default — drop it
-        raise
+    temp, token_key = temperature, "max_tokens"
+    while True:
+        try:
+            return _call(temp, token_key)
+        except Exception as exc:  # noqa: BLE001
+            if temp is not None and _temperature_unsupported(exc):
+                temp = None  # this model only allows the default — drop it
+                continue
+            if max_tokens and token_key == "max_tokens" and _max_tokens_unsupported(exc):
+                token_key = "max_completion_tokens"
+                continue
+            raise
 
 
 @dataclass
@@ -209,7 +234,14 @@ class ChatClient(Protocol):
 class OpenAIChatClient:
     """Thin wrapper over the OpenAI SDK, JSON-mode chat completions."""
 
-    def __init__(self, settings: Settings, temperature: float = 0.9):
+    def __init__(
+        self,
+        settings: Settings,
+        temperature: float = 0.9,
+        *,
+        model: str | None = None,
+        max_tokens: int | None = None,
+    ):
         if not settings.openai_api_key:
             raise LLMError("OPENAI_API_KEY is not set — add it to your .env")
         try:
@@ -225,14 +257,17 @@ class OpenAIChatClient:
             api_key=settings.openai_api_key,
             base_url=settings.get_openai_base_url(),
         )
-        self._model = settings.openai_model
+        # Defaults to the creative model; callers that only need speed (the
+        # concept sketch) pass the cheap scout model instead.
+        self._model = model or settings.openai_model
         self._temperature = temperature
+        self._max_tokens = max_tokens
 
     def complete(self, system: str, user: str) -> LLMResult:
         try:
             resp = chat_json_create(
                 self._client, model=self._model, system=system, user=user,
-                temperature=self._temperature,
+                temperature=self._temperature, max_tokens=self._max_tokens,
             )
         except Exception as exc:  # noqa: BLE001 - surface any SDK failure uniformly
             raise LLMError(_describe_llm_error(exc)) from exc

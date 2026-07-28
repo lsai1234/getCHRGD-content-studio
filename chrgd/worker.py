@@ -486,14 +486,26 @@ def _handle_lane_angles(store: Store, settings: Settings, job: dict) -> dict:
 
 
 def _handle_concepts(store: Store, settings: Settings, job: dict) -> dict:
-    """The concept engine, off the web request. The creative model can be slow
-    (a reasoning-class model + a rich prompt), so running it inside the HTTP
-    request meant the proxy dropped the connection. Here it runs in the worker
-    and the create screen polls the job — same pattern as builds/takes."""
-    from .concepts import generate_concepts
+    """Stage 1: the fast concept sketch, off the web request.
+
+    Five headline-level concepts on the fast model — seconds, not the minute
+    the old full-treatment run took. It still runs as a job (not inline in the
+    HTTP request) so a slow day can't have the proxy drop the connection, and
+    the create screen polls it the same way it polls builds/takes."""
+    from .concepts import sketch_concepts
 
     params = json.loads(job["params_json"] or "{}")
-    return generate_concepts(store, settings, seed=str(params.get("seed", "")))
+    return sketch_concepts(store, settings, seed=str(params.get("seed", "")))
+
+
+def _handle_concept_detail(store: Store, settings: Settings, job: dict) -> dict:
+    """Stage 2: drill ONE sketched concept down into a ready-to-build brief."""
+    from .concepts import develop_concept
+
+    params = json.loads(job["params_json"] or "{}")
+    return develop_concept(
+        store, settings, params.get("concept") or {}, seed=str(params.get("seed", ""))
+    )
 
 
 def _handle_moment_detail(store: Store, settings: Settings, job: dict) -> dict:
@@ -578,6 +590,7 @@ _HANDLERS: dict[str, Callable[[Store, Settings, dict], dict]] = {
     "lane_angles": _handle_lane_angles,
     "concept": _handle_concept,
     "concepts": _handle_concepts,
+    "concept_detail": _handle_concept_detail,
     "run": _handle_run,
 }
 
@@ -663,6 +676,25 @@ def enqueue_concepts(store: Store, *, seed: str = "") -> int:
         if active:
             return int(active["job_id"])
     return store.create_job("concepts", params={"seed": seed})
+
+
+def enqueue_concept_detail(store: Store, concept: dict, *, seed: str = "") -> int:
+    """Kick the drill-down on one sketched concept. Deduped by title so a
+    double-tap on the same card doesn't pay for the same brief twice."""
+    title = str(concept.get("title") or "").strip()
+    if title:
+        rows = store.conn.execute(
+            "SELECT job_id, params_json FROM jobs WHERE kind = 'concept_detail' "
+            "AND status IN ('QUEUED','PROCESSING') ORDER BY job_id DESC LIMIT 20"
+        ).fetchall()
+        for row in rows:
+            try:
+                params = json.loads(row["params_json"] or "{}")
+            except json.JSONDecodeError:
+                continue
+            if str((params.get("concept") or {}).get("title") or "").strip() == title:
+                return int(row["job_id"])
+    return store.create_job("concept_detail", params={"concept": concept, "seed": seed})
 
 
 def enqueue_run(store: Store, *, count: int, scout: bool, dry_run: bool) -> int:
