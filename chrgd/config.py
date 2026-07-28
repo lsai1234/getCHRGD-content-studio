@@ -114,6 +114,26 @@ class Settings(BaseSettings):
     concept_gate_min_score: int = Field(default=9, alias="CHRGD_CONCEPT_GATE_MIN")
     # Max judge rounds (each failing round sharpens slide 1 and re-judges).
     concept_gate_max_rounds: int = Field(default=3, alias="CHRGD_CONCEPT_GATE_ROUNDS")
+    # The opener TOURNAMENT (stages A+B). Sharpening one hook only ever makes
+    # the same idea louder — it never leaves the neighbourhood of whatever the
+    # build happened to write first. So before scoring, the engine invents
+    # several genuinely different openers for the same post (each forced onto a
+    # different curiosity mechanic) and judges the whole field head-to-head, with
+    # the built opener as the incumbent. This is where "a hundred other gym posts
+    # could open with this" gets caught: in isolation a derivative opener scores
+    # fine; next to three sharper rivals it loses.
+    concept_tournament_enabled: bool = Field(
+        default=True, alias="CHRGD_CONCEPT_TOURNAMENT"
+    )
+    # How many rivals to invent (they compete against the built opener, so the
+    # field is this + 1). Below 4 the model tends to hedge toward the safe one.
+    concept_candidates: int = Field(default=4, alias="CHRGD_CONCEPT_CANDIDATES")
+    # The GLANCE test (stage D). The judge is shown only what a stranger
+    # perceives in the half-second before the thumb decides — the headline and
+    # the shape of the image, with none of the reasoning — and has to say what it
+    # actually took away. Catches concepts that are clever on paper but need a
+    # second read, which in a feed means they don't exist. One bounded fix.
+    concept_glance_test: bool = Field(default=True, alias="CHRGD_CONCEPT_GLANCE")
 
     # --- Cost guard ---
     max_spend_per_run: float = Field(default=5.0, alias="CHRGD_MAX_SPEND_PER_RUN")

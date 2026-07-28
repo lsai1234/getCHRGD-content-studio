@@ -298,6 +298,13 @@
   .verdict-card .v-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
   .verdict-card .v-actions button { padding: 8px 14px; font-size: 12.5px; }
   .verdict-card .v-caveat { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
+  /* Concept-gate extras: the sub-scores, and the field of openers it beat. */
+  .verdict-card .cg-subs { margin: 8px 0 0; display: flex; gap: 14px; flex-wrap: wrap; }
+  .verdict-card .cg-sub { font-size: 12px; color: var(--muted); }
+  .verdict-card .cg-sub b { color: var(--fg); font-size: 13px; }
+  .verdict-card .cg-field { margin-top: 10px; font-size: 12.5px; }
+  .verdict-card .cg-field summary { cursor: pointer; color: var(--muted); }
+  .verdict-card .cg-beat { margin: 6px 0 0 14px; color: var(--muted); }
   .thumbs { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
   .thumbs img { width: 42px; height: 52px; object-fit: cover; border-radius: 6px;
                 border: 2px solid var(--line); cursor: pointer; }
@@ -2154,19 +2161,48 @@ async function openImagesStep(){
   renderConceptGate(d.concept_gate);
 }
 
-/* The pre-image concept gate's score on slide 1 (set server-side at render). */
+/* The pre-image concept gate on slide 1 (set server-side at render): the
+   openers it beat, the score it earned, and what a stranger took from it in
+   half a second. */
 function renderConceptGate(cg){
   const box = document.getElementById('concept-gate');
   if (!box) return;
-  if (!cg || !cg.score) { box.innerHTML = ''; return; }
+  if (!cg || (!cg.score && !cg.tournament)) { box.innerHTML = ''; return; }
   const ok = cg.passed;
+  const t = cg.tournament;
+  const g = cg.glance;
+
+  // The three things a first slide has to be, scored separately.
+  const subs = [
+    ['intrigue', 'plants a question'],
+    ['originality', 'not the obvious opener'],
+    ['instant', 'lands in a glance'],
+  ].filter(([k]) => cg[k]).map(([k, label]) =>
+    `<span class="cg-sub"><b>${cg[k]}</b>/10 ${label}</span>`).join('');
+
+  // The rivals it had to beat — the honest reason each one lost.
+  let field = '';
+  if (t && t.candidates > 1) {
+    const beaten = (t.beaten || []).filter(b => b.headline);
+    field = `<details class="cg-field">
+      <summary>${t.swapped ? '🏆 Beat' : '🏆 Held off'} ${t.candidates - 1} rival
+        opener${t.candidates - 1 === 1 ? '' : 's'}${t.why ? ` — ${esc(t.why)}` : ''}</summary>
+      ${beaten.map(b => `<p class="cg-beat"><s>${esc(b.headline)}</s>
+        ${b.verdict ? `<span class="v-conf">— ${esc(b.verdict)}</span>` : ''}</p>`).join('')}
+    </details>`;
+  }
+
   box.innerHTML = `<div class="verdict-card ${ok ? 'stop' : 'scroll'}" style="margin-bottom:10px">
     <div class="v-top">
-      <span class="v-badge">${ok ? '✅' : '⚠️'} Slide-1 concept gate: ${cg.score}/10</span>
+      <span class="v-badge">${ok ? '✅' : '⚠️'} Slide-1 concept gate${cg.score ? `: ${cg.score}/10` : ''}</span>
       <span class="v-conf">checked before the image was generated${cg.rounds > 1 ? ` · sharpened over ${cg.rounds} rounds` : ''}</span>
     </div>
+    ${subs ? `<p class="cg-subs">${subs}</p>` : ''}
     ${!ok && cg.weakness ? `<p class="v-killer"><b>Still soft on:</b> ${esc(cg.weakness)}</p>` : ''}
     ${cg.note ? `<p class="v-note">${esc(cg.note)}</p>` : ''}
+    ${field}
+    ${g && g.took_away ? `<p class="v-fix"><b>${g.stops ? '👁️ Half-second glance:' : '👁️ At a glance they only got:'}</b>
+      “${esc(g.took_away)}”${g.stops && g.question ? ` — and wanted to know: “${esc(g.question)}”` : ''}${g.fixed ? ' <span class="v-conf">(re-cut for glance speed)</span>' : ''}</p>` : ''}
   </div>`;
 }
 

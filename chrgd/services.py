@@ -30,9 +30,10 @@ def render_idea(
     """Render one carousel, persist asset paths, and log image spend.
 
     Before the (paid, single) slide-1 image is generated, the concept gate
-    validates — and if needed sharpens — the slide-1 concept, so the money is
-    spent on an opener that has already cleared an independent quality bar. The
-    gate is skipped on dry runs and when disabled in settings.
+    develops the opener — inventing rival angles and judging the field — then
+    validates and if needed sharpens the winner, so the money is spent on an
+    opener that has already beaten alternatives and cleared an independent
+    quality bar. The gate is skipped on dry runs and when disabled in settings.
     """
     from .profile import brand_character_ref, brand_style_note, brand_swipe_style
 
@@ -44,9 +45,11 @@ def render_idea(
         gate_spend = gate.spend_usd
         idea = gate.idea  # the (possibly sharpened) concept we now render
         log.info(
-            "concept_gate idea=%s score=%d/%d rounds=%d refined=%s passed=%s%s",
+            "concept_gate idea=%s score=%d/%d rounds=%d refined=%s passed=%s "
+            "field=%d swapped=%s glance=%s%s",
             idea.idea_id, gate.score, gate.min_score, gate.rounds,
-            gate.refined, gate.passed,
+            gate.refined, gate.passed, len(gate.candidates), gate.swapped,
+            gate.glance.stops if gate.glance else "n/a",
             f" error={gate.error}" if gate.error else "",
         )
 
