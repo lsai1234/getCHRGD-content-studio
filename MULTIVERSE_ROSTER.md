@@ -1,6 +1,6 @@
-# THE MULTIVERSE — roster draft v1
+# THE MULTIVERSE — roster v2 (locked)
 
-**For your approval.** This becomes `config/roster.toml` once you've cut it.
+**Twelve characters, agreed.** This becomes `config/roster.toml` in Phase 3.
 Companion to `THEMES_PLAN.md` (Show 2, decisions D1/D3/D6).
 
 Each entry carries the four things the engine actually needs:
@@ -77,11 +77,12 @@ The Facebook AI-slop icon.
 - **Gym role:** the gym's spiritual authority, and a running joke about engagement farming *inside* a post that is itself asking for engagement. Cheap, and it works.
 - **Visual lock:** serene robed figure with shrimp features and shrimp limbs, glowing halo, deliberately over-rendered AI-slop sheen inside a comic frame.
 
-### 7. **Orangina** — `meme_character` · ⚠️ **need you to confirm which one**
-You named this one and I don't want to guess wrong — there are a few orange
-AI characters circulating (an Orangina-bottle creature, and the orange
-brainrot ones). Send me the video or a description and I'll write the entry;
-I've held the slot.
+### 7. Orangina · `meme_character`
+Half human, half orange — the one blowing up across AI video right now.
+- **Trait:** is *technically* a health food and has built an entire personality on it. Has never trained a day in her life, is made of vitamin C, and considers that a moral achievement.
+- **Gym role:** the wellness girl. Lives at the smoothie bar. Assesses everything anyone eats and says "but is it *clean* though" in a tone that ends friendships.
+- **Joke engine:** unearned nutritional superiority. She's the perfect antagonist for Chimpanzini Bananini (both fruit, wildly different politics) and for Gordon Ramsay (both have opinions about your food, neither will yield).
+- **Visual lock:** young woman with an orange for a head — segmented citrus skin, glossy peel texture, a small face — in gym kit, comic ink, halftone shading.
 
 ---
 
@@ -132,35 +133,11 @@ news framing, punch at status and situation only. All living public figures.
 
 | Who | Trait | Class |
 |---|---|---|
-| **Clavicular** ⚠️ | **Need you to confirm who this is** — I'm not certain enough to write a trait, and a guessed character is a dead character. Send me a link or a description and I'll write the entry properly. Slot held. | ? |
-| **Bonnie Blue** ⚠️ | Everyone in Iron Palace recognises her and nobody will say out loud where from. See the flag below. | `public_figure` |
+| Arnold Schwarzenegger | Dispenses ancient, mildly unhinged wisdom nobody asked for. | `public_figure` |
 | Arnold Schwarzenegger | Dispenses ancient, mildly unhinged wisdom nobody asked for. | `public_figure` |
 | Peter Crouch | Too tall for every piece of equipment, endlessly good-natured about it. | `public_figure` |
 | Roy Keane | Judges your form, your kit, your reasons for being alive. | `public_figure` |
 | Brr Brr Patapim | Speaks only in nonsense and is somehow always right. | `meme_character` |
-
-### The Bonnie Blue flag — your call, but here's the practical problem
-
-She's unquestionably in your audience's cultural conversation, so I understand
-the pick. The difficulty is mechanical rather than moral: she is famous
-*specifically* for sexual stunts, which means a joke about her either leans on
-that — and then we're posting adult-adjacent material on a supplement brand's
-account, which TikTok's guidelines suppress and which fails the likeness gate
-you already approved ("never anything sexual") — or it avoids it, in which case
-she's an unrecognisable generic blonde and there is no joke. The thing that
-makes her funny is the thing we can't put on the slide.
-
-**The version I'd actually build**, if you want to keep her: make the joke
-about *notoriety itself* and never about the content. Every character in Iron
-Palace clocks her instantly, nobody will admit how they know her, and the panel
-is everyone aggressively not making eye contact. That's a status joke, it's
-genuinely funny, it's PG, and it clears the gate. She'd work as a rare guest
-star rather than a regular.
-
-Separately worth knowing: association with adult-content creators can affect an
-account's advertiser-friendly rating, which is a reach question for a brand
-account, not just a taste one. Tell me to put her in as a regular and I will —
-it's your account and your call — I'd just rather you make it knowing that.
 
 **Deliberately left off**, and I'd keep them off: anyone with live legal
 proceedings or allegations attached, anyone famous *for* a supplement scandal
@@ -185,8 +162,6 @@ this is the single most common way a comic serial goes soggy.
 
 ## What I need from you
 
-1. **Orangina** — which character do you actually mean?
-2. **Clavicular** — who is this? Slot held until you tell me.
-3. **Bonnie Blue** — regular, rare guest star on the notoriety joke, or out? **→ default: rare guest star.**
-4. **Anyone else missing** who your audience would clock instantly?
-4. Season 1 = the Villa as planned, or open on the Tournament? **→ default: the Villa, it's the one you started from and the couplings generate more story than a bracket.**
+1. **Anyone missing** who your audience would clock instantly?
+2. Season 1 = the Villa, or open on the Tournament? **→ default: the Villa.**
+
