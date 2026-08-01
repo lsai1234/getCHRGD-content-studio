@@ -493,9 +493,14 @@ def _handle_discover(store: Store, settings: Settings, job: dict) -> dict:
     # Two-stage: stage 1 returns headlines fast; the angles for a story are
     # written on tap by _handle_lane_angles. Turns a 60-90s "everything" scan
     # into a ~15-25s headline list.
+    # LIVE WIRE scans its interest territories rather than the country (D9).
+    # `None` (every other lane, and any scan started before this shipped) keeps
+    # the old country-wide behaviour exactly.
+    territories = params.get("territories")
     result = scout_discover(
         settings, job["kind"], int(params.get("count", 6)),
         client=client, headlines_only=True,
+        territories=list(territories) if territories is not None else None,
     )
     return {
         "limitation": result.limitation,
@@ -670,8 +675,16 @@ def enqueue_trends(store: Store, *, count: int) -> int:
     return store.create_job("trends", params={"count": count})
 
 
-def enqueue_discover(store: Store, kind: str = "moments", *, count: int = 6) -> int:
-    """One scan per lane at a time — reuse an in-flight scan, don't stack."""
+def enqueue_discover(
+    store: Store, kind: str = "moments", *, count: int = 6,
+    territories: list[str] | None = None,
+) -> int:
+    """One scan per lane at a time — reuse an in-flight scan, don't stack.
+
+    `territories` puts the scan on LIVE WIRE's interest model (D9): `[]` for
+    the full in-season spread, a list of keys to narrow it. None keeps the
+    country-wide scan every other lane uses.
+    """
     if kind not in ("moments", "evergreen", "trending", "ragebait"):
         raise ValueError(f"unknown discover kind '{kind}'")
     row = store.conn.execute(
@@ -681,7 +694,10 @@ def enqueue_discover(store: Store, kind: str = "moments", *, count: int = 6) -> 
     ).fetchone()
     if row:
         return int(row["job_id"])
-    return store.create_job(kind, params={"count": count})
+    params: dict = {"count": count}
+    if territories is not None:
+        params["territories"] = territories
+    return store.create_job(kind, params=params)
 
 
 def enqueue_moment_detail(store: Store, *, topic: str, count: int = 6) -> int:

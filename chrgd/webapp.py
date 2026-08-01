@@ -342,13 +342,27 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             counts=counts, spend=spend, scheduled=scheduled, runs=runs,
         )
 
+    def _amp_situations(settings) -> list[dict]:
+        from .character import load_situations, used_situations
+
+        with _store(settings) as store:
+            used = used_situations(store)
+        return [
+            {"key": s.key, "label": s.label, "setup": s.setup,
+             "state": s.default_state(), "tips": s.tips,
+             "used": s.key in used}
+            for s in load_situations().values()
+        ]
+
     @app.get("/create", response_class=HTMLResponse)
     def create_page(
         request: Request, idea: str | None = None, day: str | None = None,
         _: str = Depends(require_user_page),
     ):
+        from .character import AMP_STATES, STATE_ORDER
         from .mechanics import load_mechanics
         from .shows import ordered_shows
+        from .territories import in_season
 
         # No style preset picker: the engine designs a bespoke design_system
         # per post, so the journey goes source → door directly.
@@ -363,6 +377,19 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     "blurb": sh.blurb, "icon": sh.icon, "weekday": sh.weekday,
                 }
                 for sh in ordered_shows()
+            ],
+            # AMP's own screen: the situation bank with what's been used
+            # recently marked (a nudge, never a rule — D12) and his states.
+            amp_situations=_amp_situations(settings),
+            amp_states=[
+                {"key": k, "label": AMP_STATES[k]["label"],
+                 "mood": AMP_STATES[k]["mood"]}
+                for k in STATE_ORDER
+            ],
+            # LIVE WIRE's own screen: the in-season interest territories.
+            territories=[
+                {"key": t.key, "label": t.label, "weight": t.weight}
+                for t in in_season()
             ],
             resume_idea=idea or "",
             preset_day=day or "",
@@ -843,6 +870,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         scheduled_for: datetime | None = None,
         moment: dict | None = None,
         show: str = "",
+        amp: dict | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
@@ -856,6 +884,21 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             if get_show(show) is None:
                 raise HTTPException(400, f"unknown show '{show}'")
             route[ROUTE_KEY] = show
+        # AMP's journey: the situation, his state and the tip the post owes.
+        # These drive the build brief (character.situation_brief) and, for the
+        # state, the locked character prefix on every image.
+        if amp:
+            from .character import AMP_STATES, get_situation
+
+            if amp.get("situation") and get_situation(amp["situation"]) is None:
+                raise HTTPException(400, f"unknown situation '{amp['situation']}'")
+            if amp.get("state") and amp["state"] not in AMP_STATES:
+                raise HTTPException(400, f"unknown Amp state '{amp['state']}'")
+            for src, key in (("situation", "amp_situation"),
+                             ("situation_text", "amp_situation_text"),
+                             ("state", "amp_state"), ("tip", "amp_tip")):
+                if amp.get(src):
+                    route[key] = amp[src]
         if moment:
             route["moment"] = moment
         if style:
@@ -895,6 +938,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         mode: str = Form(...),  # 'idea' | 'facts' | 'blank'
         text: str = Form(""),
         show: str = Form(""),
+        amp_situation: str = Form(""),
+        amp_situation_text: str = Form(""),
+        amp_state: str = Form(""),
+        amp_tip: str = Form(""),
         mechanic: str = Form(""),
         style: str = Form(""),
         length: str = Form(""),
@@ -909,6 +956,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         from .worker import enqueue_concept, enqueue_takes
 
         when = _parse_when(scheduled_for)
+        amp = {
+            "situation": amp_situation, "situation_text": amp_situation_text,
+            "state": amp_state, "tip": amp_tip,
+        }
+        amp = amp if any(amp.values()) else None
 
         # The default journey fans out to competing takes first; develop and
         # straight-build remain as explicit choices.
@@ -942,7 +994,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     # renders as an Amp post instead of a carousel that merely
                     # mentions him.
                     mechanic_key=mechanic,
-                    length=length, scheduled_for=when, show=show,
+                    length=length, scheduled_for=when, show=show, amp=amp,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}
@@ -1421,14 +1473,35 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.post("/api/jobs/moments")
     def api_job_moments(
-        count: int = Form(6), kind: str = Form("moments"), _: str = Depends(require_user)
+        count: int = Form(6), kind: str = Form("moments"),
+        territories: str = Form(""), live_wire: bool = Form(False),
+        _: str = Depends(require_user),
     ):
+        """Kick a discovery scan.
+
+        `live_wire` puts it on the interest-territory model (D9) instead of a
+        country-wide trend scan; `territories` narrows that to a comma-separated
+        selection. Without either, the lane scans exactly as it always has."""
         from .worker import enqueue_discover
 
         kind = _discover_kind(kind)
+        picked = [t for t in (territories or "").split(",") if t.strip()]
+        terr = picked if picked else ([] if live_wire else None)
         with _store(settings) as store:
-            job_id = enqueue_discover(store, kind, count=count)
+            job_id = enqueue_discover(store, kind, count=count, territories=terr)
         return {"job_id": job_id, "kind": kind}
+
+    @app.get("/api/territories")
+    def api_territories(_: str = Depends(require_user)):
+        """LIVE WIRE's in-season interest territories, heaviest first."""
+        from .territories import in_season
+
+        return {
+            "territories": [
+                {"key": t.key, "label": t.label, "weight": t.weight}
+                for t in in_season()
+            ]
+        }
 
     @app.post("/api/jobs/meta")
     def api_job_meta(_: str = Depends(require_user)):

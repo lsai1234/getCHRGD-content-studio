@@ -536,14 +536,18 @@ def _seed_context(idea: Idea, prefs: dict) -> list[str]:
             for i, step in enumerate(skeleton, 1):
                 lines.append(f"  {i}. {step}")
 
-        # An Amp post needs the mascot in the WORDS too — without this the
-        # engine writes a normal carousel that only looks like Amp once the
-        # images render. Pass-through for every other mechanic.
-        from .character import build_brief, is_amp_route
 
-        if is_amp_route(prefs):
-            lines.append("")
-            lines.append(build_brief(len(skeleton) or 5))
+    # An Amp post needs the mascot in the WORDS too — without this the engine
+    # writes a normal carousel that only looks like Amp once the images render.
+    # Outside the mechanic branch on purpose: Amp is now a SHOW, so a post
+    # started from the AMP tile carries no mechanic lock and would otherwise
+    # never get this. Pass-through for every post that isn't Amp's.
+    from .character import amp_brief_for, is_amp_route
+
+    if is_amp_route(prefs):
+        lock = prefs.get("mechanic_lock") or {}
+        lines.append("")
+        lines.append(amp_brief_for(prefs, len(lock.get("skeleton") or []) or 5))
 
     # Blank-canvas builds (mechanic picked, no subject given) are where the
     # engine drifts into obscure trivia nobody holds — pin it to the middle
@@ -585,6 +589,10 @@ def creation_prefs(idea: Idea) -> dict:
             # The show this post is an episode of (chrgd/shows.py). Absent on
             # every off-format post, which is what keeps this a pass-through.
             "show",
+            # AMP's journey: the situation he's in, the state he's in, and the
+            # tip the post owes the viewer (chrgd/character.py). Only set by
+            # the AMP show's screen.
+            "amp_state", "amp_situation", "amp_situation_text", "amp_tip",
         )
         if k in route
     }

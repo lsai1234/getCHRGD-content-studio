@@ -1,0 +1,86 @@
+# Amp's situation bank.
+#
+# One character, once a week, forever = sameness. The charge cycle is a strong
+# container but the SITUATION has to be genuinely new each time, or every post
+# becomes "Amp is tired after leg day" with a different tip bolted on.
+#
+# The bank is a tickable list, not a rota (D12): the create screen marks what's
+# been used recently and suggests what hasn't, and the editor is free to ignore
+# it entirely. Add your own freely — any `[situations.<key>]` with a label and
+# a setup works.
+#
+# `states` names the AMP_STATES (chrgd/character.py) that suit the situation;
+# the first is the default the screen preselects. `tips` are directions the tip
+# could take, not the tip itself — the engine writes the actual line.
+
+[situations.four_am_airport]
+label = "The 4am airport"
+setup = "A 4am flight, a departure lounge, no gym, no proper food, and a full day at the other end."
+states = ["drained", "knackered_happy"]
+tips = ["what to actually do in a hotel room with no kit", "eating on a travel day without derailing everything"]
+
+[situations.three_pm_slump]
+label = "The 3pm slump"
+setup = "Half three in the afternoon, brain gone, session booked for six, sofa looking increasingly reasonable."
+states = ["flat", "drained"]
+tips = ["the 10-minute rule for a session you don't fancy", "why the slump hits and the cheap fix"]
+
+[situations.january_packed_gym]
+label = "January, and the gym is rammed"
+setup = "First week of January. Every machine taken, a queue for the squat rack, nobody knows how anything works."
+states = ["flat", "smug"]
+tips = ["how to train around a packed gym", "the case for being generous about the January crowd"]
+
+[situations.broken_lift]
+label = "The lift's out"
+setup = "Leg day yesterday. The lift in the block is out. Four flights up."
+states = ["knackered_happy", "drained"]
+tips = ["what actually helps with DOMS and what doesn't", "why walking is the best thing for sore legs"]
+
+[situations.leaking_shaker]
+label = "The shaker leaked in the bag"
+setup = "Opened the gym bag to find the shaker has emptied itself over everything he owns."
+states = ["flat", "drained"]
+tips = ["mixing without the mess", "prepping the bag the night before"]
+
+[situations.night_out_before]
+label = "Session booked, night out happened"
+setup = "Big night out. Session booked for the morning. Past-Amp has made a decision that present-Amp must live with."
+states = ["drained", "knackered_happy"]
+tips = ["training after a bad night's sleep — go, but change what you do", "hydration, honestly"]
+
+[situations.too_much_preworkout]
+label = "Twice the scoop"
+setup = "Doubled the pre-workout because he was tired. It is now working extremely well and he is doing lateral raises at speed."
+states = ["wired", "flat"]
+tips = ["what pre-workout actually does and when it's counterproductive", "timing it so you don't crash mid-session"]
+
+[situations.forgot_kit]
+label = "Forgot the kit"
+setup = "Got all the way to the gym. Trainers are at home, by the door, where he left them so he wouldn't forget them."
+states = ["flat", "smug"]
+tips = ["the session you can do in what you're wearing", "the one-bag system that fixes this forever"]
+
+[situations.first_session_back]
+label = "First session back after a break"
+setup = "Three weeks off. Walking back in convinced everyone is watching and that he has lost everything."
+states = ["flat", "beaming"]
+tips = ["how much you actually lose in three weeks (less than you think)", "what to do in week one back"]
+
+[situations.new_year_promises]
+label = "The plan he made on the 1st"
+setup = "The six-day training split he designed on New Year's Day, meeting reality on the 4th."
+states = ["smug", "flat"]
+tips = ["why the sustainable plan beats the perfect one", "cutting a plan down to what you'll actually do"]
+
+[situations.meal_deal]
+label = "The meal deal decision"
+setup = "Standing in front of the meal deal fridge at 12:40, making a decision that will define the afternoon."
+states = ["flat", "smug"]
+tips = ["building a decent meal deal without thinking about it", "why the afternoon crash starts at lunch"]
+
+[situations.everything_taken]
+label = "Six o'clock, everything taken"
+setup = "The 6pm rush. Every rack, every bench, every cable. Someone is doing curls in the squat rack."
+states = ["flat", "wired"]
+tips = ["the session you run when nothing's free", "training at the edges of the rush"]

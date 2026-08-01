@@ -78,9 +78,27 @@
   .show-tile .sh-s{font-size:12.5px; color:var(--muted); line-height:1.35}
   .show-tile .sh-day{margin-left:auto; flex:none; font-size:11px;
     text-transform:uppercase; letter-spacing:.06em; color:var(--faint)}
+  .cta-wide{display:block; width:100%; margin:2px 0 14px; padding:12px;
+    border-radius:12px; border:1px solid var(--accent); cursor:pointer;
+    background:rgba(79,195,247,.12); color:inherit; font-weight:600;
+    font-size:13.5px; letter-spacing:.02em}
+  .cta-wide:hover{background:rgba(79,195,247,.2)}
   #offformat-line a{color:var(--muted); text-decoration:none;
     border-bottom:1px dashed var(--line)}
   #offformat-line a:hover{color:var(--accent)}
+
+  /* Amp's situation bank */
+  .sit-grid{display:grid; gap:8px; margin-top:4px}
+  @media (min-width:620px){ .sit-grid{grid-template-columns:1fr 1fr} }
+  .sit{display:flex; flex-direction:column; gap:4px; text-align:left; padding:11px 12px;
+    border-radius:12px; background:var(--card); border:1px solid var(--line);
+    color:inherit; cursor:pointer; transition:border-color .15s}
+  .sit:hover{border-color:var(--accent)}
+  .sit.sel{border-color:var(--accent); background:rgba(79,195,247,.08)}
+  .sit.used{opacity:.62}
+  .sit-t{font-weight:600; font-size:13.5px}
+  .sit-s{font-size:12px; color:var(--muted); line-height:1.35}
+  .sit-used{font-weight:400; font-size:11px; color:var(--faint)}
 
   /* the hero door + tier labels on the source screen */
   .opt-hero { border-color: var(--accent-line); background: linear-gradient(180deg, var(--accent-tint), var(--panel)); }
@@ -399,6 +417,9 @@
       </button>
       {% endfor %}
     </div>
+    <button type="button" id="show-go" class="cta-wide" hidden
+            onclick="openShowScreen()"></button>
+
     <p class="tier-label" id="offformat-line">
       <a href="#" onclick="toggleOffFormat(); return false">Something off-format? →</a>
     </p>
@@ -493,6 +514,71 @@
       </div>
     </div>
     <div id="radar-body"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+  </section>
+
+  <!-- ═════════ 3·AMP — the mascot's own screen ═════════
+       The generic seed box asks "what's the idea?", which is the wrong
+       question for this show: an Amp post is a SITUATION plus a STATE plus a
+       TIP, and those three are what the build brief is written from. -->
+  <section class="scr" id="scr-amp">
+    <p class="eyebrow">⚡ AMP</p>
+    <h2>What's happened to him this week?</h2>
+    <p class="hint">Pick the situation — the bank marks what's been used lately, but nothing stops you reusing one.</p>
+
+    <div class="sit-grid" id="sit-grid">
+      {% for s in amp_situations %}
+      <button type="button" class="sit{% if s.used %} used{% endif %}" data-sit="{{ s.key }}"
+              data-state="{{ s.state }}" onclick="pickSituation('{{ s.key }}', this)">
+        <span class="sit-t">{{ s.label }}{% if s.used %} <span class="sit-used">used recently</span>{% endif %}</span>
+        <span class="sit-s">{{ s.setup }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <label style="margin-top:14px">Or write your own situation</label>
+    <input id="amp-own" placeholder="e.g. his headphones died two sets into a session">
+
+    <label style="margin-top:14px">How's he feeling?</label>
+    <div class="chip-row" id="amp-states">
+      {% for st in amp_states %}
+      <button type="button" class="chip" data-state="{{ st.key }}" title="{{ st.mood }}"
+              onclick="pickAmpState('{{ st.key }}', this)">{{ st.label }}</button>
+      {% endfor %}
+    </div>
+    <p class="hint" style="margin-top:6px; font-size:12px">He doesn't have to end the post charged — pick the state the story actually wants.</p>
+
+    <label style="margin-top:14px">The tip it has to leave them with <span class="muted">(optional — the engine will find one)</span></label>
+    <input id="amp-tip" placeholder="e.g. pack the bag the night before">
+
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
+    <div class="cta-row">
+      <button type="button" onclick="startAmp(true)" title="five different ways to play this situation">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startAmp(false)">⚡ Just build it</button>
+    </div>
+  </section>
+
+  <!-- ═════════ 3·LIVE WIRE — the topical show's own screen ═════════
+       The generic trending lane scans "what's trending in the UK", which
+       returns what everyone's already posting. This scans the audience's
+       actual interest territories instead (D9). -->
+  <section class="scr" id="scr-livewire">
+    <p class="eyebrow">📡 LIVE WIRE</p>
+    <h2>What are we reacting to?</h2>
+    <p class="hint">Scans what an 18-30 UK gym-goer is actually into this week — not just fitness. Leave them all on for the full spread.</p>
+
+    <div class="chip-row" id="terr-chips">
+      {% for t in territories %}
+      <button type="button" class="chip sel" data-terr="{{ t.key }}"
+              onclick="toggleTerritory('{{ t.key }}', this)">{{ t.label }}</button>
+      {% endfor %}
+    </div>
+
+    <div class="cta-row" style="margin-top:14px">
+      <button type="button" onclick="scanLiveWire()">📡 Scan these</button>
+      <button type="button" class="ghost" onclick="show('source', {back:true})">← back</button>
+    </div>
+    <p class="hint" style="margin-top:8px; font-size:12px">Or skip the scan and work from today's concepts on the previous screen.</p>
+    <div id="livewire-body" style="margin-top:14px"></div>
   </section>
 
   <!-- ═════════ 3b · IDEA ═════════ -->
@@ -829,6 +915,7 @@ const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
 let state = { ideaId: null, source: null, style: null, show: '',
+              ampSit: '', ampState: '', terrs: null,
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
 // The show metadata the server rendered, so the concept studio can label
@@ -842,6 +929,8 @@ const MAX_SLIDES = 10, MIN_SLIDES = 1;
 // stage number (of 5), label, and rail % per screen
 const META = {
   source:  [1, 'Start',     6],
+  amp:     [1, 'The situation', 24],
+  livewire:[1, 'What\u2019s live', 24],
   radar:   [1, 'Pick a story', 24],
   idea:    [1, 'Your idea', 24],
   facts:   [1, 'Your research', 24],
@@ -906,6 +995,77 @@ function pickShow(key, el){
   // Each show keeps its own cached set and its own freshness memory, so this
   // repaints from that show's cache rather than rewording another show's set.
   loadConcepts(false);
+  // A show with a bespoke screen offers it; the concept studio stays visible
+  // underneath as the other way in.
+  const go = document.getElementById('show-go');
+  if (sh && SHOW_SCREEN[sh.key]) {
+    go.hidden = false;
+    go.textContent = `${sh.icon} Open the ${sh.label} journey →`;
+  } else {
+    go.hidden = true;
+  }
+}
+// A show with its own screen goes there instead of the generic seed box —
+// this is the "custom journey per show" half of the layer. Shows without one
+// yet stay on the concept studio, which is a working default, not a stub.
+const SHOW_SCREEN = {amp: 'amp', live_wire: 'livewire'};
+function openShowScreen(){
+  const screen = SHOW_SCREEN[state.show];
+  if (!screen) { toast('Pick an idea below to build this show.'); return; }
+  if (screen === 'amp') {
+    // Preselect the state the chosen situation suits, so the common case is
+    // one tap. Overridable, obviously.
+    const sel = document.querySelector('#sit-grid .sit.sel');
+    if (sel && !state.ampState) pickAmpState(sel.dataset.state);
+  }
+  show(screen);
+}
+function pickSituation(key, el){
+  state.ampSit = (state.ampSit === key) ? '' : key;
+  document.querySelectorAll('#sit-grid .sit').forEach(b =>
+    b.classList.toggle('sel', b.dataset.sit === state.ampSit));
+  if (state.ampSit && el) pickAmpState(el.dataset.state);
+}
+function pickAmpState(key, el){
+  state.ampState = key;
+  document.querySelectorAll('#amp-states .chip').forEach(c =>
+    c.classList.toggle('sel', c.dataset.state === key));
+}
+async function startAmp(takes){
+  const own = document.getElementById('amp-own').value.trim();
+  if (!state.ampSit && !own) { toast('Pick a situation, or write your own.'); return; }
+  const tip = document.getElementById('amp-tip').value.trim();
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  // The situation IS the seed — the show's brief carries the rest.
+  const sit = document.querySelector(`#sit-grid .sit[data-sit="${state.ampSit}"]`);
+  body.set('text', own || (sit ? sit.querySelector('.sit-s').textContent.trim() : ''));
+  if (state.ampSit)   body.set('amp_situation', state.ampSit);
+  if (own)            body.set('amp_situation_text', own);
+  if (state.ampState) body.set('amp_state', state.ampState);
+  if (tip)            body.set('amp_tip', tip);
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+function toggleTerritory(key, el){
+  el.classList.toggle('sel');
+  state.terrs = [...document.querySelectorAll('#terr-chips .chip.sel')]
+    .map(c => c.dataset.terr);
+}
+async function scanLiveWire(){
+  const body = new URLSearchParams({kind: 'trending', count: '8', live_wire: 'true'});
+  // All chips on == the full in-season spread; a subset narrows the scan.
+  const all = document.querySelectorAll('#terr-chips .chip').length;
+  const picked = state.terrs || [];
+  if (picked.length && picked.length < all) body.set('territories', picked.join(','));
+  const el = document.getElementById('livewire-body');
+  el.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  const r = await post('/api/jobs/moments', body);
+  if (!r || !r.job_id) { el.innerHTML = ''; return; }
+  // Reuse the radar lane exactly as it is — same cards, same angle flow.
+  state.source = 'trending';
+  show('radar'); switchLane('trending');
 }
 function toggleOffFormat(){
   const el = document.getElementById('offformat');

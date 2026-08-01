@@ -710,12 +710,19 @@ def scout_discover(
     *,
     client: TrendSearchClient | None = None,
     headlines_only: bool = False,
+    territories: list[str] | None = None,
 ) -> MomentsResult:
     """One discovery scan: 'moments' (UK now), 'evergreen' (worth knowing),
     'trending' (formats to ride) or 'ragebait' (arguments worth starting).
 
     `headlines_only` runs the fast stage-1 pass (titles + why, no angles); the
-    angles are then written per-story by `generate_lane_angles`."""
+    angles are then written per-story by `generate_lane_angles`.
+
+    `territories` switches the 'trending' lane onto LIVE WIRE's interest model
+    (D9): instead of one country-wide scan it asks for a weighted spread across
+    what this audience is actually into. Pass `[]` for the full in-season
+    spread, a list of keys to narrow it, or None to keep the old behaviour.
+    """
     if kind not in _DISCOVER_PROMPTS:
         raise TrendError(f"unknown discover kind '{kind}'")
     client = client or OpenAITrendClient(settings)
@@ -733,6 +740,15 @@ def scout_discover(
         seed = uk_calendar_seed()
         if seed:
             ask += "\n\n" + seed
+    # LIVE WIRE's territories. An empty brief (no config, nothing in season)
+    # leaves the ask exactly as it was, so the lane degrades to its old scan
+    # rather than failing.
+    if territories is not None:
+        from .territories import scan_brief
+
+        brief = scan_brief(count, keys=territories or None)
+        if brief:
+            ask += "\n\n" + brief
     result = parse_moments(client.search(system, ask))
     result.moments = result.moments[:count]
     return result

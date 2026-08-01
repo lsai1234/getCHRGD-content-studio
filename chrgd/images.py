@@ -395,6 +395,7 @@ def compose_design_prompt(
     feature_character: bool | None = None,
     has_character: bool = False,
     charge: int | None = None,
+    amp_state: str = "",
     show=None,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
@@ -418,10 +419,12 @@ def compose_design_prompt(
     parts = []
     # Amp posts lead with the LOCKED character block: it outranks the slide's
     # own brief, so a topic can add a scene but never restyle the mascot.
-    if charge is not None:
-        from .character import character_block
+    # Either the charge cycle or the free expression system drives it (D5) —
+    # never both, and neither for a post that isn't Amp's.
+    if amp_state or charge is not None:
+        from .character import character_prefix
 
-        parts.append(character_block(charge))
+        parts.append(character_prefix(charge=charge, state=amp_state))
     # Does a person belong in THIS slide's scene? The engine's per-slide call
     # wins; otherwise infer from the brief. A portrait being attached always
     # means yes.
@@ -599,6 +602,18 @@ def _charge_for(idea: Idea, slide_index: int, slide_count: int) -> int | None:
     if arc is None or not 0 <= slide_index < len(arc):
         return None
     return arc[slide_index]
+
+
+def _amp_state_for(idea: Idea) -> str:
+    """The free Amp state for this idea, or '' when it isn't running one.
+
+    Its counterpart `_charge_for` returns None for the same ideas, so exactly
+    one of the two drives the locked character prefix and neither fires for a
+    non-Amp post.
+    """
+    from .character import state_for_route
+
+    return state_for_route(_route_of(idea))
 
 
 def style_for_idea(idea: Idea) -> str | None:
@@ -1018,6 +1033,7 @@ def render_slide(
                     feature_character=wants_character,
                     has_character=has_character,
                     charge=_charge_for(idea, slide_index, len(slides)),
+                    amp_state=_amp_state_for(idea),
                     show=show,
                 )
             else:

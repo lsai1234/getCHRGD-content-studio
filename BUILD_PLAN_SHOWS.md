@@ -205,9 +205,24 @@ All offline, injectable clients as everywhere else in this repo.
 
 ---
 
-## Phase 1 — AMP + LIVE WIRE · **M** (D4)
+## Phase 1 — AMP + LIVE WIRE · **M** (D4) — ✅ **BUILT**
 
-The two shows that are ~80% built. This phase proves the Show layer against
+Shipped: Amp's free state system + situation bank + situation-led brief + his
+own create screen; Live Wire's interest territories + territory-aware scout +
+its own create screen. 31 new tests (`tests/test_phase1_shows.py`); 474 pass.
+
+Two things found while building:
+
+* **An unknown stored `amp_state` dropped both spines.** The first cut checked
+  `route.get("amp_state")` for truthiness, so a typo'd state gave no arc *and*
+  no valid state — leaving an Amp slide with no locked character prefix, i.e.
+  an off-model mascot on a paid image. It now validates through
+  `state_for_route` and falls back to the arc.
+* **The Amp brief only fired inside the mechanic-lock branch**, which a post
+  started from the AMP show tile never enters — so the show would have written
+  a normal carousel that merely looked like Amp once rendered. Hoisted out.
+
+The two shows that were ~80% built. This phase proves the Show layer against
 real posts before any new engine gets written.
 
 ### 1.1 AMP · S–M

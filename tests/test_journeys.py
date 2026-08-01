@@ -837,7 +837,8 @@ def test_worker_discover_job_and_dedupe(settings, store, monkeypatch):
 
     seen_kinds = []
 
-    def fake_scout(s, kind="moments", count=6, client=None, headlines_only=False):
+    def fake_scout(s, kind="moments", count=6, client=None,
+                   headlines_only=False, territories=None):
         seen_kinds.append(kind)
         return MomentsResult.model_validate(MOMENTS_PAYLOAD)
 
@@ -1562,7 +1563,8 @@ def test_claim_lanes_use_the_creative_model(settings, store, monkeypatch):
     monkeypatch.setattr(trends, "OpenAITrendClient", RecClient)
     monkeypatch.setattr(
         trends, "scout_discover",
-        lambda s, kind, count, client=None, headlines_only=False: trends.MomentsResult(),
+        lambda s, kind, count, client=None, headlines_only=False,
+               territories=None: trends.MomentsResult(),
     )
 
     worker._handle_discover(store, settings, {"kind": "ragebait", "params_json": "{}"})

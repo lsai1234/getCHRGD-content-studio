@@ -1,0 +1,50 @@
+# LIVE WIRE's interest territories (D9).
+#
+# The scout used to scan "what's trending in the UK", which returns the news
+# everyone is already posting — so the leap starts from material the audience
+# scrolled past twice yesterday. That's why the trending lane feels generic.
+#
+# A territory is a named slice of what an 18-30 UK gym-goer is ACTUALLY into.
+# The person who trains five times a week also watches the same telly, follows
+# the same football and books the same holidays as everyone else — so this is
+# deliberately broader than fitness, while the gym leap stays the product.
+#
+# `weight` is how many of a scan's slots the territory gets (relative, not a
+# percentage). `months` restricts a seasonal territory to when it's live —
+# omit it for year-round. `probe` is what the scout is told to go and find.
+
+[territories.gym_news]
+label = "Gym & fitness news"
+weight = 3
+probe = """Big news in UK gyms and fitness right now: chain price rises or closures, a gym company in the news, a viral gym incident or piece of etiquette drama, a supplement or product recall, a major race or event (Hyrox, London Marathon, Tough Mudder), a rule change, a big opening. Real, dateable stories — not evergreen advice pieces."""
+
+[territories.science]
+label = "The science"
+weight = 3
+probe = """New or newly-circulating research relevant to training, nutrition, sleep, recovery or supplements — the kind of study that's actually being talked about, not a paper nobody has heard of. Prefer findings that are counterintuitive, that overturn common advice, or that a lot of people are currently getting wrong. Note honestly where the evidence is thin."""
+
+[territories.reality_tv]
+label = "Reality TV & telly"
+weight = 2
+probe = """What everyone's watching and arguing about on UK television right now — the big reality format's current drama, a talent show moment, a returning series, a talking-point episode. The thing people bring up in the changing room."""
+
+[territories.football]
+label = "Football"
+weight = 2
+probe = """UK football's live talking points: the weekend's results and controversies, a transfer saga, an injury or fitness story, a manager under pressure, an England or club moment people are actually discussing. Prefer anything with a physical, fitness or lifestyle angle."""
+
+[territories.money_going_out]
+label = "Money & going out"
+weight = 2
+probe = """What things cost and what people are doing with their money and their weekends in the UK right now: the price of a night out, a pint, a meal deal, a gym membership; payday habits; cost-of-living stories; where people are going out. The everyday economics of being 18-30 in Britain."""
+
+[territories.holidays]
+label = "Holidays & summer"
+weight = 2
+months = [1, 2, 3, 4, 5, 6, 7, 8]
+probe = """UK holiday season talking points: booking season and where everyone's going, airline and airport stories, the shredded-by-summer cycle, all-inclusives, festival season, heatwaves. Live and seasonal, not evergreen travel advice."""
+
+[territories.food_culture]
+label = "Food & drink culture"
+weight = 1
+probe = """What the UK is eating and drinking and arguing about right now: a viral food trend, a chain's new menu or a discontinued favourite, an energy drink or protein product everyone's suddenly on, a supermarket story, a health scare or claim doing the rounds."""
