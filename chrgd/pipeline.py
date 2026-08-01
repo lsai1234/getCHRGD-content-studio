@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, ValidationError
 from .config import Settings
 from .db import Store
 from .models import Idea, Post, Status
+from .shows import get_show
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "content_engine_prompt.md"
 # Persona + gold-standard examples — the single biggest quality lever. Optional:
@@ -361,6 +362,19 @@ def build_user_message(
     prefs = creation_prefs(idea)
     lines.extend(_seed_context(idea, prefs))
 
+    # The show's brief: what turns one general-purpose engine into five
+    # recognisable formats. It sits directly after the seed so every later
+    # instruction (take, concept brief, length) is read in the show's context.
+    # Absent for an off-format post — the message is then byte-identical to
+    # what the engine built before shows existed.
+    show = get_show(str(prefs.get("show") or ""))
+    if show is not None:
+        lines.append("")
+        # An explicit editor length choice outranks the show's own range.
+        lines.append(
+            show.brief_block(include_length=not prefs.get("length_pref"))
+        )
+
     # A take the editor chose from a fan-out is the agreed direction — the
     # full write must BE that take, not a fresh interpretation of the seed.
     take = prefs.get("take")
@@ -568,6 +582,9 @@ def creation_prefs(idea: Idea) -> dict:
         for k in (
             "style", "mechanic_lock", "concept_brief",
             "length_pref", "moment", "take", "casting_intensity",
+            # The show this post is an episode of (chrgd/shows.py). Absent on
+            # every off-format post, which is what keeps this a pass-through.
+            "show",
         )
         if k in route
     }
@@ -921,6 +938,19 @@ def develop_concept(
     lines = ["Develop the concept for this backlog row (do NOT write the full post):", ""]
     prefs = creation_prefs(idea)
     lines.extend(_seed_context(idea, prefs))
+
+    # The show's brief: what turns one general-purpose engine into five
+    # recognisable formats. It sits directly after the seed so every later
+    # instruction (take, concept brief, length) is read in the show's context.
+    # Absent for an off-format post — the message is then byte-identical to
+    # what the engine built before shows existed.
+    show = get_show(str(prefs.get("show") or ""))
+    if show is not None:
+        lines.append("")
+        # An explicit editor length choice outranks the show's own range.
+        lines.append(
+            show.brief_block(include_length=not prefs.get("length_pref"))
+        )
     take = prefs.get("take")
     if take:
         lines += ["", "CHOSEN TAKE — the editor picked this direction from a "

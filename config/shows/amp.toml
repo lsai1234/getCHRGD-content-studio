@@ -1,0 +1,66 @@
+# AMP — the mascot's show. Tip-led, and a story that teaches nothing
+# doesn't ship (D5). His state is free to range: deflated and low one week,
+# beaming and full of colour the next. See THEMES_PLAN.md and chrgd/character.py.
+
+[show]
+key = "amp"
+label = "AMP"
+tagline = "One relatable disaster, one usable tip, one charge cycle."
+blurb = "The brand's face. Funny, but it always leaves you with something you can actually use."
+icon = "⚡"
+weekday = "wed"
+kpi = "shares, then saves — the gag earns the share, the tip earns the save"
+slides_min = 4
+slides_max = 6
+front_screen = "seed"
+cast = "amp"
+gate_profile = "comedy_useful"
+engagement_play = "share"
+
+[spine]
+roles = ["the_state", "the_pull", "the_tip", "its_working", "the_payoff"]
+flex = 1
+briefs = [
+  "Open on Amp in a specific, relatable state caused by a specific, real situation — the 4am airport, the 3pm slump, a packed gym in January, a leaking shaker. Name the situation concretely; 'tired' is not a situation.",
+  "It gets worse, or the temptation to bail becomes real. The audience should recognise this exact moment from their own week.",
+  "THE TURN — and the tip IS the turn. One genuinely usable thing, stated plainly enough that someone could do it tomorrow. This is the slide the whole post exists for.",
+  "It's working. Amp's state visibly shifts. Keep it concrete — show the difference, don't announce it.",
+  "The payoff state and the sign-off. Land the joke and leave the tip ringing."
+]
+
+[voice]
+block = """Amp is a lovable try-hard on the journey WITH the audience — never a superhero who has it sorted. Cheeky, dry, British. He is allowed to fail, sulk and overreact.
+
+TIP-LED. Every episode of this show leaves the viewer with ONE thing they could actually do. If you cannot name that takeaway in a single plain sentence, the post isn't finished — go back and find the tip. A funny story that teaches nothing does not ship on this show.
+
+KEEP THE TIPS IN AMP'S LANE: behaviour, habit, routine, the small practical fix — going anyway when you don't fancy it, packing the bag the night before, the 10-minute rule, eating before not after. Leave dosing, physiology and biochemistry to STRAIGHT UP; Amp explains what to DO, not what happens inside a cell.
+
+HIS STATE IS FREE. Amp does not have to start flat and end charged every week. Sometimes he's deflated and dim, sometimes he's beaming and full of colour, sometimes he's smug and about to be humbled. Pick the state the story needs and let his colour and posture carry the emotion.
+
+SPECIFICITY IS THE JOKE. A named, exact situation is funny; a general one is a greetings card. Punch at situations and at Amp himself, never at the viewer.
+
+Speech bubbles are allowed and welcome, used sparingly — a short line from Amp lands harder than narration."""
+banned = [
+  "a story with no usable takeaway",
+  "dosing, physiology or biochemistry advice (that's STRAIGHT UP's job)",
+  "photoreal rendering of Amp",
+  "punching down at the viewer",
+  "repeating a situation the show has already used",
+  "motivational-poster language"
+]
+
+[look]
+style_preset = "amp_vector"
+house_style = "Flat vector cartoon, sticker energy, bold clean outlines, minimal shading. Reads as a comic strip panel, never as a photograph. Amp's colour and posture carry the emotional state of the beat — dim, desaturated grey-blue when he's flat; full-saturation electric cyan with a glow when he's charged."
+palette = "Electric cyan (#29C2F2) as Amp's body against the brand near-black, with the accent colour shifting warmer or dimmer to match his state."
+type_style = "Chunky, rounded, high-contrast display type with a comic feel — bold enough to sit alongside a cartoon without looking like a caption bar."
+motif = "Amp himself, plus a charge indicator that visibly changes state across the set."
+title_card = "AMP"
+title_note = "small, top-left, in the show's chunky display type"
+
+[look.furniture]
+wordmark = true
+scrim = false
+counter = true
+handle = true
+footer_bar = true

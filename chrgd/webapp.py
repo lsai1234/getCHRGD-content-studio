@@ -348,12 +348,22 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         _: str = Depends(require_user_page),
     ):
         from .mechanics import load_mechanics
+        from .shows import ordered_shows
 
         # No style preset picker: the engine designs a bespoke design_system
         # per post, so the journey goes source → door directly.
+        # The five recurring shows are server-rendered so the picker paints on
+        # first load rather than after a round-trip.
         return render_page(
             request, "create.html", "create",
             mechanics=[m.model_dump() for m in load_mechanics().values()],
+            shows=[
+                {
+                    "key": sh.key, "label": sh.label, "tagline": sh.tagline,
+                    "blurb": sh.blurb, "icon": sh.icon, "weekday": sh.weekday,
+                }
+                for sh in ordered_shows()
+            ],
             resume_idea=idea or "",
             preset_day=day or "",
         )
@@ -832,11 +842,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         length: str = "",
         scheduled_for: datetime | None = None,
         moment: dict | None = None,
+        show: str = "",
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
+        from .shows import ROUTE_KEY, get_show
 
         route: dict = {}
+        # Which recurring show this post is an episode of. It rides route_json
+        # exactly like style and mechanic_lock, so creation_prefs carries it
+        # through every rebuild; absent for an off-format post.
+        if show:
+            if get_show(show) is None:
+                raise HTTPException(400, f"unknown show '{show}'")
+            route[ROUTE_KEY] = show
         if moment:
             route["moment"] = moment
         if style:
@@ -875,6 +894,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         request: Request,
         mode: str = Form(...),  # 'idea' | 'facts' | 'blank'
         text: str = Form(""),
+        show: str = Form(""),
         mechanic: str = Form(""),
         style: str = Form(""),
         length: str = Form(""),
@@ -922,7 +942,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     # renders as an Amp post instead of a carousel that merely
                     # mentions him.
                     mechanic_key=mechanic,
-                    length=length, scheduled_for=when,
+                    length=length, scheduled_for=when, show=show,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}
@@ -943,6 +963,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     mechanic_key=mechanic,
                     length=length,
                     scheduled_for=when,
+                    show=show,
                 )
                 if manual:
                     # Fully manual: empty slides straight into the editor
@@ -1304,9 +1325,30 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             except Exception:  # noqa: BLE001 — the card is a bonus, never a blocker
                 return {"status": "warming", "pick": None, "alternates": []}
 
+    @app.get("/api/shows")
+    def api_shows(_: str = Depends(require_user)):
+        """The five recurring shows the create screen opens on.
+
+        Config-driven (config/shows/*.toml) so adding or retiring a show is a
+        file, not a deploy of new code."""
+        from .shows import ordered_shows
+
+        return {
+            "shows": [
+                {
+                    "key": s.key, "label": s.label, "tagline": s.tagline,
+                    "blurb": s.blurb, "icon": s.icon, "weekday": s.weekday,
+                    "kpi": s.kpi, "front_screen": s.front_screen,
+                    "slides_min": s.slides_min, "slides_max": s.slides_max,
+                }
+                for s in ordered_shows()
+            ]
+        }
+
     @app.get("/api/concepts")
     def api_concepts_cached(
-        max_age_hours: float = 8.0, _: str = Depends(require_user)
+        max_age_hours: float = 8.0, show: str = "",
+        _: str = Depends(require_user)
     ):
         """Today's concept set WITHOUT spending or waiting, when we already have
         one: the last completed set if it's still fresh, otherwise whatever run
@@ -1315,14 +1357,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         from .concepts import cached_concepts
 
         with _store(settings) as store:
-            cached = cached_concepts(store, max_age_hours=max_age_hours)
+            cached = cached_concepts(store, max_age_hours=max_age_hours,
+                                     show=show)
             if cached:
                 return {"status": "ready", **cached}
+            from .shows import job_show_filter
+
+            clause, params = job_show_filter(show)
             active = store.conn.execute(
                 "SELECT job_id FROM jobs WHERE kind = 'concepts' "
                 "AND status IN ('QUEUED','PROCESSING') "
                 "AND COALESCE(params_json,'{}') LIKE '%\"seed\": \"\"%' "
-                "ORDER BY job_id DESC LIMIT 1"
+                + clause +
+                "ORDER BY job_id DESC LIMIT 1",
+                params,
             ).fetchone()
         return {
             "status": "thinking" if active else "cold",
@@ -1332,7 +1380,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.post("/api/concepts")
     def api_concepts(
-        seed: str = Form(""), fresh: bool = Form(False),
+        seed: str = Form(""), fresh: bool = Form(False), show: str = Form(""),
         _: str = Depends(require_user),
     ):
         """Kick the fast concept sketch on the worker and return a job_id to poll.
@@ -1344,7 +1392,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         from .worker import enqueue_concepts
 
         with _store(settings) as store:
-            job_id = enqueue_concepts(store, seed=seed, fresh=fresh)
+            job_id = enqueue_concepts(store, seed=seed, fresh=fresh, show=show)
         return {"job_id": job_id, "kind": "concepts"}
 
     @app.post("/api/concepts/develop")

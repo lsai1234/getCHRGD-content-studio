@@ -1,0 +1,65 @@
+# STRAIGHT UP — supplements, facts, actual help.
+# Decisions D2 (educational + sourced), D7 (general for now, product hook
+# designed in and left empty). See THEMES_PLAN.md.
+
+[show]
+key = "straight_up"
+label = "STRAIGHT UP"
+tagline = "The honest answer, without the hype."
+blurb = "What an ingredient actually does, what the evidence supports, and what the label is hiding."
+icon = "🧪"
+weekday = "tue"
+kpi = "saves and profile visits — this is the show that earns trust"
+slides_min = 4
+slides_max = 6
+front_screen = "seed"
+cast = "none"
+gate_profile = "claims"
+engagement_play = "save"
+
+[spine]
+roles = ["the_question", "the_short_answer", "the_mechanism", "what_it_means", "the_myth", "save_this"]
+flex = 1
+briefs = [
+  "The question people actually ask, in their words — not a blog title. 'Do I need creatine if I only train 3 times a week?' beats 'Creatine explained'.",
+  "The short answer, given away immediately. Trust beats tease on this show: withholding the answer to force a swipe is exactly the move that makes people distrust supplement accounts.",
+  "Why — the mechanism, in plain language, honestly caveated. What the evidence supports, and where it genuinely doesn't know.",
+  "What it means for the viewer in practice: dose, timing, whether it's worth the money, who it actually helps.",
+  "The myth or the marketing lie to ignore — this is where the show is allowed to be sharp, because it's punching at the industry rather than at physiology.",
+  "The one thing worth keeping, and a plain prompt to save it."
+]
+
+[voice]
+block = """Calm expert with a sharp edge on marketing lies. Authority comes from plainness, not volume — no hype, no fear, no shouting.
+
+THE CLAIMS LINE, and it is not negotiable. Say what the evidence does and does not support. Never promise an outcome. Never use medical or therapeutic framing. Never write "studies show" without being able to name the actual study. Where the evidence is weak or mixed, say that — "the evidence here is thinner than the marketing suggests" is a stronger line than a confident overclaim, and it's true.
+
+BE OPINIONATED ABOUT THE INDUSTRY, NEVER ABOUT PHYSIOLOGY. Proprietary blends, £45 tubs of flavoured maltodextrin, labels that hide the dose, influencer discount codes — all fair game, take a real side. What a supplement does inside a human body is reported, not argued.
+
+This account currently has no own-brand products, so every post is category education. Never imply a product recommendation that doesn't exist.
+
+UK-native throughout: British spelling, £, real UK supplement shelves and prices."""
+banned = [
+  "promising any outcome or result",
+  "medical, therapeutic or diagnostic framing",
+  "'studies show' without a nameable study",
+  "fear-based framing ('you're poisoning yourself')",
+  "hot-take or ragebait framing about physiology",
+  "recommending an own-brand product (there isn't one yet)"
+]
+
+[look]
+style_preset = "clean_editorial"
+house_style = "Bright, clean, editorial. Light or white background, generous whitespace, crisp product-on-seamless or a single clear object. The opposite of the gritty night-flash gym look — legibility and calm ARE the aesthetic, because they are what make it read as trustworthy."
+palette = "Off-white background, near-black type, one light-blue accent (#4FC3F7). Restrained — no more than three colours in a frame."
+type_style = "Large, clean, high-contrast sans headline with plenty of air around it. Supporting text set generously; nothing crowded, nothing shouting."
+motif = "A consistent thin rule under the headline and a single centred subject on a clean field — the same calm grid on every slide."
+title_card = "STRAIGHT UP"
+title_note = "small, top-left, quiet — the show name should read as a masthead, not a badge"
+
+[look.furniture]
+wordmark = true
+scrim = false
+counter = true
+handle = true
+footer_bar = true

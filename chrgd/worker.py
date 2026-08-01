@@ -534,6 +534,7 @@ def _handle_concepts(store: Store, settings: Settings, job: dict) -> dict:
     return sketch_concepts(
         store, settings,
         seed=str(params.get("seed", "")), fresh=bool(params.get("fresh")),
+        show=str(params.get("show", "")),
     )
 
 
@@ -701,22 +702,33 @@ def enqueue_concept(store: Store, idea_id: str, *, feedback: str = "") -> int:
     return store.create_job("concept", idea_id=idea_id, params={"feedback": feedback})
 
 
-def enqueue_concepts(store: Store, *, seed: str = "", fresh: bool = False) -> int:
+def enqueue_concepts(
+    store: Store, *, seed: str = "", fresh: bool = False, show: str = ""
+) -> int:
     """Kick a concept-engine run on the worker. Deduped for the no-seed
     auto-load (a reopened page shouldn't stack runs); a seeded spin or an
     explicit ↻ Fresh set is always a new run, because the editor asked for one
     — handing back the in-flight job there is exactly how "refresh" ended up
     showing the same set again."""
     if not seed.strip() and not fresh:
+        # Dedupe within the same show only — an in-flight AMP run must not be
+        # handed back to someone who just opened STRAIGHT UP.
+        from .shows import job_show_filter
+
+        clause, params = job_show_filter(show)
         active = store.conn.execute(
             "SELECT job_id FROM jobs WHERE kind = 'concepts' "
             "AND status IN ('QUEUED','PROCESSING') "
             "AND COALESCE(params_json,'{}') LIKE '%\"seed\": \"\"%' "
-            "ORDER BY job_id DESC LIMIT 1"
+            + clause +
+            "ORDER BY job_id DESC LIMIT 1",
+            params,
         ).fetchone()
         if active:
             return int(active["job_id"])
-    return store.create_job("concepts", params={"seed": seed, "fresh": fresh})
+    return store.create_job(
+        "concepts", params={"seed": seed, "fresh": fresh, "show": show}
+    )
 
 
 def enqueue_concept_detail(store: Store, concept: dict, *, seed: str = "") -> int:

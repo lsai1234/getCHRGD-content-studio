@@ -1,0 +1,66 @@
+# LIVE WIRE — what our lot are actually talking about.
+# Decision D9: the overflow lane, weighted to big gym news and new science,
+# and retargeted from "UK trending" to what 18-30 UK gym-goers are into.
+# The territory model itself lands in Phase 1 (config/territories.toml).
+
+[show]
+key = "live_wire"
+label = "LIVE WIRE"
+tagline = "The take on what everyone's already talking about."
+blurb = "Big gym news, new science, and the culture that sits alongside the gym in the same person's life."
+icon = "📡"
+weekday = "fri"
+kpi = "comments and reach — the show most likely to spike"
+slides_min = 4
+slides_max = 6
+front_screen = "concepts"
+cast = "none"
+gate_profile = ""          # today's hot-take rubric — this show is what it was tuned for
+engagement_play = "comment"
+
+[spine]
+roles = ["the_take", "the_receipt", "the_twist", "the_side", "pick_one"]
+flex = 1
+briefs = [
+  "The take, stated flat and without hedging. No 'in my opinion'. This is the mate who says it outright.",
+  "The receipt — the real thing that actually happened. Ground the facts; the angle is invented, the event never is.",
+  "The twist: the gym angle nobody else would post. This is the leap, and it's the whole job.",
+  "The side worth taking, with the strongest counter-argument left conspicuously unaddressed — that gap is what the comments rush to fill.",
+  "Pick one. A comment prompt answerable in under five words without thinking."
+]
+
+[voice]
+block = """This is the topical show, and it should look and read like it wasn't designed — native, slightly rough, made today.
+
+WHAT THIS SHOW IS ABOUT is broader than fitness and that is deliberate. It covers what an 18-30 UK gym-goer is genuinely into this week: big gym and fitness news, new science worth knowing, reality TV, football, holidays, money and going out. The person who trains five times a week also watches the same telly and goes on the same holidays as everyone else — write for that whole person. Generic "UK trending" is exactly what this show is NOT.
+
+THE LEAP IS THE PRODUCT. Never just report what's happening — turn it into a gym idea nobody else would post. The reference move: Andy Burnham cutting bus fares to £2 becomes "make gyms free like he's making buses free". The event is fuel; the angle is the product.
+
+GROUND THE FACTS, INVENT THE ANGLE. Never invent news beyond the real signal given. Any number must be plausibly true and claim-safe.
+
+Opinionated, yes. Bad-faith, no — every take must be one you'd defend out loud. On anything political stay light-touch and non-partisan: play the analogy, never attack a named person.
+
+UK-native throughout: British spelling, £, real UK gym life — PureGym, The Gym Group, meal deals, the 6pm rush, payday, the leg-day limp."""
+banned = [
+  "invented news or fabricated statistics",
+  "partisan attacks on a named person",
+  "awareness-day or heritage-month filler",
+  "a take the brand couldn't defend out loud",
+  "medical or guaranteed-outcome claims"
+]
+
+[look]
+style_preset = "native_rough"
+house_style = "Deliberately undesigned: a candid phone photo with harsh direct flash, or a screenshot-style artefact (notes app, a group chat, a poster taped to the gym wall), or a meme-shaped image. If it could pass for a supplement brand's paid ad, it has failed — rewrite it rawer."
+palette = "Whatever the artefact would really be — a white notes-app screen, a green message bubble, the fluorescent cast of a real gym. Brand colour used sparingly if at all."
+type_style = "Native platform typography: the system font of whatever artefact is being imitated, or plain bold sans over a photo. Never a designed lockup."
+motif = "The artefact framing itself — the sense that you're looking at something screenshotted rather than made."
+title_card = "LIVE WIRE"
+title_note = "small and plain, bottom-left — it should look stamped on rather than designed in"
+
+[look.furniture]
+wordmark = true
+scrim = true
+counter = true
+handle = true
+footer_bar = true

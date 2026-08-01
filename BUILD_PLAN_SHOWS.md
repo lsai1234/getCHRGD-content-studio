@@ -13,7 +13,37 @@ alone if you hate it — nothing is a one-way door until Phase 3.
 
 ---
 
-## Phase 0 — the Show layer · **M**
+## Phase 0 — the Show layer · **M** — ✅ **BUILT**
+
+Shipped: `chrgd/shows.py`, five `config/shows/*.toml`, `config/gate_profiles.toml`,
+per-show presets in `brand.toml`, route plumbing through `/api/create/start`,
+the show brief in `pipeline.build_user_message`, the look pack + on-image show
+name in `images.compose_design_prompt`, gate profiles in `conceptgate.py`,
+show-scoped concept sketching and freshness memory in `concepts.py`, `/api/shows`,
+and the five show tiles on `/create` with the old six doors behind an
+"off-format" escape. 41 new tests in `tests/test_shows.py`; 443 pass.
+
+### One correction to §0.4, found while building it
+
+The plan said furniture toggles were "the single change that lets the Multiverse
+stop looking like a CHRGD ad". That was wrong about where the look actually
+comes from. On a real render the engine runs `ai_design`, where the image model
+designs the WHOLE slide and **no brand frame is drawn in code at all** —
+`images.render_slide` returns the model's output untouched, and
+`_DESIGN_TEXT_RULES` explicitly forbids logos, labels and watermarks. So
+`brand.toml [identity]` only affects the dry-run preview and the legacy overlay
+path.
+
+What actually carries a show's look on a paid render is `style_preset` +
+`house_style` + the look block, and those are what the implementation leans on.
+Two consequences worth knowing:
+
+* **The show name on-image (D10) had to be granted explicitly.** The text rules
+  forbid extra labels outright, so a title card is only drawn because
+  `compose_design_prompt` now adds it as approved copy — on slide 1 only.
+* **Furniture toggles are still wired** (and the Multiverse still runs
+  handle-only) because they're correct for the preview path and for any future
+  return to overlay rendering — but they are not doing the heavy lifting.
 
 The foundation. No new shows yet — this is the seam that lets the other four
 phases be mostly configuration. Build it first and everything after is cheap;
@@ -275,11 +305,16 @@ role and the **safety class** (`meme_character` / `public_figure` /
 `fictional_ip`). **New `chrgd/roster.py`**: load, cast 2–4 per episode, and
 emit each character's locked prefix, mirroring `character.py`'s proven pattern.
 
-### 3.2 Canon · M
+### 3.2 Canon, authored in the studio · M
 **New `chrgd/series.py`** + a `series` / `episode` store (`chrgd/db.py`
 `Store`). Each episode writes what changed — who won, who lost, who now hates
 whom, what's unresolved — and the next episode reads it. Plus the **cold-open
 recap generator**: slide 1 always lands for someone who's never seen it (D6).
+
+**Operator-authored (D16).** The canon is not engine-only: a studio screen
+lets you write and edit storylines and history directly, and a **hard reset**
+wipes the canon and starts the world clean. The engine proposes the next
+episode from the log; you own what the log says.
 
 ### 3.3 The episode pipeline · M
 `STORY_ENGINE_PLAN.md`'s stages, which already exist as a design: arc → beat
@@ -301,9 +336,11 @@ The `continuity_likeness` profile:
 `brand.toml [styles.comic]` + the Multiverse's furniture set to handle-only
 (D3). Bold ink, halftone, panel captions, speech bubbles.
 
-### 3.6 The vote · S
-The season mechanic. Needs a decision from you first (still open) — canon vote
-or cliffhanger alone.
+### 3.6 The vote · S — optional
+Downgraded by D16: with canon authored in the studio, the serial no longer
+depends on an audience vote to know what happens next. Cliffhangers carry the
+grip; the vote becomes a comment mechanic you can switch on per season rather
+than a structural requirement.
 
 ---
 

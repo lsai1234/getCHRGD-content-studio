@@ -1,0 +1,68 @@
+# Gate profiles — what the slide-1 concept gate judges a show ON.
+#
+# The gate (chrgd/conceptgate.py) runs four stages: rivals → tournament →
+# score → glance. Its rubric is tuned to one question — "is this a
+# thumb-stopping hot take" — which is the right question for LIVE WIRE and the
+# wrong one for a claims explainer or a workout card. Judged on that scale, a
+# calm, useful, trustworthy opener scores badly and gets "sharpened" into
+# something shouty. That is why the serious shows come out wrong today.
+#
+# A profile does NOT replace the rubric. It appends a focus block to each
+# stage's system prompt, so the gate keeps everything it knows about openers
+# and gains a show-specific bar. A show with no profile (or an unknown key)
+# gets empty strings and behaves EXACTLY as the gate does today — that
+# equivalence is asserted in tests/test_shows.py and is the thing to protect.
+#
+#   judge_focus  → JUDGE_SYSTEM (stage C, the solo score)
+#   rival_focus  → the rivals brief (stage A, inventing alternative openers)
+#   tourney_focus→ TOURNAMENT_SYSTEM (stage B, picking what to spend on)
+#   glance_focus → GLANCE_SYSTEM (stage D, the half-second test)
+
+[profiles.comedy_useful]
+label = "Funny, and it teaches something"
+judge_focus = """THIS OPENER IS FOR **AMP**, the brand's mascot show. Judge it on that show's bar, not on hot-take heat:
+- Is it genuinely FUNNY, or is it merely about comedy? Name the joke in one line or it isn't one.
+- Is the situation SPECIFIC and real (the 4am airport, the 3pm slump) rather than general ("feeling tired")? Specificity is the joke.
+- Does the post promise something USABLE? Amp is tip-led — if you cannot name the one thing a viewer would take away, this opener fails regardless of how funny it is.
+- Is Amp a lovable try-hard here rather than a superhero who has it sorted?
+A shouty, confrontational or ragebait opener is WRONG for this show even if it would stop a thumb. Score it down."""
+rival_focus = """Every rival opener must star Amp in a SPECIFIC, relatable situation, and must set up a post that delivers one usable tip. Vary the situation between rivals — a different drain, a different setting, a different joke. Do not write a rival that is a hot take or a confrontation; that is a different show."""
+tourney_focus = """Prefer the opener that is actually funny AND clearly promises something useful. An opener that is merely loud, confrontational or provocative is the wrong show — rank it last."""
+glance_focus = """You are glancing at a cartoon mascot post. Did it make you smile, and did you get a sense that it was going to tell you something useful?"""
+
+[profiles.claims]
+label = "Trustworthy, and defensible"
+judge_focus = """THIS OPENER IS FOR **STRAIGHT UP**, the evidence show. Judge it on trust, not heat:
+- Does it ask the question a real person would actually ask, in their words?
+- Is it CLAIM-SAFE? Any promised outcome, medical framing, or "studies show" without a nameable study is an automatic fail — not a deduction, a fail.
+- Is it calm and plain? On this show, hype and fear are DEFECTS. An opener that sounds like a supplement advert has failed even if it would stop a thumb.
+- Is it specific enough to be worth answering — a real question, not a category name?
+The show is allowed to be sharp about the INDUSTRY (pricing, labelling, marketing lies) and must be neutral and reported about physiology. Score an opinionated physiology claim down hard."""
+rival_focus = """Every rival opener must be a real question a UK gym-goer would genuinely ask about a supplement or ingredient, phrased in their words. No outcome promises, no medical framing, no fear. Sharp about marketing is welcome; sharp about what happens inside a body is not."""
+tourney_focus = """Prefer the opener a sceptical viewer would TRUST. Curiosity matters, but on this show credibility outranks intrigue: reject anything that reads like an advert or an overclaim, however clickable."""
+glance_focus = """You are glancing at a supplement-information post. Did you understand what question it was about to answer, and did it feel honest rather than salesy?"""
+
+[profiles.useful_legible]
+label = "Anyone could follow this"
+judge_focus = """THIS OPENER IS FOR **THE SESSION**, the workout show. It is not trying to be funny or provocative — judge it on usefulness:
+- Is it immediately clear WHO this session is for, HOW LONG it takes and WHAT KIT is needed? Vagueness is the main failure mode here.
+- Would someone screenshot this? Saveability is this show's whole job.
+- Is it LEGIBLE — could a complete beginner read this and know whether it's for them?
+- Is it goal-framed (glutes, strength, conditioning, fat loss, mobility) rather than gender-labelled? "For the girls" / "for the lads" is a fail.
+- Does it avoid %1RM, RPE scales and any jargon assuming training history? Those are fails.
+A confrontational or joke opener is the WRONG show. Score it down."""
+rival_focus = """Every rival opener must state a concrete promise: the goal, the time, the kit. Vary the goal, the time of day and the equipment level between rivals. No jokes, no hot takes, no jargon a beginner wouldn't know."""
+tourney_focus = """Prefer the opener most likely to be SAVED — the one whose promise is most concrete and most obviously worth keeping. Cleverness is worth nothing here if the offer is vague."""
+glance_focus = """You are glancing at a workout post. In half a second: did you know who it was for, how long it takes, and what you'd need?"""
+
+[profiles.continuity_likeness]
+label = "In-world, gripping, and safe"
+judge_focus = """THIS OPENER IS FOR **THE MULTIVERSE**, a comic serial. Judge it on grip and on safety:
+- Does it work COLD for someone who has never seen an episode, while still rewarding someone who has?
+- Are the characters instantly recognisable, and is each one playing their established trait?
+- Does it end mid-tension so the swipe is inevitable?
+- LIKENESS SAFETY — any of these is an automatic fail, not a deduction: a real person rendered photoreal rather than as caricature; a real person shown using, holding or endorsing a product; a fabricated quote, fake announcement or real-news framing; any joke about appearance, protected characteristics, sex, crime or health.
+Flag a safety fail explicitly in your reasoning so it can be fixed rather than sharpened."""
+rival_focus = """Every rival opener must cast 2-4 characters from the approved roster, play their established traits, and end mid-tension. All likeness rules apply to every rival you write: caricature only, no endorsement, no fabricated statements, punch at status and situation only."""
+tourney_focus = """Prefer the opener with the strongest cold-open grip that also passes the likeness rules. An opener that breaks a likeness rule cannot win, however funny it is — rank it last and say why."""
+glance_focus = """You are glancing at a comic panel. Did you recognise who was in it, and did you want to know what happens next?"""

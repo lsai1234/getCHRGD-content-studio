@@ -56,6 +56,7 @@ from pydantic import BaseModel, ValidationError, field_validator
 from .config import Settings
 from .db import Store
 from .models import Idea
+from .shows import DEFAULT_GATE_PROFILE, gate_profile_for_idea
 
 
 class ConceptGateError(RuntimeError):
@@ -260,6 +261,25 @@ Return a SINGLE JSON object, nothing else:
 """
 
 
+def _with_focus(system: str, focus: str) -> str:
+    """A stage's system prompt plus the show's focus block.
+
+    The gate's rubric is tuned to one question — "is this a thumb-stopping hot
+    take" — which is right for LIVE WIRE and wrong for a claims explainer or a
+    workout card: judged on that scale a calm, useful opener scores badly and
+    gets sharpened into something shouty. A show's gate profile appends what
+    THIS show is judged on, so the gate keeps everything it knows about openers
+    and gains a show-specific bar.
+
+    An empty focus (the default, and every off-format post) returns the system
+    prompt unchanged — the gate then behaves exactly as it did before shows.
+    """
+    focus = (focus or "").strip()
+    if not focus:
+        return system
+    return system + "\n\nSHOW-SPECIFIC BAR — this outranks the general\nguidance above wherever they disagree:\n" + focus
+
+
 def _slide_text(slide: dict, key: str) -> str:
     return (slide.get(key) or "").strip()
 
@@ -301,6 +321,7 @@ def invent_rivals(
     *,
     count: int,
     client=None,
+    profile=None,
 ) -> tuple[list[ConceptCandidate], float]:
     """Stage A — several genuinely different openers for the same post."""
     from .pipeline import OpenAIChatClient, engine_base, estimate_cost
@@ -308,6 +329,8 @@ def invent_rivals(
     if client is None:
         client = OpenAIChatClient(settings)
     system = engine_base() + "\n" + RIVALS_CONTRACT
+    if profile is not None:
+        system = _with_focus(system, profile.rival_focus)
     result = client.complete(system, _rivals_payload(idea, slides, count))
     spend = estimate_cost(
         settings.openai_model, result.prompt_tokens, result.completion_tokens
@@ -766,6 +789,7 @@ def _run_tournament(
     refiner,
     result: GateResult,
     stage: _Stager,
+    profile=None,
 ) -> None:
     """Stages A + B — invent rival openers and pick the one worth spending on.
 
@@ -773,13 +797,16 @@ def _run_tournament(
     score still runs. A field we couldn't invent is not a reason to skip the
     check we can still do.
     """
+    profile = profile or DEFAULT_GATE_PROFILE
     count = settings.concept_candidates
     if count < 1:
         stage("rivals", "skipped", "")
         stage("tournament", "skipped", "")
         return
     stage("rivals", "running", f"inventing {count} rival openers before committing to one")
-    rivals, spend = invent_rivals(idea, slides, settings, count=count, client=refiner)
+    rivals, spend = invent_rivals(
+        idea, slides, settings, count=count, client=refiner, profile=profile
+    )
     result.spend_usd += spend
     if not rivals:
         stage("rivals", "skipped", "no rival openers came back — scoring the built one")
@@ -794,7 +821,10 @@ def _run_tournament(
         f"judging {len(field_)} openers head-to-head on intrigue, originality and speed",
     )
     verdict = parse_tournament_verdict(
-        judge.judge(TOURNAMENT_SYSTEM, _tournament_payload(idea, field_, slides))
+        judge.judge(
+            _with_focus(TOURNAMENT_SYSTEM, profile.tourney_focus),
+            _tournament_payload(idea, field_, slides),
+        )
     )
     winner = _resolve_winner(verdict, len(field_))
     verdict.winner = winner
@@ -823,6 +853,7 @@ def _run_glance_test(
     refiner,
     result: GateResult,
     stage: _Stager,
+    profile=None,
 ) -> None:
     """Stage D — does it land in the fraction of a second, with no explanation?
 
@@ -830,8 +861,12 @@ def _run_glance_test(
     re-glance once. We keep the second verdict either way — an honest "still
     doesn't land" is worth more to the editor than hiding it.
     """
+    profile = profile or DEFAULT_GATE_PROFILE
     stage("glance", "running", "glance test: what a stranger takes from it in half a second")
-    glance = parse_glance_verdict(judge.judge(GLANCE_SYSTEM, _glance_payload(slides[0])))
+    glance = parse_glance_verdict(
+        judge.judge(_with_focus(GLANCE_SYSTEM, profile.glance_focus),
+                    _glance_payload(slides[0]))
+    )
     result.glance = glance
     if glance.stops or not glance.fix.strip():
         stage(
@@ -862,7 +897,8 @@ def _run_glance_test(
     result.refined = True
     result.glance_fixed = True
     result.glance = parse_glance_verdict(
-        judge.judge(GLANCE_SYSTEM, _glance_payload(slides[0]))
+        judge.judge(_with_focus(GLANCE_SYSTEM, profile.glance_focus),
+                    _glance_payload(slides[0]))
     )
     stage(
         "glance", "done",
@@ -901,6 +937,11 @@ def gate_slide_one(
         result.skipped = True
         return result
 
+    # What THIS show is judged on. Off-format ideas resolve to the no-op
+    # profile, whose focus blocks are all empty — so the gate's prompts, and
+    # therefore its verdicts, are unchanged for every pre-show post.
+    profile = gate_profile_for_idea(idea)
+
     stage = _Stager(result, notify, on_stage)
 
     def _note(msg: str) -> None:
@@ -927,7 +968,10 @@ def gate_slide_one(
         # Isolated so a failed tournament still leaves the solo score to run.
         if settings.concept_tournament_enabled:
             try:
-                _run_tournament(idea, slides, settings, judge, refiner, result, stage)
+                _run_tournament(
+                    idea, slides, settings, judge, refiner, result, stage,
+                    profile=profile,
+                )
             except (ConceptGateError, ValidationError, json.JSONDecodeError) as exc:
                 result.error = str(exc)
                 stage("rivals", "failed", "")
@@ -950,7 +994,8 @@ def gate_slide_one(
                 round=rnd, of=max_rounds,
             )
             verdict = parse_concept_verdict(
-                judge.judge(JUDGE_SYSTEM, _concept_payload(idea, slides[0]))
+                judge.judge(_with_focus(JUDGE_SYSTEM, profile.judge_focus),
+                            _concept_payload(idea, slides[0]))
             )
             result.verdict = verdict
             result.score = verdict.score
@@ -980,7 +1025,10 @@ def gate_slide_one(
         # Stage D — prove it survives the half-second it will actually get.
         if settings.concept_glance_test:
             try:
-                _run_glance_test(idea, slides, settings, judge, refiner, result, stage)
+                _run_glance_test(
+                    idea, slides, settings, judge, refiner, result, stage,
+                    profile=profile,
+                )
             except (ConceptGateError, ValidationError, json.JSONDecodeError) as exc:
                 result.error = str(exc)
                 stage("glance", "failed", f"couldn't run the glance test ({exc}) — rendering as is")

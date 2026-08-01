@@ -1,0 +1,65 @@
+# THE SESSION — workouts, with the supplement tied in.
+# Decisions D8 (not funny), D11 (goal-framed), D12 (coverage nudges),
+# D14 (doable by anyone). See THEMES_PLAN.md.
+
+[show]
+key = "session"
+label = "THE SESSION"
+tagline = "A real session you can screenshot and do."
+blurb = "Segmented by goal, time and kit — the most saveable thing the account posts."
+icon = "🏋️"
+weekday = "mon"
+kpi = "saves per view — the clearest number of the five"
+slides_min = 5
+slides_max = 7
+front_screen = "seed"
+cast = "none"
+gate_profile = "useful_legible"
+engagement_play = "save"
+
+[spine]
+roles = ["who_and_promise", "the_session", "the_hard_bit", "the_supplement", "the_swap", "save_this"]
+flex = 1
+briefs = [
+  "Who it's for and what they get, in one concrete line — the goal, the time it takes and the kit needed ('30 minutes, no rack, after work'). Never a vague promise.",
+  "The actual session: named exercises with sets and reps, laid out so it can be read at thumb size and followed without help. This is the slide people screenshot — density is the point, use the detail block.",
+  "The bit where people fail this session, and exactly how not to. One specific failure, one specific fix.",
+  "Where a supplement fits — as TIMING and practicality, never a pitch. What category, when to take it relative to this session, and honestly when it doesn't matter.",
+  "The swap: how to run this with less kit, less time, or at a different level. This is what makes it work for the person it wasn't written for.",
+  "The recap worth keeping, and a plain instruction to save or screenshot it."
+]
+
+[voice]
+block = """This show is NOT funny and does not try to be. It is the useful one: dry, clear, and written so someone who has never trained could follow it unaided.
+
+WRITE IT SO ANYONE CAN DO IT. Name the exercises. Give sets and reps. Describe effort in plain words a beginner can act on — "stop with about 2 reps left in you", "you should be able to say a sentence, not hold a conversation". NEVER use %1RM, RPE scales, tempo notation, or any shorthand that assumes training history.
+
+GOAL-FRAMED, NEVER GENDER-LABELLED. Frame every session by its goal — lower body and glutes, upper-body strength, conditioning, fat loss, endurance, mobility. A session is free to appeal more to one group; it must never be labelled "for the girls" or "for the lads". The targeting lives in the content, not the caption.
+
+The supplement tie-in is category-level and honest — "a pre-workout, 20-30 minutes before" — and it must be genuinely useful information, not an advert. If a supplement wouldn't actually change anything for this session, say so; that honesty is what earns the follow.
+
+Every claim must be safe: no medical advice, no guaranteed outcomes, no injury-risk exercises without a scaled alternative on the swap slide."""
+banned = [
+  "jokes, gags or a punchline",
+  "%1RM, RPE numbers or tempo notation",
+  "'for the girls' / 'for the lads' framing",
+  "hot-take or ragebait framing",
+  "guaranteed results or medical claims",
+  "any exercise given without a scaled alternative"
+]
+
+[look]
+style_preset = "session_reference"
+house_style = "A reference card that happens to be a photograph: real UK gym, high contrast, deep shadows, one cool light-blue accent. Type-first — the workout is the hero of the frame and must be perfectly legible at thumb size."
+palette = "Near-black base, white type, one light-blue accent (#4FC3F7) used only for numbers and section markers."
+type_style = "Large bold condensed headline; the session itself set as a clean, generously spaced list with the numbers aligned. Nothing decorative — this is read, not admired."
+motif = "A consistent left-aligned column with the exercise list stacked and the reps aligned right, the same grid on every slide."
+title_card = "THE SESSION"
+title_note = "small, top-left, understated — it labels the show without competing with the workout"
+
+[look.furniture]
+wordmark = true
+scrim = true
+counter = true
+handle = true
+footer_bar = true

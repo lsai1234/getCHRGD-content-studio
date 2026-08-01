@@ -27,6 +27,7 @@ from PIL import Image, ImageDraw, ImageFont
 from .brand import Brand, load_brand
 from .config import Settings
 from .models import MAX_SLIDES, Idea, Slide
+from .shows import brand_for_show, show_for_idea
 
 # Rough USD cost per generated image, by gpt-image-1 quality. Estimate only,
 # for the spend log / cost guard.
@@ -394,6 +395,7 @@ def compose_design_prompt(
     feature_character: bool | None = None,
     has_character: bool = False,
     charge: int | None = None,
+    show=None,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -511,9 +513,16 @@ def compose_design_prompt(
         )
     if slide.image_prompt.strip():
         parts.append(slide.image_prompt.strip())
-    # The editable house style (settings page) overrides generic art direction:
-    # it's the brand look every slide across every post must share.
-    if house_style.strip():
+    # A show's look outranks the account house style: the whole point of the
+    # show layer is that a comic serial and a claims explainer do NOT look like
+    # the same dark gym account. `show` is None for every off-format post, so
+    # the house style below stays the only art direction, exactly as before.
+    show_look = show.look.as_block() if show is not None else ""
+    if show_look:
+        parts.append(show_look)
+    elif house_style.strip():
+        # The editable house style (settings page): the brand look every slide
+        # across every post must share.
         parts.append(house_style.strip())
     style_block = brand.style_prompt(style)
     if style_block:
@@ -544,6 +553,18 @@ def compose_design_prompt(
             "line spacing, high contrast, on a calm area of the design so "
             "every word is easy to read. Simplify the imagery to serve the "
             "text; render EVERY sentence, complete and correctly spelled."
+        )
+    # D10 — the show is NAMED on screen. The text rules below forbid extra
+    # labels and logos outright, so a title has to be granted explicitly here
+    # or the model will (correctly) refuse to draw it.
+    if show is not None and show.look.title_card.strip() and index == 0:
+        prompt += (
+            f"\n\nSHOW TITLE (draw this, it is approved copy): render the "
+            f"words \"{show.look.title_card.strip()}\" on this slide as the "
+            "recurring name of the show — "
+            + (show.look.title_note.strip() or
+               "small and understated, clear of the headline")
+            + ". It must not compete with the headline for attention."
         )
     # Short, punchy slides get scene-integrated typography; reader/long slides
     # stay clean and legible (see _typography_mode).
@@ -581,7 +602,17 @@ def _charge_for(idea: Idea, slide_index: int, slide_count: int) -> int | None:
 
 
 def style_for_idea(idea: Idea) -> str | None:
-    """The style preset chosen for this idea (stored in route_json)."""
+    """The art-direction preset for this idea.
+
+    A show's own preset wins: the show IS the look, and an editor's leftover
+    style pick shouldn't drag a comic serial back to gritty gym photography.
+    Off-format ideas fall through to the route's `style`, unchanged.
+    """
+    from .shows import show_for_idea
+
+    show = show_for_idea(idea)
+    if show is not None and show.look.style_preset.strip():
+        return show.look.style_preset.strip()
     return _route_of(idea).get("style")
 
 
@@ -876,6 +907,10 @@ def render_slide(
         raise ImageError(f"slide {slide_index + 1} out of range for {idea.idea_id}")
     slide = slides[slide_index]
     out_dir = _out_dir(settings, idea.idea_id)
+    # A show can override the brand furniture (D3) — only the overlay/dry-run
+    # path draws it, but resolving here keeps every downstream call consistent.
+    show = show_for_idea(idea)
+    brand = brand_for_show(brand, show)
     ext, pil_format = _ext(brand)
     style = style_for_idea(idea)
     mode = render_mode_for_idea(idea, brand)
@@ -983,6 +1018,7 @@ def render_slide(
                     feature_character=wants_character,
                     has_character=has_character,
                     charge=_charge_for(idea, slide_index, len(slides)),
+                    show=show,
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)

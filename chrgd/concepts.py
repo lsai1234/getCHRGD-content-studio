@@ -240,24 +240,40 @@ Return a SINGLE JSON object, no markdown, no commentary:
 Return your strongest few (up to 5), ordered best-first. Quality over quantity — three brilliant concepts beat five with a dud."""
 
 
-def recent_concepts(store: Store, *, sets: int = _RECALL_SETS) -> list[dict]:
+def recent_concepts(
+    store: Store, *, sets: int = _RECALL_SETS, show: str = ""
+) -> list[dict]:
     """Titles + sources from the last few concept sets, newest first.
 
     This is the engine's short-term memory. Without it every spin starts from a
     blank slate against an unchanged live pool, which is exactly why "Fresh set"
-    kept returning the same core idea in new words."""
+    kept returning the same core idea in new words.
+
+    `show` scopes the memory to one show's sets. Sets are read a few extra deep
+    when filtering so a show still gets a full recall window when the shows are
+    interleaved across the week.
+    """
+    depth = max(1, sets) * (4 if show else 1)
     rows = store.conn.execute(
         "SELECT result_json FROM jobs WHERE kind = 'concepts' "
         "AND status = 'COMPLETED' ORDER BY job_id DESC LIMIT ?",
-        (max(1, sets),),
+        (depth,),
     ).fetchall()
     out: list[dict] = []
     seen: set[str] = set()
+    kept = 0
     for row in rows:
         try:
             data = json.loads(row["result_json"] or "{}")
         except json.JSONDecodeError:
             continue
+        if show and str(data.get("show") or "") != show:
+            continue
+        if not show and str(data.get("show") or ""):
+            continue
+        kept += 1
+        if kept > max(1, sets):
+            break
         for c in data.get("concepts") or []:
             title = str(c.get("title") or "").strip()
             key = title.lower()
@@ -268,10 +284,15 @@ def recent_concepts(store: Store, *, sets: int = _RECALL_SETS) -> list[dict]:
     return out[:_RECALL_TITLES]
 
 
-def _already_pitched(store: Store) -> str:
+def _already_pitched(store: Store, *, show: str = "") -> str:
     """The banned list: what the editor has already been shown, and why a new
-    wording of it doesn't count as a new idea."""
-    recent = recent_concepts(store)
+    wording of it doesn't count as a new idea.
+
+    Scoped per show: an Amp situation and a Straight Up question are not
+    competing for the same slot, so freshness memory shouldn't bleed between
+    formats and rule out a subject one show has never used.
+    """
+    recent = recent_concepts(store, show=show)
     if not recent:
         return ""
     lines = [
@@ -508,6 +529,7 @@ def sketch_concepts(
     count: int = _MAX_CONCEPTS,
     fresh: bool = False,
     generator=None,
+    show: str = "",
 ) -> dict:
     """Five headline-level concepts, FAST — the create screen's first paint.
 
@@ -520,8 +542,15 @@ def sketch_concepts(
     go in as a banned list and the live pool is rotated, so the editor gets new
     SUBJECTS rather than the same idea reworded.
 
-    One of the five stars Amp (the mascot), so his charge-cycle format is always
-    on the table without the editor having to go and find it in the gallery.
+    `show` pitches five concepts INSIDE one show's format rather than five
+    generic ones — five Amp situations, or five Straight Up questions. This is
+    the highest-leverage part of the show layer: everything else improves how a
+    post is made, this improves what gets proposed, which is upstream of all of
+    it. Off a show (the default) the behaviour is exactly as it was.
+
+    With no show, one of the five stars Amp (the mascot), so his charge-cycle
+    format is always on the table without the editor going to find it. On a
+    show that slot would cost a concept, so it's dropped.
 
     Never raises: on any LLM/parse failure returns an empty list with the error,
     so the create screen degrades to the manual doors."""
@@ -541,12 +570,29 @@ def sketch_concepts(
         # A different slice of the pool per spin, so a refresh has genuinely
         # different raw material in front of it rather than the same ranked list.
         rotate = len(recent_concepts(store)) if fresh else 0
+        from .shows import get_show
+
+        chosen = get_show(show)
         tail = (
             f"TODAY IS {date.today():%A, %-d %B %Y} — any topical concept must be "
             "genuinely live around now, never a past-year story treated as current. "
             f"Pitch {count} varied concepts, headline-level only (title + hook), "
-            "strongest first. One of them stars Amp. Return the JSON object."
+            "strongest first. "
+            + ("" if chosen is not None else "One of them stars Amp. ")
+            + "Return the JSON object."
         )
+        # The show's brief replaces the generic pitch rules: every concept must
+        # be an episode of THIS show, so the editor picks between five versions
+        # of the thing they actually came to make.
+        show_block = ""
+        if chosen is not None:
+            show_block = (
+                chosen.brief_block(include_length=False)
+                + "\n\nPitch concepts that are EPISODES OF THIS SHOW — five "
+                "different subjects that all fit its format, voice and spine. "
+                "A concept that would work just as well on another show is the "
+                "wrong concept."
+            )
         if fresh:
             tail += (
                 "\n\nTHIS IS A REFRESH — the editor rejected the last set. Five "
@@ -556,25 +602,32 @@ def sketch_concepts(
             )
         user = "\n\n".join(
             block for block in (
+                show_block,
                 _fuel(store, seed, limit=_SKETCH_CANDIDATES, brief=True,
                       rotate=rotate),
-                _already_pitched(store) if fresh else "",
+                _already_pitched(store, show=show) if fresh else "",
                 _steering(store),
                 tail,
             ) if block
         )
         result = generator.complete(SKETCH_SYSTEM, user)
-        concepts = _ensure_amp(_parse_concepts(result.content, count), rotate)
+        concepts = _parse_concepts(result.content, count)
+        # The forced Amp slot exists to smuggle the mascot into a generic set.
+        # On a show it's redundant (AMP is its own show now) and it would cost
+        # a concept, so it only runs off-format.
+        if chosen is None:
+            concepts = _ensure_amp(concepts, rotate)
         return {
             "concepts": [c.as_payload() for c in concepts],
             "seeded": bool(seed.strip()),
             "stage": "sketch",
+            "show": show,
         }
     except Exception as exc:  # noqa: BLE001 — best-effort feature, never a blocker
         logging.getLogger(__name__).warning("concept sketch failed: %s", exc)
         return {
             "concepts": [], "seeded": bool(seed.strip()),
-            "stage": "sketch", "error": str(exc),
+            "stage": "sketch", "show": show, "error": str(exc),
         }
 
 
@@ -693,7 +746,9 @@ def develop_concept(
 # --- today's set, cached -------------------------------------------------------
 
 
-def cached_concepts(store: Store, *, max_age_hours: float = 8.0) -> dict | None:
+def cached_concepts(
+    store: Store, *, max_age_hours: float = 8.0, show: str = ""
+) -> dict | None:
     """The last completed unseeded concept set, if it's still fresh.
 
     Reopening /create used to kick a brand-new engine run and stare at
@@ -702,11 +757,17 @@ def cached_concepts(store: Store, *, max_age_hours: float = 8.0) -> dict | None:
     only spends when it's stale or the editor asks for a fresh set."""
     from datetime import datetime
 
+    from .shows import job_show_filter
+
+    # Per show: a cached AMP set must never paint onto STRAIGHT UP.
+    clause, params = job_show_filter(show)
     row = store.conn.execute(
         "SELECT job_id, result_json, updated_at FROM jobs "
         "WHERE kind = 'concepts' AND status = 'COMPLETED' "
         "AND COALESCE(params_json,'{}') LIKE '%\"seed\": \"\"%' "
-        "ORDER BY job_id DESC LIMIT 1"
+        + clause +
+        "ORDER BY job_id DESC LIMIT 1",
+        params,
     ).fetchone()
     if not row:
         return None

@@ -64,6 +64,31 @@ prompt = "Deliberately mundane amateur photo look, awkward framing, fluorescent 
 label = "Dark cinematic"
 prompt = "Cinematic film still, anamorphic depth, volumetric light cutting through chalk dust in a dark gym, cool blue-and-black grade, icy light-blue highlights, high contrast, dramatic atmosphere."
 
+# --- Per-show art direction (config/shows/*.toml `look.style_preset`) --------
+# One per show. These are selected automatically by the show, not by hand:
+# `images.style_for_idea` prefers a show's preset over the editor's style pick,
+# because on a show the look IS the format.
+
+[styles.amp_vector]
+label = "Amp — flat vector"
+prompt = "Flat vector cartoon illustration, sticker energy, bold clean black outlines, minimal flat shading, no photorealism whatsoever. Reads as a single comic-strip panel. Bright, high-contrast, energetic."
+
+[styles.comic]
+label = "The Multiverse — comic book"
+prompt = "A comic book page: bold black ink linework, halftone dot shading, saturated flat colour, dramatic panel composition and foreshortening. Characters instantly recognisable as caricatures — never photoreal. Narration boxes and speech bubbles are part of the drawing, not overlays."
+
+[styles.clean_editorial]
+label = "Straight Up — clean editorial"
+prompt = "Bright, clean editorial product photography. Light or off-white background, generous negative space, soft even lighting, one clear subject on a calm field. Calm and legible is the aesthetic — it is what makes the information read as trustworthy. Never moody, never gritty."
+
+[styles.session_reference]
+label = "The Session — reference card"
+prompt = "A reference card that happens to be a photograph: a real UK gym shot with high contrast and deep shadows, composed with a large clear area for the workout text. Type-first — the imagery serves the legibility of the session, never competes with it."
+
+[styles.native_rough]
+label = "Live Wire — native and rough"
+prompt = "Deliberately undesigned and native to the feed: a candid phone photo with harsh direct flash and slightly awkward framing, or a screenshot-style artefact (notes app, group chat, a poster taped to a gym wall). If it could pass for a paid advert, it has failed — make it rawer."
+
 # --- Embedded typography (words rendered as part of the scene) ---------------
 # When a slide's copy is short and punchy, the image model can render the words
 # AS a real object in the shot (chalk on the floor, formed from plates, gym

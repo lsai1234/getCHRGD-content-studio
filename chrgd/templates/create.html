@@ -63,6 +63,25 @@
   .opt .chev { flex-shrink: 0; color: #4a4a52; font-size: 16px;
                transition: transform .15s, color .15s; }
   .opt:hover .chev { color: var(--accent); transform: translateX(2px); }
+  /* ── the show picker: the front page of /create ── */
+  .show-grid{display:grid; gap:10px; margin:4px 0 14px}
+  @media (min-width:620px){ .show-grid{grid-template-columns:1fr 1fr} }
+  .show-tile{display:flex; align-items:center; gap:12px; width:100%;
+    padding:14px 14px; border-radius:14px; text-align:left; cursor:pointer;
+    background:var(--card); border:1px solid var(--line); color:inherit;
+    transition:border-color .15s, transform .15s, background .15s}
+  .show-tile:hover{border-color:var(--accent); transform:translateY(-1px)}
+  .show-tile.sel{border-color:var(--accent); background:rgba(79,195,247,.08)}
+  .show-tile .sh-ic{font-size:22px; line-height:1; flex:none}
+  .show-tile .sh-tx{display:flex; flex-direction:column; gap:3px; min-width:0}
+  .show-tile .sh-t{font-weight:700; letter-spacing:.04em; font-size:14px}
+  .show-tile .sh-s{font-size:12.5px; color:var(--muted); line-height:1.35}
+  .show-tile .sh-day{margin-left:auto; flex:none; font-size:11px;
+    text-transform:uppercase; letter-spacing:.06em; color:var(--faint)}
+  #offformat-line a{color:var(--muted); text-decoration:none;
+    border-bottom:1px dashed var(--line)}
+  #offformat-line a:hover{color:var(--accent)}
+
   /* the hero door + tier labels on the source screen */
   .opt-hero { border-color: var(--accent-line); background: linear-gradient(180deg, var(--accent-tint), var(--panel)); }
   .opt-hero .ic { background: var(--accent-tint-2); border-color: var(--accent-line); font-size: 24px; }
@@ -359,7 +378,30 @@
   <section class="scr" id="scr-source">
     <p class="eyebrow">Create</p>
     <h2>What are we making today?</h2>
-    <p class="hint">Start here — you can amend everything later.</p>
+    <p class="hint">Pick the show. Each one has its own shape, its own look and its own bar — you can amend everything later.</p>
+
+    <!-- The five recurring shows. This is the front page now: the old six
+         doors differed only in where the SEED came from, which is the wrong
+         first question — the first question is which show this is an episode
+         of, because that decides the structure, the voice, the look and what
+         the quality gate judges it on. The doors live on below, behind the
+         off-format escape, and still work exactly as they did. -->
+    <div class="show-grid" id="show-grid">
+      {% for sh in shows %}
+      <button type="button" class="show-tile" data-show="{{ sh.key }}"
+              onclick="pickShow('{{ sh.key }}', this)">
+        <span class="sh-ic">{{ sh.icon }}</span>
+        <span class="sh-tx">
+          <span class="sh-t">{{ sh.label }}</span>
+          <span class="sh-s">{{ sh.tagline }}</span>
+        </span>
+        {% if sh.weekday %}<span class="sh-day">{{ sh.weekday }}</span>{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    <p class="tier-label" id="offformat-line">
+      <a href="#" onclick="toggleOffFormat(); return false">Something off-format? →</a>
+    </p>
 
     <!-- The concept engine (the hero): finished, ready-to-build post concepts
          made by the creative leap from the live pool. Not raw feeds — the actual
@@ -369,7 +411,7 @@
         <p class="eyebrow" style="margin:0">🎯 Today's concepts</p>
         <button type="button" class="pick-more" id="cs-refresh" onclick="loadConcepts(true)">↻ Fresh set</button>
       </div>
-      <p class="hint" style="margin:2px 0 12px">Five quick ideas from what the UK's actually talking about — build one straight off, or drill into it first. <span id="cs-note" class="cs-note"></span></p>
+      <p class="hint" style="margin:2px 0 12px"><span id="cs-hint">Five quick ideas from what the UK's actually talking about — build one straight off, or drill into it first.</span> <span id="cs-note" class="cs-note"></span></p>
 
       <div class="cs-seed">
         <input id="cs-seed-input" type="text" autocomplete="off"
@@ -380,6 +422,7 @@
       <div id="concept-list"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
     </div>
 
+    <div id="offformat" hidden>
     <p class="tier-label">Prefer to dig the raw feeds yourself?</p>
     <button type="button" class="opt" onclick="pickHero(this)">
       <span class="ic">📡</span>
@@ -415,6 +458,7 @@
           <span class="s">Write every slide yourself</span></span>
       </button>
     </div>
+    </div><!-- /offformat -->
   </section>
 
   <!-- The look step is gone — the engine designs a bespoke design_system per
@@ -784,9 +828,14 @@ const RESUME_IDEA = "{{ resume_idea }}";
 const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
-let state = { ideaId: null, source: null, style: null,
+let state = { ideaId: null, source: null, style: null, show: '',
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
+// The show metadata the server rendered, so the concept studio can label
+// itself without a round-trip.
+const SHOWS = {{ shows|tojson }};
+const SHOW_BY_KEY = Object.fromEntries(SHOWS.map(s => [s.key, s]));
+const CS_HINT_DEFAULT = "Five quick ideas from what the UK's actually talking about \u2014 build one straight off, or drill into it first.";
 const MAX_SLIDES = 10, MIN_SLIDES = 1;
 
 /* ---------- screen plumbing: one focused screen at a time ---------- */
@@ -837,6 +886,32 @@ function tapThen(el, group, fn){
 // (palette, type, motif, evolution), so a hand-picked preset would only
 // fight the automatic branding. Length is the one editorial dial left —
 // its chips live inline on each door.
+// Picking a show is the real first decision: it sets what gets PROPOSED (the
+// concept sketch runs inside the show's format), and it rides route_json from
+// the seed onward so the write, the look and the gate all follow it.
+function pickShow(key, el){
+  state.show = (state.show === key) ? '' : key;
+  document.querySelectorAll('#show-grid .show-tile').forEach(t =>
+    t.classList.toggle('sel', t.dataset.show === state.show));
+  const sh = SHOW_BY_KEY[state.show];
+  const eyebrow = document.querySelector('#concept-studio .eyebrow');
+  const hint = document.getElementById('cs-hint');
+  if (sh) {
+    eyebrow.textContent = `${sh.icon} ${sh.label} — today's ideas`;
+    if (hint) hint.textContent = sh.blurb || sh.tagline;
+  } else {
+    eyebrow.textContent = '🎯 Today\u2019s concepts';
+    if (hint) hint.textContent = CS_HINT_DEFAULT;
+  }
+  // Each show keeps its own cached set and its own freshness memory, so this
+  // repaints from that show's cache rather than rewording another show's set.
+  loadConcepts(false);
+}
+function toggleOffFormat(){
+  const el = document.getElementById('offformat');
+  el.hidden = !el.hidden;
+  if (!el.hidden) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
 function pickSource(src, el){
   state.source = src;
   tapThen(el, '#scr-source .opt', routeToDoor);
@@ -866,6 +941,7 @@ function routeToDoor(){
 /* ---------- shared create params ---------- */
 function baseParams(develop, takes = false){
   return new URLSearchParams({
+    show: state.show || '',
     style: state.style || '',
     length: state.length || '',
     scheduled_for: PRESET_DAY ? `${PRESET_DAY}T18:00` : '',
@@ -1044,7 +1120,8 @@ async function loadConcepts(fresh){
   // already in flight instead of stacking another.
   if (!fresh && !seed) {
     try {
-      const cached = await (await fetch('/api/concepts')).json();
+      const q = state.show ? `?show=${encodeURIComponent(state.show)}` : '';
+      const cached = await (await fetch('/api/concepts' + q)).json();
       if (cached.status === 'ready' && cached.concepts && cached.concepts.length) {
         csJob = null;  // cancel any in-flight poll — this set supersedes it
         csSeed = '';
@@ -1066,6 +1143,7 @@ async function loadConcepts(fresh){
   const body = new URLSearchParams();
   if (seed) body.set('seed', seed);
   if (fresh) body.set('fresh', 'true');
+  if (state.show) body.set('show', state.show);
   const r = await post('/api/concepts', body);
   if (!r || !r.job_id) { csLoading = false; csDone(); return renderConceptsEmpty(r); }
   csJob = r.job_id;

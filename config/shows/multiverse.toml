@@ -1,0 +1,79 @@
+# THE MULTIVERSE — the weirdest crossover in fitness.
+# Decisions D1 (serial), D3 (breaks the house look), D6 (recognisable roster +
+# canon memory), D15 (roster locked at 12), D16 (canon authored in the studio).
+# The roster store, canon log and likeness gate arrive in Phase 3 — this file
+# is the show's shape, voice and look, and it carries the likeness rules from
+# day one so no episode can be written without them.
+
+[show]
+key = "multiverse"
+label = "THE MULTIVERSE"
+tagline = "Every reality leaks into the same knackered gym on a retail park."
+blurb = "A comic serial. Recognisable characters, one squat rack, storylines that carry week to week."
+icon = "💥"
+weekday = "thu"
+kpi = "comments, and whether they come back next week"
+slides_min = 5
+slides_max = 7
+front_screen = "seed"
+cast = "roster"
+gate_profile = "continuity_likeness"
+engagement_play = "comment"
+
+[spine]
+roles = ["cold_open_recap", "the_threat", "the_complication", "the_escalation", "the_turn", "the_cliffhanger"]
+flex = 1
+briefs = [
+  "A cold open that works for someone who has never seen this before AND rewards someone who has. Establish who's here and what's at stake in one line — never 'previously on' housekeeping, always a hook that happens to catch you up.",
+  "The situation and the threat. Something specific is about to be lost — a rack, a spot, a reputation, a place in the queue.",
+  "The complication: the thing that makes it worse, caused by a character's established trait rather than by coincidence.",
+  "Escalation. Raise the cost, never restate it. Whatever was at stake is now worse.",
+  "The turn — the reveal that reframes what came before. Exactly one status change per episode: someone gains, loses or learns.",
+  "The cliffhanger. Resolve THIS beat, open the next question, and make the comment section argue about what happens next."
+]
+
+[voice]
+block = """Comic-book narration boxes — dry, deadpan, third person — plus speech bubbles for the characters. Never a TikTok voiceover; the comic register IS the format.
+
+THE WORLD: Iron Palace, Unit 4, a retail park, between a Greggs and a vape shop. A 24/7 mid-tier gym that, for reasons nobody ever explains, is the fixed point every reality leaks into. One squat rack short. The lat pulldown has said BACK SOON since 2019.
+
+THE ENGINE OF THE SERIES: the gym is the only place in the multiverse where nobody gets special treatment. A god, a Premier League striker and a sentient banana all wait for the same bench. Every episode is a status contest the room refuses to settle.
+
+CAST 2-4 CHARACTERS PER EPISODE, no more — a carousel cannot hold five and the attempt is how a comic serial goes soggy. Use only characters from the approved roster. Play each one's established trait; the trait is the joke engine.
+
+EXACTLY ONE STATUS CHANGE per episode, caused by a character's flaw rather than by coincidence, and it must open the next question.
+
+THE SWIPE RULE: every slide but the last ends mid-tension — a question raised, an interruption, a reveal half-shown. If a slide's last line is a complete thought, the swipe stops there.
+
+LIKENESS RULES — these are hard limits, not preferences, and they apply to every real person and every owned character:
+- Caricature only. Never photoreal. The comic style is the point and it is also the line.
+- NEVER show a real person using, holding, recommending or endorsing any product. This account sells supplements; implied endorsement is the one thing that cannot appear.
+- NEVER put a realistic statement in a real person's mouth, and never frame anything as real news, a real quote or a real announcement. Absurd situations are the joke; realistic claims are not.
+- Punch at status and at the situation. NEVER at appearance, protected characteristics, or anything sexual, criminal or health-related.
+- Owned fictional characters are parodied in OUR drawing style, never copied from the original design."""
+banned = [
+  "photoreal rendering of any real person",
+  "any real person using, holding or endorsing a product",
+  "fabricated quotes, fake news framing or realistic statements attributed to a real person",
+  "jokes about appearance, protected characteristics, sex, crime or health",
+  "more than four characters in one episode",
+  "casting anyone who is not on the approved roster",
+  "resolving the episode completely — it is a serial"
+]
+
+[look]
+style_preset = "comic"
+house_style = "A comic book page. Bold black ink outlines, halftone dot shading, saturated flat colour, dramatic panel composition. Characters clearly and instantly recognisable at thumb size. Narration boxes in the top corner and speech bubbles where a character speaks — these are part of the format, not overlays."
+palette = "Saturated comic primaries — hot yellow, coral red, turquoise — on bright grounds. Deliberately NOT the brand's near-black; this show lives in its own world."
+type_style = "Comic lettering: bold, slightly irregular, all-caps in narration boxes and speech bubbles, with heavy outlines. It should read as drawn, not typeset."
+motif = "The Iron Palace itself — the same knackered retail-park gym interior, the BACK SOON sign on the lat pulldown, the single squat rack — recurring in every episode."
+title_card = "THE MULTIVERSE"
+title_note = "a comic masthead treatment across the top of slide 1, in the show's lettering — plus a small episode number"
+
+# D3 — this show breaks the house look entirely. Handle only, no CHRGD frame.
+[look.furniture]
+wordmark = false
+scrim = false
+counter = true
+handle = true
+footer_bar = false

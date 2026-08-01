@@ -177,7 +177,7 @@ def test_worker_handles_concepts_job(settings, store, monkeypatch):
 
     monkeypatch.setattr(
         cm, "sketch_concepts",
-        lambda s, se, seed="", fresh=False: {
+        lambda s, se, seed="", fresh=False, show="": {
             "concepts": [{"title": "t", "angle": "a"}], "seeded": bool(seed),
         },
     )
@@ -432,13 +432,16 @@ def test_fresh_flag_reaches_the_engine(settings, store, monkeypatch):
     seen = {}
     monkeypatch.setattr(
         cm, "sketch_concepts",
-        lambda s, se, seed="", fresh=False: seen.update(fresh=fresh) or {"concepts": []},
+        lambda s, se, seed="", fresh=False, show="": (
+            seen.update(fresh=fresh, show=show) or {"concepts": []}
+        ),
     )
     from chrgd.worker import _handle_concepts
 
     job_id = store.create_job("concepts", params={"seed": "", "fresh": True})
     _handle_concepts(store, settings, store.get_job(job_id))
     assert seen["fresh"] is True
+    assert seen["show"] == ""
 
 
 # --- Amp always has a seat at the table ---------------------------------------
