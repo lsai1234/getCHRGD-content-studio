@@ -354,6 +354,23 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             for s in load_situations().values()
         ]
 
+    def _ingredient_list(settings) -> list[dict]:
+        from .ingredients import covered, load_ingredients
+
+        with _store(settings) as store:
+            done = covered(store)
+        return [
+            {"key": i.key, "label": i.label, "question": i.question,
+             "covered": i.key in done}
+            for i in load_ingredients().values()
+        ]
+
+    def _session_nudge(settings) -> str:
+        from .sessions import suggestion
+
+        with _store(settings) as store:
+            return suggestion(store)
+
     @app.get("/create", response_class=HTMLResponse)
     def create_page(
         request: Request, idea: str | None = None, day: str | None = None,
@@ -361,6 +378,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     ):
         from .character import AMP_STATES, STATE_ORDER
         from .mechanics import load_mechanics
+        from .sessions import load_axes
         from .shows import ordered_shows
         from .territories import in_season
 
@@ -386,6 +404,16 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                  "mood": AMP_STATES[k]["mood"]}
                 for k in STATE_ORDER
             ],
+            # STRAIGHT UP's own screen: the ingredient library, with what's
+            # already been covered marked.
+            ingredients=_ingredient_list(settings),
+            # THE SESSION's own screen: the variant matrix + the staleness nudge.
+            session_axes=[
+                {"key": a.key, "label": a.label, "required": a.required,
+                 "options": [{"key": k, "label": v} for k, v in a.options.items()]}
+                for a in load_axes().values()
+            ],
+            session_nudge=_session_nudge(settings),
             # LIVE WIRE's own screen: the in-season interest territories.
             territories=[
                 {"key": t.key, "label": t.label, "weight": t.weight}
@@ -871,6 +899,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         moment: dict | None = None,
         show: str = "",
         amp: dict | None = None,
+        ingredient: str = "",
+        session_variant: dict | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
@@ -899,6 +929,23 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                              ("state", "amp_state"), ("tip", "amp_tip")):
                 if amp.get(src):
                     route[key] = amp[src]
+        # STRAIGHT UP's subject — the library entry the post is written from.
+        if ingredient:
+            from .ingredients import ROUTE_KEY as ING_KEY, get_ingredient
+
+            if get_ingredient(ingredient) is None:
+                raise HTTPException(400, f"unknown ingredient '{ingredient}'")
+            route[ING_KEY] = ingredient
+        # THE SESSION's point in the variant matrix. Required axes are checked
+        # here rather than in the matrix module, which stays permissive so a
+        # renamed option can't 500 an old bookmark.
+        if session_variant:
+            from .sessions import ROUTE_KEY as SESSION_KEY, missing_required, validate
+
+            missing = missing_required(session_variant)
+            if missing:
+                raise HTTPException(400, "still to pick: " + ", ".join(missing))
+            route[SESSION_KEY] = validate(session_variant)
         if moment:
             route["moment"] = moment
         if style:
@@ -942,6 +989,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         amp_situation_text: str = Form(""),
         amp_state: str = Form(""),
         amp_tip: str = Form(""),
+        ingredient: str = Form(""),
+        variant: str = Form(""),   # JSON object: {axis: option}
         mechanic: str = Form(""),
         style: str = Form(""),
         length: str = Form(""),
@@ -961,6 +1010,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "state": amp_state, "tip": amp_tip,
         }
         amp = amp if any(amp.values()) else None
+        try:
+            variant_obj = json.loads(variant) if variant.strip() else None
+        except json.JSONDecodeError:
+            raise HTTPException(400, "variant must be a JSON object") from None
+        if variant_obj is not None and not isinstance(variant_obj, dict):
+            raise HTTPException(400, "variant must be a JSON object")
 
         # The default journey fans out to competing takes first; develop and
         # straight-build remain as explicit choices.
@@ -995,6 +1050,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     # mentions him.
                     mechanic_key=mechanic,
                     length=length, scheduled_for=when, show=show, amp=amp,
+                    ingredient=ingredient, session_variant=variant_obj,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}

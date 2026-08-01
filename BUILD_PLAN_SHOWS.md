@@ -274,7 +274,28 @@ an override (§2 Q3 default).
 
 ---
 
-## Phase 2 — STRAIGHT UP + THE SESSION · **M**
+## Phase 2 — STRAIGHT UP + THE SESSION · **M** — ✅ **BUILT**
+
+Shipped: `config/ingredients.toml` + `chrgd/ingredients.py` (13 entries, each
+with an empty `our_product` hook per D7), `chrgd/claims.py` (the lint + the
+judge), `config/session_variants.toml` + `chrgd/sessions.py` (the matrix and the
+staleness nudge), both briefs wired into the build, and both shows' own create
+screens. 48 new tests (`tests/test_phase2_shows.py`); 522 pass.
+
+**The claims gate is the first check here allowed to STOP a post.** Everything
+else in this codebase flags and lets the render proceed; a compliance check
+shouldn't. A flagged STRAIGHT UP post is marked `review` with the reason
+attached rather than shipped — a false positive costs an editor thirty seconds,
+a false negative puts a health claim on a public account. It's two layers:
+
+* **the lint** — deterministic patterns, no key, no network, runs on *every*
+  post everywhere (advisory outside STRAIGHT UP). Deliberately narrow: only
+  phrasings that are wrong regardless of context. Over-flagging trains the
+  editor to ignore the gate, which is worse than not having one, so "£45 for
+  flavoured maltodextrin" and "the evidence is thinner than the marketing
+  suggests" must pass — and there are tests asserting they do.
+* **the judge** — a cheap LLM pass for implied promises a regex can't see.
+  Only runs on a claims-gated show, deduped against the lint, and never fatal.
 
 Mostly config plus two gates and one picker. No new architecture.
 

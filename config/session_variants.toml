@@ -1,0 +1,80 @@
+# THE SESSION's variant matrix.
+#
+# The show's identity IS that it's segmented: over a month it should cover the
+# whole audience rather than shouting at one slice of it. Pick one option per
+# axis and the engine writes into it.
+#
+# D11 — GOAL-FRAMED, never gender-labelled. A glute-focused session finds its
+# audience without a "for the girls" label on it and stays useful to everyone
+# else; the targeting lives in the content, not the caption.
+#
+# D12 — the coverage tracker SUGGESTS what's gone stale and never enforces.
+# Two lower-body sessions in a week is the operator's call, not the rota's.
+#
+# `staleness_days` is how long an option can go uncovered before the create
+# screen mentions it. `axes.<key>.required` marks the axes a session can't be
+# written without.
+
+[axes.goal]
+label = "Goal"
+required = true
+staleness_days = 28
+[axes.goal.options]
+lower_body = "Lower body & glutes"
+upper_strength = "Upper-body strength"
+conditioning = "Full-body conditioning"
+fat_loss = "Fat loss"
+endurance = "Endurance"
+mobility = "Mobility & recovery"
+
+[axes.when]
+label = "When"
+required = true
+staleness_days = 21
+[axes.when.options]
+early = "5am, before work"
+lunch = "Lunch break — 30 minutes"
+after_work = "The 6pm rush"
+late = "Late night, quiet gym"
+anytime = "Whenever you can get there"
+
+[axes.how]
+label = "How"
+required = true
+staleness_days = 21
+[axes.how.options]
+weights = "Weights"
+cardio = "Cardio"
+hiit = "HIIT"
+hybrid = "Hybrid / Hyrox"
+circuits = "Circuits"
+
+[axes.where]
+label = "Where"
+required = true
+staleness_days = 21
+[axes.where.options]
+full_gym = "Full gym"
+minimal = "Minimal kit — hotel or home rack"
+no_equipment = "No equipment at all"
+outdoors = "Outdoors"
+
+[axes.level]
+label = "Level"
+required = false
+staleness_days = 35
+[axes.level.options]
+first_month = "First month training"
+returning = "Coming back after a break"
+experienced = "Experienced"
+
+[axes.supplement]
+label = "Supplement tie-in"
+required = false
+staleness_days = 28
+[axes.supplement.options]
+pre = "Pre-workout — timing"
+intra = "Intra — hydration & endurance"
+post = "Post — recovery"
+everyday = "Everyday baseline"
+none = "None — the session stands alone"

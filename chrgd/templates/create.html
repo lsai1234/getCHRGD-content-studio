@@ -581,6 +581,57 @@
     <div id="livewire-body" style="margin-top:14px"></div>
   </section>
 
+  <!-- ═════════ 3·STRAIGHT UP — the evidence show's own screen ═════════ -->
+  <section class="scr" id="scr-straightup">
+    <p class="eyebrow">🧪 STRAIGHT UP</p>
+    <h2>What are we answering?</h2>
+    <p class="hint">Pick from the library — each one carries the question people ask, the evidence as it stands, and the marketing lie worth naming.</p>
+
+    <div class="sit-grid" id="ing-grid">
+      {% for i in ingredients %}
+      <button type="button" class="sit{% if i.covered %} used{% endif %}" data-ing="{{ i.key }}"
+              onclick="pickIngredient('{{ i.key }}', this)">
+        <span class="sit-t">{{ i.label }}{% if i.covered %} <span class="sit-used">covered</span>{% endif %}</span>
+        <span class="sit-s">{{ i.question }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <label style="margin-top:14px">Or answer a question of your own</label>
+    <input id="ing-own" placeholder="e.g. is creatine worth it if I'm cutting?">
+    <p class="hint" style="margin-top:6px; font-size:12px">Claim-safe by construction: the finished post goes through the claims gate before it can ship.</p>
+
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
+    <div class="cta-row">
+      <button type="button" onclick="startStraightUp(true)">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startStraightUp(false)">⚡ Just build it</button>
+    </div>
+  </section>
+
+  <!-- ═════════ 3·THE SESSION — the variant matrix ═════════ -->
+  <section class="scr" id="scr-session">
+    <p class="eyebrow">🏋️ THE SESSION</p>
+    <h2>Who's this one for?</h2>
+    <p class="hint">Goal-framed, so it finds its audience without being labelled at anyone.{% if session_nudge %} <b>{{ session_nudge }}</b>{% endif %}</p>
+
+    {% for axis in session_axes %}
+    <label style="margin-top:12px">{{ axis.label }}{% if not axis.required %} <span class="muted">(optional)</span>{% endif %}</label>
+    <div class="chip-row" data-axis="{{ axis.key }}">
+      {% for o in axis.options %}
+      <button type="button" class="chip" data-opt="{{ o.key }}"
+              onclick="pickVariant('{{ axis.key }}', '{{ o.key }}', this)">{{ o.label }}</button>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <label style="margin-top:14px">Anything specific? <span class="muted">(optional)</span></label>
+    <input id="session-note" placeholder="e.g. build it around a single pair of dumbbells">
+
+    <div class="cta-row" style="margin-top:16px">
+      <button type="button" onclick="startSession()">Build the session →</button>
+    </div>
+  </section>
+
   <!-- ═════════ 3b · IDEA ═════════ -->
   <section class="scr" id="scr-idea">
     <p class="eyebrow">Your idea</p>
@@ -915,7 +966,7 @@ const PRESET_DAY = "{{ preset_day }}";
 const QA_MIN = 8;
 
 let state = { ideaId: null, source: null, style: null, show: '',
-              ampSit: '', ampState: '', terrs: null,
+              ampSit: '', ampState: '', terrs: null, ing: '', variant: {},
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
 // The show metadata the server rendered, so the concept studio can label
@@ -930,6 +981,8 @@ const MAX_SLIDES = 10, MIN_SLIDES = 1;
 const META = {
   source:  [1, 'Start',     6],
   amp:     [1, 'The situation', 24],
+  straightup:[1, 'The question', 24],
+  session: [1, 'Who it\u2019s for', 24],
   livewire:[1, 'What\u2019s live', 24],
   radar:   [1, 'Pick a story', 24],
   idea:    [1, 'Your idea', 24],
@@ -1008,7 +1061,8 @@ function pickShow(key, el){
 // A show with its own screen goes there instead of the generic seed box —
 // this is the "custom journey per show" half of the layer. Shows without one
 // yet stay on the concept studio, which is a working default, not a stub.
-const SHOW_SCREEN = {amp: 'amp', live_wire: 'livewire'};
+const SHOW_SCREEN = {amp: 'amp', live_wire: 'livewire',
+                    straight_up: 'straightup', session: 'session'};
 function openShowScreen(){
   const screen = SHOW_SCREEN[state.show];
   if (!screen) { toast('Pick an idea below to build this show.'); return; }
@@ -1047,6 +1101,42 @@ async function startAmp(takes){
   const r = await post('/api/create/start', body);
   if (!r) return;
   afterStart(r, false, takes);
+}
+function pickIngredient(key, el){
+  state.ing = (state.ing === key) ? '' : key;
+  document.querySelectorAll('#ing-grid .sit').forEach(b =>
+    b.classList.toggle('sel', b.dataset.ing === state.ing));
+}
+async function startStraightUp(takes){
+  const own = document.getElementById('ing-own').value.trim();
+  if (!state.ing && !own) { toast('Pick a subject, or write your own question.'); return; }
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  const card = document.querySelector(`#ing-grid .sit[data-ing="${state.ing}"]`);
+  body.set('text', own || (card ? card.querySelector('.sit-s').textContent.trim() : ''));
+  if (state.ing) body.set('ingredient', state.ing);
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+// One option per axis. Tapping the selected one clears it, so an optional axis
+// can be turned off after being turned on.
+function pickVariant(axis, opt, el){
+  const row = el.closest('.chip-row');
+  const already = state.variant[axis] === opt;
+  if (already) delete state.variant[axis]; else state.variant[axis] = opt;
+  row.querySelectorAll('.chip').forEach(c =>
+    c.classList.toggle('sel', !already && c.dataset.opt === opt));
+}
+async function startSession(){
+  const note = document.getElementById('session-note').value.trim();
+  const body = baseParams(false, false);
+  body.set('mode', 'idea');
+  body.set('text', note || 'a session for this week');
+  body.set('variant', JSON.stringify(state.variant));
+  const r = await post('/api/create/start', body);
+  if (!r) return;           // a missing required axis comes back as a 400 toast
+  afterStart(r, false, false);
 }
 function toggleTerritory(key, el){
   el.classList.toggle('sel');

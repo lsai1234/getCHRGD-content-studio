@@ -1,0 +1,111 @@
+# STRAIGHT UP's backlog — the ingredient library.
+#
+# The show needs a spine, or it gets invented weekly and drifts. Each entry is
+# a post waiting to happen: the question people actually ask, what the evidence
+# supports, and the marketing lie worth naming.
+#
+# D7: there are no getCHRGD products yet, so this is category education. Every
+# entry carries an EMPTY `our_product` field on purpose — when you have a
+# range, wiring it in is filling that field, not re-architecting the show.
+#
+# `evidence` is deliberately hedged where the evidence is hedged. That's not
+# timidity: on this show, "the evidence here is thinner than the marketing
+# suggests" is a stronger line than a confident overclaim, and it's true.
+# The claims gate (chrgd/claims.py) checks the finished post against D2 —
+# describe, never promise; sharp about the industry, neutral about physiology.
+
+[ingredients.creatine]
+label = "Creatine monohydrate"
+question = "Do I actually need creatine if I only train three times a week?"
+evidence = "One of the most-studied supplements there is. Well supported for strength and repeated high-intensity effort. Around 3-5g a day; loading is optional and mostly just gets you there faster."
+myth = "That it's a steroid, that it wrecks your kidneys in healthy people, and that you have to cycle off it."
+industry = "Monohydrate is the cheap, boring, best-evidenced form — and it's the one 'advanced' blends charge four times more to replace."
+our_product = ""
+
+[ingredients.caffeine]
+label = "Caffeine"
+question = "Is pre-workout just expensive coffee?"
+evidence = "The best-evidenced performance ingredient in most pre-workouts. Effects are dose-dependent and tolerance builds. Peaks roughly 45-60 minutes after taking it, and a late session can genuinely cost you sleep."
+myth = "That you need more and more of it, and that the tingles mean it's working (that's beta-alanine, and it does nothing for the caffeine)."
+industry = "Half the price of a tub is flavour, marketing and a proprietary blend hiding how little of the active stuff is in it."
+our_product = ""
+
+[ingredients.beta_alanine]
+label = "Beta-alanine"
+question = "What actually causes the pre-workout tingles?"
+evidence = "Beta-alanine causes the tingling (paraesthesia) — harmless, and unrelated to whether the product works. Some support for sustained high-intensity efforts in the 1-4 minute range; less relevant for heavy low-rep work."
+myth = "That the tingle is the product working, or that it's a sign of potency."
+industry = "The tingle is a fantastic marketing accident: a sensation people mistake for efficacy, dosed for the feeling rather than the effect."
+our_product = ""
+
+[ingredients.protein_powder]
+label = "Protein powder"
+question = "Do I need protein powder, or is it just expensive food?"
+evidence = "It's food — a convenient way to hit a daily protein target, not a magic one. Total daily intake matters far more than the source or the timing."
+myth = "The 30-minute anabolic window. Total intake across the day is what the evidence actually supports."
+industry = "Flavour, brand and marketing account for most of the price gap between tubs whose ingredient lists are near-identical."
+our_product = ""
+
+[ingredients.eaas_bcaas]
+label = "EAAs / BCAAs"
+question = "Do I need EAAs if I'm already hitting my protein?"
+evidence = "If you're hitting a reasonable daily protein target from whole food or whey, the case for adding EAAs is weak, and for BCAAs weaker still."
+myth = "That sipping aminos through a session is doing meaningful work for someone who already eats enough protein."
+industry = "One of the clearest examples of a category kept alive by marketing rather than evidence."
+our_product = ""
+
+[ingredients.electrolytes]
+label = "Electrolytes"
+question = "Do I need an electrolyte drink for a normal gym session?"
+evidence = "Relevant for long, hot or very sweaty sessions and for heavy sweaters. For an hour indoors, water and a normal diet generally cover it."
+myth = "That everyone needs them daily, and that ordinary tiredness is dehydration."
+industry = "A sachet of salt and sugar with a lifestyle brand around it, at a remarkable markup."
+our_product = ""
+
+[ingredients.ashwagandha]
+label = "Ashwagandha"
+question = "Does ashwagandha actually do anything?"
+evidence = "Studied mostly for stress and sleep measures, with mixed and often small trials. Interesting rather than settled — say so plainly rather than either dismissing or overselling it."
+myth = "That it's a testosterone booster. That's a much bigger claim than the evidence carries."
+industry = "The current default 'natural' ingredient to put on a label when a product needs a story."
+our_product = ""
+
+[ingredients.citrulline]
+label = "L-citrulline"
+question = "What's actually giving me the pump?"
+evidence = "Reasonable support for blood flow and the pump sensation; the case for it improving actual performance is thinner. Doses in many blends are below what studies used."
+myth = "That the pump equals growth."
+industry = "A classic underdosed ingredient — on the label for credibility, at a fraction of the studied dose."
+our_product = ""
+
+[ingredients.collagen]
+label = "Collagen"
+question = "Is collagen worth it for joints?"
+evidence = "Some interest around tendon and joint discomfort, often alongside vitamin C and loading. As a protein source for muscle it's poor — an incomplete amino acid profile."
+myth = "That eating collagen sends it to your skin or your joints intact."
+industry = "Sold hard on appearance benefits that the evidence supports far less strongly than the packaging implies."
+our_product = ""
+
+[ingredients.fat_burners]
+label = "Fat burners"
+question = "Do fat burners do anything?"
+evidence = "Mostly caffeine, with effects on energy expenditure that are small in the context of a whole day's eating. Nothing here substitutes for the calorie side."
+myth = "That a supplement can drive fat loss on its own."
+industry = "The category with the widest gap between what the packaging implies and what the ingredients support — and the one to be most careful describing."
+our_product = ""
+
+[ingredients.proprietary_blends]
+label = "Proprietary blends"
+question = "What is a 'proprietary blend' actually hiding?"
+evidence = "A blend lets a label list ingredients without disclosing individual doses, so a product can name a well-studied ingredient while including very little of it."
+myth = "That a long ingredient list means a better product."
+industry = "This is the show's home turf: it's a labelling practice, not physiology, so we can be as pointed about it as we like."
+our_product = ""
+
+[ingredients.multivitamins]
+label = "Multivitamins"
+question = "Is a multivitamin doing anything if I eat alright?"
+evidence = "Useful for filling a known gap. For someone eating a varied diet the general case is weak, though specifics (vitamin D over a British winter) are a different conversation."
+myth = "That more of a vitamin is better — several are fat-soluble and accumulate."
+industry = "Cheap to make, easy to sell, and often dosed for the label rather than for a deficiency anyone actually has."
+our_product = ""

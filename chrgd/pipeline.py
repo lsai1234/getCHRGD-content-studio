@@ -537,6 +537,26 @@ def _seed_context(idea: Idea, prefs: dict) -> list[str]:
                 lines.append(f"  {i}. {step}")
 
 
+    # STRAIGHT UP builds from an ingredient in the library: the question, the
+    # evidence as it stands, the myth, and where the show may be sharp.
+    if prefs.get("ingredient"):
+        from .ingredients import get_ingredient
+
+        ingredient = get_ingredient(str(prefs["ingredient"]))
+        if ingredient is not None:
+            lines.append("")
+            lines.append(ingredient.brief_block())
+
+    # THE SESSION builds from a point in the variant matrix rather than a
+    # topic — that segmentation IS the show.
+    if prefs.get("session_variant"):
+        from .sessions import brief_block as session_brief
+
+        block = session_brief(prefs["session_variant"])
+        if block:
+            lines.append("")
+            lines.append(block)
+
     # An Amp post needs the mascot in the WORDS too — without this the engine
     # writes a normal carousel that only looks like Amp once the images render.
     # Outside the mechanic branch on purpose: Amp is now a SHOW, so a post
@@ -593,6 +613,9 @@ def creation_prefs(idea: Idea) -> dict:
             # tip the post owes the viewer (chrgd/character.py). Only set by
             # the AMP show's screen.
             "amp_state", "amp_situation", "amp_situation_text", "amp_tip",
+            # STRAIGHT UP's subject and THE SESSION's point in the variant
+            # matrix — each written by that show's own screen.
+            "ingredient", "session_variant",
         )
         if k in route
     }
@@ -875,7 +898,23 @@ def build_single_idea(
         return BuildResult(idea_id=idea_id, status=Status.queued, error=str(exc))
 
     if result.post is not None:
-        fields = build_fields_from_post(result.post, _build_extra_route(store, idea))
+        extra = _build_extra_route(store, idea)
+        # The claims gate: a separate pass over the finished post, because a
+        # self-scored `claim_safety` inside the write is the model marking its
+        # own homework on the one topic carrying real outside risk. The lint
+        # runs on every post; the judge and the hold-for-review only apply to a
+        # claims-gated show (STRAIGHT UP), so nothing else changes behaviour.
+        from .claims import check_claims
+
+        claims = check_claims(result.post.model_dump(mode="json"), idea, settings)
+        extra = {**extra, "claims": claims.as_payload()}
+        result.spend_usd += claims.spend_usd
+        if claims.blocking and not claims.safe:
+            _prog(90, f"claims gate flagged {len(claims.flags)} thing(s) — holding for review")
+            result.status = Status.review
+            result.qa_failures = result.qa_failures + claims.reasons()
+
+        fields = build_fields_from_post(result.post, extra)
         if result.status is Status.done:
             store.save_build(idea_id, fields)
         else:
