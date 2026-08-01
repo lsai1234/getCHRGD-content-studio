@@ -4,6 +4,15 @@
 *Questions for you*; my recommended default is marked **→ default** so you can
 reply "default" and move on where you don't care.
 
+## Decisions locked (round 1)
+
+| # | Decision | Consequence |
+|---|---|---|
+| D1 | **The Villa is a serial** — 3–5 named regulars, cliffhanger + a vote that becomes canon next episode | `chrgd/series.py`, series/episode storage and the continuity gate get built (the `STORY_ENGINE_PLAN.md` build). Episodes can't be pre-batched ahead of a vote. |
+| D2 | **Straight Up is educational + sourced** — say what the evidence supports, cite internally, never promise an outcome; opinionated about the *industry* (pricing, labelling, marketing), never about physiology | The show's gate is a **claims gate**, not the hot-take rubric: a separate pass that fails outcome promises and unsourced numbers. |
+| D3 | **The Villa breaks the house look; the other four share the furniture** with their own palette, type and photography | Furniture toggles (wordmark / scrim / counter / footer) move into the show's look pack, defaulting to `brand.toml [identity]`. The Villa runs handle-only. |
+| D4 | **Build order: Amp + Live Wire first** | Phase 1 is the Show layer proved against the two shows that are already ~80% built. Straight Up + The Session next, The Villa last. |
+
 ---
 
 ## 0. The diagnosis (why the create journey feels like it's doing too much)
@@ -99,7 +108,7 @@ the account off a rights-holder's radar. Already argued in `STORY_ENGINE_PLAN.md
 and I'd hold that line.
 
 **Questions for you**
-1. **Serial or standalone?** Same cast every week with a cliffhanger and a vote (high ceiling, high commitment — if it flops at episode 3 you're stuck), or a new self-contained parody each week that just borrows a format (safer, weaker)? **→ default: serial. It's the only one of the five with a real reason to follow the account.**
+1. ~~Serial or standalone?~~ **DECIDED (D1): serial**, with a named cast, a cliffhanger and a canon vote.
 2. **One format or a rotating parody slot?** Villa forever, or does this slot rotate — villa / mockumentary office (your Hyrox-boss idea) / talent-show / dating-app? **→ default: Villa runs a full "series" of ~8 episodes, then the slot rotates to the next format. Seasons, not forever.**
 3. **Cast** — do you want to write the 3–5 characters yourself (fastest way to find out if it's funny), or should I generate a bible for you to edit? **→ default: I generate a first bible, you rewrite the traits — the trait is the joke engine and it should be yours.**
 4. **The vote** — is the audience's choice genuinely canon next week (strongest mechanic, means you can't pre-batch episodes), or a soft "who's your favourite"? **→ default: genuinely canon. It's the whole reason to comment.**
@@ -129,11 +138,10 @@ explicit, written line — see the question below, it's the one I most need you
 to answer.
 
 **Questions for you**
-1. **How far do we go on claims?** (a) strict — describe, never promise, no
-   health outcomes at all; (b) educational — cite the evidence and say what it
-   does and doesn't support; (c) opinionated — take a side on contested stuff
-   ("most people don't need BCAAs"). **→ default: (b) with (c) reserved for
-   *industry* opinions (pricing, labelling, marketing), never physiology.**
+1. ~~How far do we go on claims?~~ **DECIDED (D2): educational + sourced.**
+   Say what the evidence does and doesn't support, cite internally, never
+   promise an outcome. Opinionated about the *industry* (pricing, labelling,
+   marketing lies), never about physiology.
 2. Does this show **sell getCHRGD products**, or stay product-neutral education with the brand as the trusted voice? **→ default: neutral education, with our product mentioned only where it's honestly the answer — maybe 1 in 4.**
 3. Do you want **visible sources** on-slide (a "source: …" line), or sources kept internal for your own confidence? **→ default: internal, with a source line only on the eyebrow-raising numbers.**
 4. Where does the material come from — **your product range** (an ingredient library I'd seed from your labels), **audience questions** (comments/DMs), or **the trend scout**? **→ default: an ingredient library as the spine, topped up by real audience questions.**
@@ -266,13 +274,13 @@ own 2nd screen  system prompt         house furniture    legibility / hot-take)
 - `learning.py` / `analytics.py` — tag performance **by show**, so after a
   month you know which of the five to double down on and which to kill.
 
-**Suggested order**
+**Build order — DECIDED (D4)**
 1. **Show layer + Live Wire + Amp** — mostly re-pointing what exists; proves
    the architecture with the two shows that are nearly built.
-2. **Straight Up + The Session** — mostly config + two new gates + the variant
+2. **Straight Up + The Session** — config + the claims gate (D2) + the variant
    matrix.
 3. **The Villa** — the real build (`STORY_ENGINE_PLAN.md`), last, because it's
-   the only one that needs new engine and the one most worth hand-testing
+   the only one that needs new engine (D1) and the one most worth hand-testing
    before automating.
 
 ---
@@ -281,10 +289,9 @@ own 2nd screen  system prompt         house furniture    legibility / hot-take)
 
 These change the shape of the build more than any single show.
 
-1. **Look independence.** How far does each show's look diverge? (a) shared
-   furniture, different palette/type per show; (b) fully separate identities
-   with only the `@getchrgd` handle in common; (c) one look, varied slightly.
-   **→ default: (b) for the Villa, (a) for the other four.**
+1. ~~Look independence.~~ **DECIDED (D3): the Villa gets its own world**
+   (handle only, no wordmark/scrim/counter/footer); the other four share the
+   brand furniture with their own palette, type and photography style.
 2. **Is a show ever allowed to break format?** A locked spine gives
    recognisability and kills surprise. **→ default: the spine is a floor, and
    the engine can add or drop one slide when the idea genuinely wants it.**
