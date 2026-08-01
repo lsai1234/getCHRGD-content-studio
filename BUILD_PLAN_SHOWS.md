@@ -329,7 +329,30 @@ Mostly config plus two gates and one picker. No new architecture.
 
 ---
 
-## Phase 3 — THE MULTIVERSE · **L**
+## Phase 3 — THE MULTIVERSE · **L** — ✅ **BUILT**
+
+Shipped: `config/roster.toml` + `chrgd/roster.py` (13 characters, each with a
+safety class and a locked comic design), `chrgd/series.py` (the canon — one
+editable JSON document, operator-authored, with a hard reset), the episode
+brief reaching the build, the locked cast designs reaching every image,
+`chrgd/likeness.py` (the five rules, checked against the finished episode), and
+the show's own create screen. 34 new tests
+(`tests/test_phase3_multiverse.py`); 556 pass.
+
+Notes on what actually got built:
+
+* **The canon is one JSON document in `app_settings`**, not new tables. That
+  makes D16 nearly free: authoring is a `PUT`, a reset is replacing it, and an
+  export is copying it. `record_episode` is idempotent per `idea_id`, because
+  a rebuild is not a new episode and a duplicated event silently corrupts every
+  recap after it.
+* **The likeness lint is roster-aware**, which is what lets it do things a
+  general judge can't: it knows which names are approved and which of those are
+  protected, so "Haaland" next to a shaker is an endorsement flag while
+  "Orangina" next to one is fine.
+* **A count correction:** the roster is **13**, not the 12 recorded in D15 —
+  seven meme regulars and six guest stars. The docs said twelve; the numbered
+  list in `MULTIVERSE_ROSTER.md` always had thirteen. Corrected in both.
 
 The only phase with real new engine. Built last, deliberately: by then the
 Show layer is proven and you'll have posted enough to know what works.

@@ -352,6 +352,7 @@ def build_user_message(
     idea: Idea,
     retry_reasons: list[str] | None = None,
     performance_notes: str = "",
+    store: Store | None = None,
 ) -> str:
     """Render a seed row into the instruction the engine builds from."""
     lines = ["Build one finished post from this backlog row. Preserve the core idea."]
@@ -360,7 +361,7 @@ def build_user_message(
         lines.append(performance_notes)
         lines.append("")
     prefs = creation_prefs(idea)
-    lines.extend(_seed_context(idea, prefs))
+    lines.extend(_seed_context(idea, prefs, store))
 
     # The show's brief: what turns one general-purpose engine into five
     # recognisable formats. It sits directly after the seed so every later
@@ -428,7 +429,7 @@ def build_user_message(
     return "\n".join(lines)
 
 
-def _seed_context(idea: Idea, prefs: dict) -> list[str]:
+def _seed_context(idea: Idea, prefs: dict, store: Store | None = None) -> list[str]:
     """The seed's full context, shared by the fan-out (takes) and the build
     so every stage reasons from the same brief: row fields, the cultural
     moment it rides, any locked format, and the blank-canvas subject rules."""
@@ -557,6 +558,25 @@ def _seed_context(idea: Idea, prefs: dict) -> list[str]:
             lines.append("")
             lines.append(block)
 
+    # THE MULTIVERSE builds from its world, its cast and the canon — that
+    # memory is what makes it a serial rather than a weekly sketch. Needs the
+    # store to read the canon; without one it still gets the world and cast.
+    if prefs.get("cast"):
+        from .roster import cast_block, load_world, resolve
+
+        cast = resolve([str(k) for k in prefs["cast"]])
+        if store is not None:
+            from .series import episode_brief
+
+            block = episode_brief(store, [c.key for c in cast])
+        else:
+            block = "\n\n".join(
+                b for b in (load_world().as_block(), cast_block(cast)) if b
+            )
+        if block:
+            lines.append("")
+            lines.append(block)
+
     # An Amp post needs the mascot in the WORDS too — without this the engine
     # writes a normal carousel that only looks like Amp once the images render.
     # Outside the mechanic branch on purpose: Amp is now a SHOW, so a post
@@ -616,6 +636,8 @@ def creation_prefs(idea: Idea) -> dict:
             # STRAIGHT UP's subject and THE SESSION's point in the variant
             # matrix — each written by that show's own screen.
             "ingredient", "session_variant",
+            # THE MULTIVERSE's cast for this episode (chrgd/roster.py).
+            "cast",
         )
         if k in route
     }
@@ -658,6 +680,7 @@ def run_pipeline_for_idea(
     model: str,
     on_attempt=None,
     performance_notes: str = "",
+    store: Store | None = None,
 ) -> BuildResult:
     """Run the pipeline for one idea: call, validate, QA-gate, re-request once.
 
@@ -674,7 +697,7 @@ def run_pipeline_for_idea(
     for attempt in range(1, 3):  # first try + one re-request
         if on_attempt:
             on_attempt(attempt)
-        user = build_user_message(idea, retry_reasons, performance_notes)
+        user = build_user_message(idea, retry_reasons, performance_notes, store)
         result = client.complete(system, user)
         spend += estimate_cost(model, result.prompt_tokens, result.completion_tokens)
 
@@ -883,6 +906,7 @@ def build_single_idea(
             idea,
             client,
             settings.openai_model,
+            store=store,
             on_attempt=lambda n: _prog(*_attempt_notes.get(n, (80, f"attempt {n}"))),
             performance_notes="\n\n".join(
                 x for x in (
@@ -906,13 +930,27 @@ def build_single_idea(
         # claims-gated show (STRAIGHT UP), so nothing else changes behaviour.
         from .claims import check_claims
 
-        claims = check_claims(result.post.model_dump(mode="json"), idea, settings)
+        payload = result.post.model_dump(mode="json")
+        claims = check_claims(payload, idea, settings)
         extra = {**extra, "claims": claims.as_payload()}
         result.spend_usd += claims.spend_usd
         if claims.blocking and not claims.safe:
             _prog(90, f"claims gate flagged {len(claims.flags)} thing(s) — holding for review")
             result.status = Status.review
             result.qa_failures = result.qa_failures + claims.reasons()
+
+        # The likeness + continuity gate: THE MULTIVERSE's rules about real
+        # people, enforced against the finished episode rather than trusted to
+        # a prompt. Same asymmetry as claims — a failure holds the post, because
+        # a fake quote from a real footballer costs rather more than a reroll.
+        from .likeness import check_likeness
+
+        likeness = check_likeness(payload, idea, settings, store=store)
+        extra = {**extra, "likeness": likeness.as_payload()}
+        if likeness.blocking and not likeness.safe:
+            _prog(90, f"likeness gate flagged {len(likeness.flags)} thing(s) — holding for review")
+            result.status = Status.review
+            result.qa_failures = result.qa_failures + likeness.reasons()
 
         fields = build_fields_from_post(result.post, extra)
         if result.status is Status.done:

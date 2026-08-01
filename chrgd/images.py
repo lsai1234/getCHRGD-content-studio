@@ -396,6 +396,7 @@ def compose_design_prompt(
     has_character: bool = False,
     charge: int | None = None,
     amp_state: str = "",
+    cast_lock: str = "",
     show=None,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
@@ -425,6 +426,11 @@ def compose_design_prompt(
         from .character import character_prefix
 
         parts.append(character_prefix(charge=charge, state=amp_state))
+    # THE MULTIVERSE's cast get the same treatment: locked designs first, so a
+    # scene can be added but a character can never be redrawn — which is what
+    # keeps the caricatures recognisable AND keeps them caricatures.
+    if cast_lock:
+        parts.append(cast_lock)
     # Does a person belong in THIS slide's scene? The engine's per-slide call
     # wins; otherwise infer from the brief. A portrait being attached always
     # means yes.
@@ -602,6 +608,16 @@ def _charge_for(idea: Idea, slide_index: int, slide_count: int) -> int | None:
     if arc is None or not 0 <= slide_index < len(arc):
         return None
     return arc[slide_index]
+
+
+def _cast_lock_for(idea: Idea) -> str:
+    """The locked character designs for a Multiverse episode, or ''."""
+    keys = _route_of(idea).get("cast")
+    if not isinstance(keys, list) or not keys:
+        return ""
+    from .roster import resolve, visual_block
+
+    return visual_block(resolve([str(k) for k in keys]))
 
 
 def _amp_state_for(idea: Idea) -> str:
@@ -1034,6 +1050,7 @@ def render_slide(
                     has_character=has_character,
                     charge=_charge_for(idea, slide_index, len(slides)),
                     amp_state=_amp_state_for(idea),
+                    cast_lock=_cast_lock_for(idea),
                     show=show,
                 )
             else:

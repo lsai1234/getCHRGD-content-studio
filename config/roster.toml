@@ -1,0 +1,133 @@
+# THE MULTIVERSE's cast — the approved roster (D15).
+#
+# From MULTIVERSE_ROSTER.md, agreed at twelve. The engine casts ONLY from this
+# file: "never free-pick a person" is one of the likeness rules, and this is
+# where that rule is actually enforced (chrgd/likeness.py checks every named
+# character against these keys).
+#
+# `class` decides which rules apply:
+#   meme_character — a public meme with no rights holder. Only taste applies.
+#   public_figure  — a real living person. The full likeness gate applies:
+#                    caricature never photoreal, no endorsement, no fabricated
+#                    quotes, punch at status and situation only.
+#   fictional_ip   — a character someone owns. Parody has latitude, but it must
+#                    be OUR drawing, never a copy of the original design.
+#
+# `trait` is the entry. A character without a joke engine is a costume and dies
+# at episode two. `visual` is the locked comic-style prefix, held identical on
+# every render — the same trick chrgd/character.py uses on Amp.
+
+[world]
+location = "Iron Palace — Unit 4, a retail park, between a Greggs and a vape shop"
+detail = "A 24/7 mid-tier gym that, for reasons nobody ever explains, is the fixed point every reality leaks into. One squat rack short. The lat pulldown has said BACK SOON since 2019. A single working hairdryer."
+engine = "The gym is the only place in the multiverse where nobody gets special treatment. A god, a Premier League striker and a sentient banana all wait for the same bench. Every episode is a status contest the room refuses to settle."
+voice = "Comic-book narration boxes — dry, deadpan, third person — plus speech bubbles for the characters. Never a TikTok voiceover; the comic register IS the format."
+max_cast = 4
+
+# ── Tier 1 — the regulars ────────────────────────────────────────────────────
+
+[characters.tralalero]
+name = "Tralalero Tralala"
+class = "meme_character"
+what = "A three-legged shark in Nike trainers."
+trait = "Has three legs and still skips leg day, and will not discuss it."
+role = "The cardio guy. Treadmill only. Owns the gym's fastest 5k and mentions it hourly."
+visual = "A blue cartoon shark standing upright on three legs, each in a white trainer, bold comic ink outlines, halftone shading."
+
+[characters.ballerina]
+name = "Ballerina Cappuccina"
+class = "meme_character"
+what = "A ballerina with a cappuccino cup for a head."
+trait = "Is literally made of caffeine. Permanently over-stimulated, cannot self-assess, always doubling the scoop."
+role = "The pre-workout dealer. Every crash in the building traces back to her."
+visual = "A ballerina in a pink tutu with an oversized coffee-cup head with a face, en pointe, comic ink and halftone."
+
+[characters.bombardiro]
+name = "Bombardiro Crocodilo"
+class = "meme_character"
+what = "A crocodile-bomber-plane hybrid."
+trait = "Solves every problem with wildly disproportionate force. Has never once used a lighter weight."
+role = "Ego lifting given a body. The reason the 40kg dumbbells are dented."
+visual = "A green crocodile head and arms on a grey bomber-plane fuselage with wings, comic ink, halftone."
+
+[characters.tung_tung]
+name = "Tung Tung Tung Sahur"
+class = "meme_character"
+what = "A wooden figure with a bat."
+trait = "Turns up at 3am and takes it personally that you didn't."
+role = "The 5am club, enforced. Runs the sign-in sheet like a court."
+visual = "A tall thin wooden-log character with a carved face and long arms, holding a small bat, comic ink."
+
+[characters.chimpanzini]
+name = "Chimpanzini Bananini"
+class = "meme_character"
+what = "A monkey in a banana body."
+trait = "Is the pre-workout snack, is fully aware of it, and has complicated feelings about being eaten."
+role = "The nutrition running gag. Present at every food conversation, visibly uncomfortable."
+visual = "A small monkey face and limbs emerging from a yellow banana body, comic ink, halftone."
+
+[characters.shrimp_jesus]
+name = "Shrimp Jesus"
+class = "meme_character"
+what = "The Facebook AI-slop icon."
+trait = "Dispenses miracles nobody asked for, then demands engagement for them — 'type AMEN for gains'."
+role = "The gym's spiritual authority, and a running joke about engagement farming inside a post that is itself asking for engagement."
+visual = "A serene robed figure with shrimp features and shrimp limbs, glowing halo, deliberately over-rendered AI-slop sheen inside a comic frame."
+
+[characters.orangina]
+name = "Orangina"
+class = "meme_character"
+what = "Half human, half orange."
+trait = "Is technically a health food and has built an entire personality on it. Has never trained a day in her life, is made of vitamin C, and considers that a moral achievement."
+role = "The wellness girl. Lives at the smoothie bar. Assesses everything anyone eats and says 'but is it clean though' in a tone that ends friendships."
+visual = "A young woman with an orange for a head — segmented citrus skin, glossy peel texture, a small face — in gym kit, comic ink, halftone shading."
+
+# ── Tier 2 — the guest stars ─────────────────────────────────────────────────
+
+[characters.haaland]
+name = "Erling Haaland"
+class = "public_figure"
+what = "The striker."
+trait = "Has fully optimised the human body and cannot process fun. Raw liver, unfiltered milk, blue-light goggles, in bed at 8pm."
+role = "The terrifying benchmark. Everything he does is correct and everyone finds it deeply unsettling."
+visual = "A tall broad blond footballer drawn as a bold comic caricature — exaggerated jaw and stature, deadpan expression, comic ink and halftone. Clearly a cartoon, never photographic."
+
+[characters.grealish]
+name = "Jack Grealish"
+class = "public_figure"
+what = "The other footballer."
+trait = "Performs at the top level despite an all-inclusive lifestyle, and knows exactly how annoying that is."
+role = "Living proof the shortcuts work. The counterargument to every post this account has ever made."
+visual = "A footballer with a headband and enormous calves, drawn as a bold comic caricature, cheeky expression, comic ink and halftone. Clearly a cartoon, never photographic."
+
+[characters.tracy_beaker]
+name = "Tracy Beaker"
+class = "fictional_ip"
+what = "Grown up, and no calmer."
+trait = "Care-home kid energy in an adult body. Tells enormous, elaborate lies. Fights everyone. Fiercely loyal about ten seconds after screaming at you."
+role = "Took a free trial pass in 2019 and simply never left. Has a permanent, escalating feud with the front desk."
+visual = "A young woman with wild curly dark hair and a permanent scowl, drawn in OUR bold comic-ink style — our own design, never a copy of any existing illustration of the character."
+
+[characters.ramsay]
+name = "Gordon Ramsay"
+class = "public_figure"
+what = "The chef."
+trait = "Cannot look at food without rating it; treats a shaker like a failing restaurant."
+role = "Runs the protein bar. Nobody has ever received a drink without a verdict."
+visual = "A weathered blond chef with a deeply lined forehead, mid-shout, drawn as a bold comic caricature, comic ink and halftone. Clearly a cartoon, never photographic."
+
+[characters.clarkson]
+name = "Jeremy Clarkson"
+class = "public_figure"
+what = "The resistance."
+trait = "Believes fitness is a conspiracy invented to sell water bottles. Attends solely for the sauna and the café."
+role = "The one voice in the building on the viewer's side at 6am."
+visual = "A tall shambolic middle-aged man in badly fitting jeans and an untucked shirt, drawn as a bold comic caricature, comic ink and halftone. Clearly a cartoon, never photographic."
+
+[characters.molly_mae]
+name = "Molly-Mae"
+class = "public_figure"
+what = "The influencer arc."
+trait = "Turns every moment into content and every setback into a lesson. The same 24 hours in a day, deployed relentlessly."
+role = "The show's bridge into the reality-TV territory LIVE WIRE scouts."
+visual = "A blonde influencer filming herself on a ring light, drawn as a bold comic caricature, comic ink and halftone. Clearly a cartoon, never photographic."

@@ -1,6 +1,6 @@
 # THE MULTIVERSE — roster v2 (locked)
 
-**Twelve characters, agreed.** This becomes `config/roster.toml` in Phase 3.
+**Thirteen characters, agreed** — seven meme regulars, six caricatured guest stars. This becomes `config/roster.toml` in Phase 3.
 Companion to `THEMES_PLAN.md` (Show 2, decisions D1/D3/D6).
 
 Each entry carries the four things the engine actually needs:

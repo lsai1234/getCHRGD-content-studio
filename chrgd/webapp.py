@@ -371,6 +371,18 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         with _store(settings) as store:
             return suggestion(store)
 
+    def _canon_summary(settings) -> dict:
+        from .series import load_canon
+
+        with _store(settings) as store:
+            canon = load_canon(store)
+        return {
+            "season": canon.season.label,
+            "episode": canon.next_number(),
+            "open_thread": canon.open_thread(),
+            "history": [e.line() for e in canon.recent()],
+        }
+
     @app.get("/create", response_class=HTMLResponse)
     def create_page(
         request: Request, idea: str | None = None, day: str | None = None,
@@ -378,6 +390,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     ):
         from .character import AMP_STATES, STATE_ORDER
         from .mechanics import load_mechanics
+        from .roster import load_roster
         from .sessions import load_axes
         from .shows import ordered_shows
         from .territories import in_season
@@ -414,6 +427,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 for a in load_axes().values()
             ],
             session_nudge=_session_nudge(settings),
+            # THE MULTIVERSE's own screen: the roster and where the canon is.
+            roster=[
+                {"key": c.key, "name": c.name, "cls": c.cls, "what": c.what,
+                 "trait": c.trait, "protected": c.protected}
+                for c in load_roster().values()
+            ],
+            canon=_canon_summary(settings),
             # LIVE WIRE's own screen: the in-season interest territories.
             territories=[
                 {"key": t.key, "label": t.label, "weight": t.weight}
@@ -901,6 +921,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         amp: dict | None = None,
         ingredient: str = "",
         session_variant: dict | None = None,
+        cast: list[str] | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
@@ -946,6 +967,23 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             if missing:
                 raise HTTPException(400, "still to pick: " + ", ".join(missing))
             route[SESSION_KEY] = validate(session_variant)
+        # THE MULTIVERSE's cast. Validated against the approved roster here,
+        # because "the engine never free-picks a person" is a likeness rule and
+        # this is the edge it has to hold at.
+        if cast:
+            from .roster import ROUTE_KEY as CAST_KEY, get_character, load_world
+
+            unknown = [k for k in cast if get_character(k) is None]
+            if unknown:
+                raise HTTPException(
+                    400, f"not on the roster: {', '.join(unknown)}"
+                )
+            limit = load_world().max_cast
+            if len(cast) > limit:
+                raise HTTPException(
+                    400, f"pick at most {limit} characters — a carousel can't hold more"
+                )
+            route[CAST_KEY] = list(cast)
         if moment:
             route["moment"] = moment
         if style:
@@ -991,6 +1029,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         amp_tip: str = Form(""),
         ingredient: str = Form(""),
         variant: str = Form(""),   # JSON object: {axis: option}
+        cast: str = Form(""),      # comma-separated roster keys
         mechanic: str = Form(""),
         style: str = Form(""),
         length: str = Form(""),
@@ -1051,6 +1090,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     mechanic_key=mechanic,
                     length=length, scheduled_for=when, show=show, amp=amp,
                     ingredient=ingredient, session_variant=variant_obj,
+                    cast=[c for c in cast.split(",") if c.strip()],
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}
@@ -1546,6 +1586,71 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         with _store(settings) as store:
             job_id = enqueue_discover(store, kind, count=count, territories=terr)
         return {"job_id": job_id, "kind": kind}
+
+    @app.get("/api/canon")
+    def api_canon_get(_: str = Depends(require_user)):
+        """THE MULTIVERSE's canon — the whole editable document (D16)."""
+        from .series import load_canon
+
+        with _store(settings) as store:
+            return load_canon(store).model_dump()
+
+    @app.put("/api/canon")
+    def api_canon_put(payload: dict, _: str = Depends(require_user)):
+        """Replace the canon. The operator authors the storyline; the engine
+        proposes the next episode from whatever this says."""
+        from .series import Canon, save_canon
+
+        try:
+            canon = Canon.model_validate(payload)
+        except Exception as exc:  # noqa: BLE001 — a bad edit is a 400, not a 500
+            raise HTTPException(400, f"canon didn't validate: {exc}") from None
+        with _store(settings) as store:
+            save_canon(store, canon)
+        return canon.model_dump()
+
+    @app.post("/api/canon/episode")
+    def api_canon_episode(
+        change: str = Form(...), unresolved: str = Form(""),
+        title: str = Form(""), cast: str = Form(""), idea_id: str = Form(""),
+        _: str = Depends(require_user),
+    ):
+        """Record what an episode changed, so the next one can extend it."""
+        from .series import record_episode
+
+        with _store(settings) as store:
+            episode = record_episode(
+                store, change=change, unresolved=unresolved, title=title,
+                cast=[c for c in cast.split(",") if c.strip()], idea_id=idea_id,
+            )
+        return episode.model_dump()
+
+    @app.post("/api/canon/reset")
+    def api_canon_reset(confirm: str = Form(""), _: str = Depends(require_user)):
+        """The hard reset (D16): wipe the world and start clean.
+
+        Requires an explicit confirmation because it is total and
+        irreversible — season, episodes, standings and notes all go."""
+        from .series import reset_canon
+
+        if confirm.strip().upper() != "RESET":
+            raise HTTPException(400, "type RESET to confirm — this wipes the whole canon")
+        with _store(settings) as store:
+            return reset_canon(store).model_dump()
+
+    @app.get("/api/roster")
+    def api_roster(_: str = Depends(require_user)):
+        from .roster import load_roster, load_world
+
+        world = load_world()
+        return {
+            "world": world.model_dump(),
+            "characters": [
+                {"key": c.key, "name": c.name, "cls": c.cls, "what": c.what,
+                 "trait": c.trait, "role": c.role, "protected": c.protected}
+                for c in load_roster().values()
+            ],
+        }
 
     @app.get("/api/territories")
     def api_territories(_: str = Depends(require_user)):

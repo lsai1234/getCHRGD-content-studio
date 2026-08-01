@@ -78,6 +78,11 @@
   .show-tile .sh-s{font-size:12.5px; color:var(--muted); line-height:1.35}
   .show-tile .sh-day{margin-left:auto; flex:none; font-size:11px;
     text-transform:uppercase; letter-spacing:.06em; color:var(--faint)}
+  .canon-box{margin:2px 0 12px; padding:10px 12px; border-radius:12px;
+    background:var(--card); border:1px solid var(--line); font-size:12.5px}
+  .canon-box summary{cursor:pointer; font-weight:600; color:var(--muted)}
+  .canon-box ul{margin:8px 0 0; padding-left:18px; color:var(--muted); line-height:1.5}
+  .canon-open{margin:8px 0 0; color:var(--accent)}
   .cta-wide{display:block; width:100%; margin:2px 0 14px; padding:12px;
     border-radius:12px; border:1px solid var(--accent); cursor:pointer;
     background:rgba(79,195,247,.12); color:inherit; font-weight:600;
@@ -632,6 +637,43 @@
     </div>
   </section>
 
+  <!-- ═════════ 3·THE MULTIVERSE — the serial's own screen ═════════
+       A serial's first question isn't "what's the idea?" — it's who's in it
+       and what the canon says happened last time. -->
+  <section class="scr" id="scr-multiverse">
+    <p class="eyebrow">💥 THE MULTIVERSE</p>
+    <h2>Episode {{ canon.episode }} — who's in it?</h2>
+    <p class="hint">{{ canon.season }} · pick 2–4. Everything they've already done carries over.</p>
+
+    {% if canon.history %}
+    <details class="canon-box">
+      <summary>The story so far ({{ canon.history|length }} episode{{ '' if canon.history|length == 1 else 's' }})</summary>
+      <ul>{% for line in canon.history %}<li>{{ line }}</li>{% endfor %}</ul>
+      {% if canon.open_thread %}<p class="canon-open">Left open: {{ canon.open_thread }}</p>{% endif %}
+    </details>
+    {% else %}
+    <p class="hint" style="margin-bottom:10px">Nothing in the canon yet — this is episode one.</p>
+    {% endif %}
+
+    <div class="sit-grid" id="cast-grid">
+      {% for c in roster %}
+      <button type="button" class="sit" data-cast="{{ c.key }}"
+              onclick="pickCast('{{ c.key }}', this)">
+        <span class="sit-t">{{ c.name }}{% if c.protected %} <span class="sit-used">caricature only</span>{% endif %}</span>
+        <span class="sit-s">{{ c.trait }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <label style="margin-top:14px">What happens this episode? <span class="muted">(optional — the engine will find it)</span></label>
+    <input id="mv-beat" placeholder="e.g. someone finally fixes the lat pulldown and claims it as theirs">
+
+    <div class="cta-row" style="margin-top:16px">
+      <button type="button" onclick="startEpisode()">Write episode {{ canon.episode }} →</button>
+    </div>
+    <p class="hint" style="margin-top:8px; font-size:12px">Every episode goes through the likeness gate before it can ship — caricature only, no endorsements, no invented quotes.</p>
+  </section>
+
   <!-- ═════════ 3b · IDEA ═════════ -->
   <section class="scr" id="scr-idea">
     <p class="eyebrow">Your idea</p>
@@ -967,6 +1009,7 @@ const QA_MIN = 8;
 
 let state = { ideaId: null, source: null, style: null, show: '',
               ampSit: '', ampState: '', terrs: null, ing: '', variant: {},
+              cast: [],
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
 // The show metadata the server rendered, so the concept studio can label
@@ -983,6 +1026,7 @@ const META = {
   amp:     [1, 'The situation', 24],
   straightup:[1, 'The question', 24],
   session: [1, 'Who it\u2019s for', 24],
+  multiverse:[1, 'The episode', 24],
   livewire:[1, 'What\u2019s live', 24],
   radar:   [1, 'Pick a story', 24],
   idea:    [1, 'Your idea', 24],
@@ -1062,7 +1106,9 @@ function pickShow(key, el){
 // this is the "custom journey per show" half of the layer. Shows without one
 // yet stay on the concept studio, which is a working default, not a stub.
 const SHOW_SCREEN = {amp: 'amp', live_wire: 'livewire',
-                    straight_up: 'straightup', session: 'session'};
+                    straight_up: 'straightup', session: 'session',
+                    multiverse: 'multiverse'};
+const MAX_CAST = 4;
 function openShowScreen(){
   const screen = SHOW_SCREEN[state.show];
   if (!screen) { toast('Pick an idea below to build this show.'); return; }
@@ -1101,6 +1147,27 @@ async function startAmp(takes){
   const r = await post('/api/create/start', body);
   if (!r) return;
   afterStart(r, false, takes);
+}
+// 2-4 characters. The cap is enforced server-side too (it's a likeness rule,
+// not a UI preference) — this just stops you hitting the error.
+function pickCast(key, el){
+  const i = state.cast.indexOf(key);
+  if (i >= 0) state.cast.splice(i, 1);
+  else if (state.cast.length >= MAX_CAST) {
+    toast(`${MAX_CAST} is the limit — a carousel can't hold more.`); return;
+  } else state.cast.push(key);
+  el.classList.toggle('sel', state.cast.includes(key));
+}
+async function startEpisode(){
+  if (state.cast.length < 2) { toast('Pick at least two characters.'); return; }
+  const beat = document.getElementById('mv-beat').value.trim();
+  const body = baseParams(false, false);
+  body.set('mode', 'idea');
+  body.set('text', beat || 'the next episode');
+  body.set('cast', state.cast.join(','));
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, false);
 }
 function pickIngredient(key, el){
   state.ing = (state.ing === key) ? '' : key;
