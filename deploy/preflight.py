@@ -1,0 +1,278 @@
+"""Pre-flight: is this box actually ready to serve?
+
+Run on the VPS from the app directory, BEFORE starting the service:
+
+    .venv/bin/python deploy/preflight.py
+
+Complements `diagnose.py`, which tests connectivity to OpenAI and costs about a
+penny. This one is **offline and free**: no API key needed, no paid calls, no
+network. It checks the things that let a deploy boot happily and then fail the
+first time someone clicks Create — a typo in a show's TOML, a style preset that
+doesn't exist, a font path that isn't on this box, a secret left at its example
+value.
+
+Exit code 0 = ready, 1 = something needs fixing. Safe to run in CI.
+"""
+
+from __future__ import annotations
+
+import shutil
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+FAILURES: list[str] = []
+WARNINGS: list[str] = []
+
+
+def ok(msg: str) -> None:
+    print(f"  ✓ {msg}")
+
+
+def fail(msg: str) -> None:
+    FAILURES.append(msg)
+    print(f"  ✗ {msg}")
+
+
+def warn(msg: str) -> None:
+    WARNINGS.append(msg)
+    print(f"  ! {msg}")
+
+
+def section(title: str) -> None:
+    print(f"\n{title}")
+
+
+# --- the content configs ----------------------------------------------------
+
+
+def check_shows() -> None:
+    section("Shows")
+    from chrgd.brand import load_brand
+    from chrgd.learning import METRIC_FIELDS
+    from chrgd.shows import load_gate_profiles, load_shows
+
+    shows = load_shows()
+    if not shows:
+        fail("no shows loaded — config/shows/*.toml missing or unreadable")
+        return
+    ok(f"{len(shows)} shows: {', '.join(sorted(shows))}")
+
+    brand = load_brand()
+    profiles = load_gate_profiles()
+    for show in shows.values():
+        where = f"config/shows/{show.key}.toml"
+        if not show.spine.roles:
+            fail(f"{where}: no spine — it would fall back to the generic engine")
+        if len(show.spine.briefs) != len(show.spine.roles):
+            fail(f"{where}: {len(show.spine.briefs)} briefs for "
+                 f"{len(show.spine.roles)} spine roles")
+        if not show.voice.block.strip():
+            fail(f"{where}: no voice block")
+        preset = show.look.style_preset
+        if preset and not brand.style_prompt(preset):
+            fail(f"{where}: style_preset '{preset}' is not in brand.toml — "
+                 "the show would silently lose its art direction")
+        if show.gate_profile and show.gate_profile not in profiles:
+            fail(f"{where}: gate_profile '{show.gate_profile}' is not in "
+                 "config/gate_profiles.toml")
+        if show.kpi_metric and show.kpi_metric not in METRIC_FIELDS:
+            fail(f"{where}: kpi_metric '{show.kpi_metric}' is not a logged metric")
+        if show.slides_min > show.slides_max:
+            fail(f"{where}: slides_min > slides_max")
+    if not FAILURES:
+        ok("every show has a spine, a voice, a real style preset and a valid gate")
+
+
+def check_roster() -> None:
+    section("The Multiverse roster")
+    from chrgd.roster import PROTECTED, load_roster, load_world
+
+    roster = load_roster()
+    if not roster:
+        fail("no roster — config/roster.toml missing; the Multiverse can't cast")
+        return
+    protected = [c for c in roster.values() if c.protected]
+    ok(f"{len(roster)} characters ({len(protected)} under the likeness gate)")
+
+    for char in roster.values():
+        where = f"config/roster.toml [{char.key}]"
+        if char.cls not in ("meme_character", *PROTECTED):
+            fail(f"{where}: unknown class '{char.cls}' — safety rules wouldn't apply")
+        for field_name in ("name", "trait", "visual"):
+            if not getattr(char, field_name, "").strip():
+                fail(f"{where}: no {field_name}")
+        if char.protected and "caricature" not in char.visual_lock().lower():
+            fail(f"{where}: a protected character whose visual lock doesn't "
+                 "force caricature — this is a likeness rule, not a preference")
+        if not char.bits:
+            warn(f"{where}: no signature bits — the engine will invent a "
+                 "personality for them every episode")
+    world = load_world()
+    if world.max_cast < 2:
+        fail("config/roster.toml [world]: max_cast under 2")
+    ok(f"world set: {world.location[:48]}… · max cast {world.max_cast}")
+
+
+def check_content_libraries() -> None:
+    section("Content libraries")
+    from chrgd.character import load_situations
+    from chrgd.ingredients import load_ingredients
+    from chrgd.sessions import load_axes
+    from chrgd.territories import in_season, load_territories
+
+    checks = [
+        ("Amp situations", load_situations(), "config/amp_situations.toml"),
+        ("Straight Up ingredients", load_ingredients(), "config/ingredients.toml"),
+        ("Session axes", load_axes(), "config/session_variants.toml"),
+        ("Live Wire territories", load_territories(), "config/territories.toml"),
+    ]
+    for label, loaded, path in checks:
+        if not loaded:
+            fail(f"{label}: nothing loaded from {path} — that show's screen "
+                 "would open empty")
+        else:
+            ok(f"{label}: {len(loaded)} entries")
+
+    if load_axes():
+        required = [a.label for a in load_axes().values() if a.required]
+        if not required:
+            warn("config/session_variants.toml: no required axes")
+    if load_territories() and not in_season():
+        fail("config/territories.toml: nothing is in season today — Live Wire "
+             "would scan nothing")
+
+
+def check_gate_profiles() -> None:
+    section("Quality gates")
+    from chrgd.claims import PATTERNS
+    from chrgd.shows import load_gate_profiles
+
+    profiles = load_gate_profiles()
+    if not profiles:
+        warn("no gate profiles — every show would be judged on the hot-take "
+             "rubric, which is what the show layer exists to stop")
+    else:
+        ok(f"{len(profiles)} gate profiles: {', '.join(sorted(profiles))}")
+    for key, profile in profiles.items():
+        if not profile.judge_focus.strip():
+            fail(f"config/gate_profiles.toml [{key}]: no judge_focus — it would "
+                 "silently behave as the default profile")
+    ok(f"claims lint: {len(PATTERNS)} patterns armed")
+
+
+# --- the box itself ---------------------------------------------------------
+
+
+def check_render_prerequisites() -> None:
+    section("Rendering")
+    from chrgd.brand import load_brand
+
+    brand = load_brand()
+    for which in ("headline", "supporting"):
+        path = brand.resolve_font(which)
+        if not Path(path).exists():
+            fail(f"brand.toml [fonts] {which}: '{path}' is not on this box — "
+                 "the dry-run preview and any overlay render would crash")
+    ok(f"fonts resolve · canvas {brand.canvas.width}x{brand.canvas.height} "
+       f"{brand.canvas.format}")
+    if brand.canvas.format.lower() == "png":
+        fail("brand.toml [canvas] format = png — TikTok's API rejects PNG")
+
+
+def check_settings() -> None:
+    section("Settings & secrets")
+    from chrgd.config import get_settings
+
+    s = get_settings()
+    if not s.openai_api_key:
+        warn("CHRGD_OPENAI_API_KEY / OPENAI_API_KEY not set — the studio will "
+             "serve, but nothing can be built or rendered")
+    else:
+        ok("OpenAI key present")
+
+    if not (s.web_password or s.web_password_hash):
+        fail("no CHRGD_WEB_PASSWORD or CHRGD_WEB_PASSWORD_HASH — the app would "
+             "be unprotected on the public internet")
+    elif s.web_password and s.web_password.strip().lower() in (
+        "change-me", "changeme", "password", "s3cret", "admin"
+    ):
+        fail("CHRGD_WEB_PASSWORD is still an example value")
+    else:
+        ok("web login configured")
+
+    if not s.secret_key:
+        fail("no CHRGD_SECRET_KEY — session cookies would not be signed")
+    elif len(s.secret_key) < 32:
+        fail(f"CHRGD_SECRET_KEY is {len(s.secret_key)} chars — use 32+")
+    else:
+        ok("session secret set")
+
+    for label, path in (("database", s.db_path.parent), ("output", s.output_dir)):
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+            probe = path / ".preflight"
+            probe.write_text("ok")
+            probe.unlink()
+            ok(f"{label} dir writable: {path}")
+        except OSError as exc:
+            fail(f"{label} dir not writable ({path}): {exc}")
+
+    if s.video_enabled:
+        if not shutil.which("ffmpeg"):
+            fail("CHRGD_VIDEO_ENABLED is true but ffmpeg is not on PATH")
+        if not s.higgsfield_api_key:
+            fail("CHRGD_VIDEO_ENABLED is true but no HIGGSFIELD_API_KEY")
+        if not FAILURES:
+            ok("video enabled and its prerequisites are present")
+    else:
+        ok("video disabled (no paid video call is reachable)")
+
+    ok(f"spend cap per run: ${s.max_spend_per_run:g}")
+
+
+def check_app_boots() -> None:
+    section("Application")
+    try:
+        from chrgd.config import get_settings
+        from chrgd.webapp import create_app
+
+        app = create_app(get_settings())
+        routes = {getattr(r, "path", "") for r in app.routes}
+        for path in ("/create", "/calendar", "/api/shows", "/api/roster",
+                     "/api/canon", "/api/shows/performance"):
+            if path not in routes:
+                fail(f"route {path} is missing")
+        ok(f"app builds · {len(routes)} routes")
+    except Exception as exc:  # noqa: BLE001
+        fail(f"the app failed to build: {type(exc).__name__}: {exc}")
+
+
+def main() -> int:
+    print("CHRGD Content Studio — pre-flight (offline, no paid calls)")
+    for check in (check_shows, check_roster, check_content_libraries,
+                  check_gate_profiles, check_render_prerequisites,
+                  check_settings, check_app_boots):
+        try:
+            check()
+        except Exception as exc:  # noqa: BLE001
+            fail(f"{check.__name__} blew up: {type(exc).__name__}: {exc}")
+
+    print()
+    if FAILURES:
+        print(f"NOT READY — {len(FAILURES)} problem(s):")
+        for f in FAILURES:
+            print(f"  · {f}")
+    if WARNINGS:
+        print(f"\n{len(WARNINGS)} warning(s) (not blocking):")
+        for w in WARNINGS:
+            print(f"  · {w}")
+    if not FAILURES:
+        print("READY — start the service, then run deploy/diagnose.py to test "
+              "the paid path.")
+    return 1 if FAILURES else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

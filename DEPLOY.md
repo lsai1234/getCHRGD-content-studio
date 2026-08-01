@@ -70,6 +70,22 @@ openssl rand -hex 32
 ```
 Paste those into `.env`. Keep `CHRGD_VIDEO_ENABLED=false` for now.
 
+## 4b. Pre-flight (offline, free, do this before starting)
+```bash
+sudo -u chrgd /opt/chrgd/app/.venv/bin/python /opt/chrgd/app/deploy/preflight.py
+```
+Checks everything that would otherwise let the app boot happily and then fail
+the first time you click Create: that all five shows load with a spine, a voice
+and a style preset that actually exists in `brand.toml`; that the Multiverse
+roster is valid and every protected character's visual lock still forces
+caricature; that the content libraries (Amp situations, ingredients, session
+axes, Live Wire territories) aren't empty; that the brand fonts exist **on this
+box**; that the web password and session secret are set and aren't still
+example values; and that the app builds with its routes.
+
+No API key needed, no network, no cost. **Exit 0 means ready.** Fix anything it
+marks ✗ before starting the service — warnings (`!`) are fine to proceed with.
+
 ## 5. Start it
 ```bash
 sudo systemctl start chrgd
@@ -90,8 +106,22 @@ certificate and the login page. Sign in with your username + password.
 > doesn't issue, it's almost always the DNS record (make sure it's **grey
 > cloud** for now) or a blocked port 80/443.
 
+Then test the **paid** path once, which pre-flight deliberately doesn't:
+```bash
+sudo -u chrgd /opt/chrgd/app/.venv/bin/python /opt/chrgd/app/deploy/diagnose.py
+```
+That makes one real chat call and one real low-quality image (~1p) down the
+exact path the create journey uses. It's the only thing that confirms your
+account's image model id and that rendering genuinely works — everything else
+is verified offline.
+
+**Re-run `preflight.py` after every update.** The shows, roster and gate
+profiles are all config files; a typo in one of them is a deploy-time problem
+and this is what turns it into a deploy-time *error* rather than a surprise
+mid-journey.
+
 ## 7. Day-to-day
-**Update to a new version:**
+**Update to a new version:** (run pre-flight after every pull — see 4b)
 ```bash
 cd /opt/chrgd/app && sudo -u chrgd git pull
 sudo -u chrgd /opt/chrgd/app/.venv/bin/pip install -e ".[web,llm,media]"
