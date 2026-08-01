@@ -13,7 +13,9 @@ Each entry carries the four things the engine actually needs:
 - **Visual lock** — the comic-style prompt prefix held identical every render,
   the same trick `chrgd/character.py` uses on Amp.
 - **Safety class** — `meme_character` (no rights holder, no constraints beyond
-  taste) or `public_figure` (the likeness gate applies in full).
+  taste), `public_figure` (the likeness gate applies in full), or `fictional_ip`
+  (a character someone owns — parody latitude, but keep it our drawing, never a
+  copy of theirs).
 
 ---
 
@@ -99,10 +101,15 @@ news framing, punch at status and situation only. All living public figures.
 - **Gym role:** living proof the shortcuts work. The counterargument to every post the account has ever made.
 - **Joke engine:** the direct foil to Haaland — put them in one panel and it writes itself.
 
-### 10. Joe Wicks · `public_figure`
-- **Trait:** relentless, unbreakable, faintly frightening cheerfulness. Cannot be discouraged by any force known to physics.
-- **Gym role:** the volunteer motivator nobody asked for.
-- **Joke engine:** infinite positivity meeting a room of cynical British gym-goers at 6pm on a Tuesday.
+### 10. Tracy Beaker · `fictional_ip`
+> Read as: **Joe Wicks out, Tracy Beaker in.** You wrote it the other way round
+> but Wicks was the one on the list, so I've swapped him out — say if you meant
+> to keep him.
+
+- **Trait:** care-home kid energy in an adult body. Tells enormous, elaborate lies. Fights everyone. Fiercely loyal about ten seconds after screaming at you.
+- **Gym role:** took a free trial pass in 2019 and simply never left. Has a permanent, escalating feud with the front desk.
+- **Joke engine:** a direct nostalgia hit for exactly your 18–30 UK audience, attached to a temper, in a building that runs entirely on queueing politely. Good instinct — she's a stronger foil for Clarkson than Wicks was, because they're both belligerent and neither will back down.
+- **Safety note:** different class from the rest. She's a **fictional character** (Jacqueline Wilson / BBC), so this is copyright/trademark territory rather than publicity rights. Parody has real latitude and the "Tracy Beaker, grown up" format is already a well-worn UK meme genre, so the risk is low — but it's not zero, and it's a different kind of risk from the real people. Keep her a caricature-in-our-style, never a copy of the BBC design.
 
 ### 11. Gordon Ramsay · `public_figure`
 - **Trait:** cannot look at food without rating it; treats a shaker like a failing restaurant.
@@ -112,7 +119,7 @@ news framing, punch at status and situation only. All living public figures.
 ### 12. Jeremy Clarkson · `public_figure`
 - **Trait:** believes fitness is a conspiracy invented to sell water bottles. Attends solely for the sauna and the café.
 - **Gym role:** the resistance. The one voice in the building on the viewer's side at 6am.
-- **Joke engine:** aggressively British anti-wellness — and the best possible foil for Joe Wicks.
+- **Joke engine:** aggressively British anti-wellness — and, now Wicks is out, the best possible foil for Tracy Beaker: two people who have never once conceded a point.
 
 ### 13. Molly-Mae · `public_figure`
 - **Trait:** turns every moment into content and every setback into a lesson. The same 24 hours in a day, deployed relentlessly.
@@ -125,12 +132,35 @@ news framing, punch at status and situation only. All living public figures.
 
 | Who | Trait | Class |
 |---|---|---|
-| Ronnie Coleman | No weight is ever heavy and no consequence is ever real. "Light weight, baby." | `public_figure` |
-| David Goggins | A rest day is a moral failure. Escalation without end. | `public_figure` |
+| **Clavicular** ⚠️ | **Need you to confirm who this is** — I'm not certain enough to write a trait, and a guessed character is a dead character. Send me a link or a description and I'll write the entry properly. Slot held. | ? |
+| **Bonnie Blue** ⚠️ | Everyone in Iron Palace recognises her and nobody will say out loud where from. See the flag below. | `public_figure` |
 | Arnold Schwarzenegger | Dispenses ancient, mildly unhinged wisdom nobody asked for. | `public_figure` |
 | Peter Crouch | Too tall for every piece of equipment, endlessly good-natured about it. | `public_figure` |
 | Roy Keane | Judges your form, your kit, your reasons for being alive. | `public_figure` |
 | Brr Brr Patapim | Speaks only in nonsense and is somehow always right. | `meme_character` |
+
+### The Bonnie Blue flag — your call, but here's the practical problem
+
+She's unquestionably in your audience's cultural conversation, so I understand
+the pick. The difficulty is mechanical rather than moral: she is famous
+*specifically* for sexual stunts, which means a joke about her either leans on
+that — and then we're posting adult-adjacent material on a supplement brand's
+account, which TikTok's guidelines suppress and which fails the likeness gate
+you already approved ("never anything sexual") — or it avoids it, in which case
+she's an unrecognisable generic blonde and there is no joke. The thing that
+makes her funny is the thing we can't put on the slide.
+
+**The version I'd actually build**, if you want to keep her: make the joke
+about *notoriety itself* and never about the content. Every character in Iron
+Palace clocks her instantly, nobody will admit how they know her, and the panel
+is everyone aggressively not making eye contact. That's a status joke, it's
+genuinely funny, it's PG, and it clears the gate. She'd work as a rare guest
+star rather than a regular.
+
+Separately worth knowing: association with adult-content creators can affect an
+account's advertiser-friendly rating, which is a reach question for a brand
+account, not just a taste one. Tell me to put her in as a regular and I will —
+it's your account and your call — I'd just rather you make it knowing that.
 
 **Deliberately left off**, and I'd keep them off: anyone with live legal
 proceedings or allegations attached, anyone famous *for* a supplement scandal
@@ -155,7 +185,8 @@ this is the single most common way a comic serial goes soggy.
 
 ## What I need from you
 
-1. **Cuts.** Which of the 13 don't earn their slot?
-2. **Orangina** — which character do you actually mean?
-3. **Anyone missing** who your audience would clock instantly?
+1. **Orangina** — which character do you actually mean?
+2. **Clavicular** — who is this? Slot held until you tell me.
+3. **Bonnie Blue** — regular, rare guest star on the notoriety joke, or out? **→ default: rare guest star.**
+4. **Anyone else missing** who your audience would clock instantly?
 4. Season 1 = the Villa as planned, or open on the Tournament? **→ default: the Villa, it's the one you started from and the couplings generate more story than a bracket.**

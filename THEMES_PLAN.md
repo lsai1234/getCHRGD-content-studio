@@ -30,7 +30,8 @@ reply "default" and move on where you don't care.
 |---|---|---|
 | D11 | **The Session is goal-framed** (glutes / strength / conditioning / fat loss / mobility), never gender-labelled — but sessions are free to skew in who they appeal to, and **no-equipment is a standing axis**, not a fallback | The variant matrix's "Who" axis becomes **Goal**; targeting lives in the content, not the caption. |
 | D12 | **Coverage nudges, it never enforces** | The engine tracks what's gone stale and suggests; the operator can run two of the same type in a week without a fight. Applies to The Session's matrix and Amp's situation bank alike. |
-| D13 | **Roster drafted for review** — 13 named characters, meme-led with public figures as guest stars, in `MULTIVERSE_ROSTER.md` | Becomes `config/roster.toml`. Iron Palace (Unit 4, a retail park) is the fixed location; the series engine is "the one place in the multiverse where nobody gets special treatment". |
+| D14 | **The Session must be doable by anyone** — named exercises, sets and reps, effort in plain words, no %1RM or RPE scales | The show's brief bans training jargon that assumes history; the legibility gate checks a beginner could follow it unaided. |
+| D13 | **Roster approved with swaps** — Joe Wicks → Tracy Beaker, Ronnie Coleman → Clavicular (pending), David Goggins → Bonnie Blue (flagged), in `MULTIVERSE_ROSTER.md` | Becomes `config/roster.toml`. Iron Palace (Unit 4, a retail park) is the fixed location; the series engine is "the one place in the multiverse where nobody gets special treatment". |
 
 ---
 
@@ -255,12 +256,12 @@ a week because that's what's landing, you do two.
 
 **Questions for you**
 1. ~~Who picks the variant?~~ **DECIDED (D12): the engine suggests from what's gone stale, you pick — and you're free to ignore it entirely.**
-2. **How prescriptive can the workout be?** Named exercises with sets/reps/rest (most useful), or a structure with the loading left to the reader? **→ default: named exercises with sets and reps, RPE not %1RM, and a plain "scale it" line.**
+2. ~~How prescriptive?~~ **DECIDED (D14): easy for anyone.** Named exercises, sets and reps, and effort described in plain words ("stop with about 2 reps left in you") — no %1RM, no RPE scale, no jargon that assumes training history.
 3. ~~Supplement tie-in~~ Category-only for now (D7); revisit when you have a range.
 4. Should each session be **standalone**, or part of a numbered block ("Week 2 of the 6pm-rush plan")? **→ default: standalone — the serial is show 2's job.**
 5. ~~Not funny?~~ **DECIDED (D8): correct — informative and saveable, no jokes.** The gate for this show scores *usefulness and legibility*, not humour or hot-take heat.
 6. ~~Gendered variants~~ **DECIDED (D11): goal-framed**, with sessions free to skew in appeal; **no-equipment is a standing axis**; coverage suggests rather than enforces (D12).
-7. Still open: **how prescriptive** the sets/reps get. **→ default: named exercises with sets and reps, RPE rather than %1RM, and a plain "scale it" line.** The supplement tie-in is category-only for now under D7.
+7. Nothing outstanding on this show — D8, D11, D12 and D14 close it out.
 
 ---
 
