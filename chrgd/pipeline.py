@@ -957,6 +957,29 @@ def build_single_idea(
             store.save_build(idea_id, fields)
         else:
             store.mark_review(idea_id, fields)
+
+        # THE MULTIVERSE writes itself into its own canon. Without this the
+        # serial's memory only grows if someone fills it in by hand, and
+        # episode 2 opens knowing nothing about episode 1 — which is the whole
+        # thing that makes it a serial rather than a weekly sketch.
+        # Recorded even when the post is held for review: the episode was
+        # written, and an operator who edits and approves it shouldn't have to
+        # remember to log it. Idempotent per idea_id, so a rebuild updates the
+        # entry instead of adding a second one.
+        cast_keys = [str(k) for k in (extra.get("cast") or [])]
+        if cast_keys:
+            from .claims import OpenAIClaimsJudge
+            from .series import record_from_post
+
+            _prog(95, "recording the episode into the canon")
+            try:
+                judge = OpenAIClaimsJudge(settings)
+            except Exception:  # noqa: BLE001 — no key: still record, thinly
+                judge = None
+            record_from_post(
+                store, payload, cast_keys=cast_keys, idea_id=idea_id,
+                judge=judge,
+            )
     else:
         store.mark_review(idea_id, {})
 

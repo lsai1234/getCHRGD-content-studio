@@ -57,6 +57,37 @@ class Episode(BaseModel):
         return text
 
 
+class CharacterCanon(BaseModel):
+    """What this show has established about one character, as it goes.
+
+    The roster gives a character their seed bits; this is what they BECOME.
+    A running gag is only running if the engine knows it ran, so every episode
+    adds what it landed and the next brief plays or escalates it.
+    """
+
+    #: Where they stand right now — free text, one line.
+    standing: str = ""
+    #: Bits this show has actually landed for them, newest last.
+    gags: list[str] = Field(default_factory=list)
+    #: How they stand with other characters, keyed by roster key.
+    relationships: dict[str, str] = Field(default_factory=dict)
+    episodes: int = 0
+
+    def add_gags(self, gags: list[str], *, cap: int = 6) -> None:
+        """Append new bits, de-duped, keeping the most recent `cap`.
+
+        Capped because the cast block goes into every episode's prompt: an
+        uncapped list would grow until the brief was mostly history, and the
+        oldest gags are the ones a serial has already wrung dry.
+        """
+        for gag in gags:
+            gag = (gag or "").strip()
+            if gag and gag not in self.gags:
+                self.gags.append(gag)
+        if len(self.gags) > cap:
+            del self.gags[:-cap]
+
+
 class Season(BaseModel):
     key: str = "villa"
     label: str = "The Villa"
@@ -73,8 +104,13 @@ class Season(BaseModel):
 class Canon(BaseModel):
     season: Season = Field(default_factory=Season)
     episodes: list[Episode] = Field(default_factory=list)
-    #: Where each character stands right now, keyed by roster key. Free text,
-    #: written by the operator or carried forward from an episode.
+    #: What the show has established per character, keyed by roster key —
+    #: standing, running gags, relationships. This is the half that makes a
+    #: returning character feel like one.
+    characters: dict[str, CharacterCanon] = Field(default_factory=dict)
+    #: Legacy/simple form: a one-line standing per character. Kept because the
+    #: operator may edit it directly and it predates `characters`; it is folded
+    #: into the brief alongside the richer record rather than replaced.
     standing: dict[str, str] = Field(default_factory=dict)
     #: Anything the operator wants every episode to know. The escape hatch that
     #: stops the structure above becoming a cage.
@@ -85,6 +121,22 @@ class Canon(BaseModel):
 
     def recent(self, depth: int = RECAP_DEPTH) -> list[Episode]:
         return sorted(self.episodes, key=lambda e: e.number)[-depth:]
+
+    def for_character(self, key: str) -> CharacterCanon:
+        return self.characters.get(key) or CharacterCanon()
+
+    def gags(self, keys: list[str] | None = None) -> dict[str, list[str]]:
+        """Landed bits per character, for the cast brief."""
+        wanted = set(keys) if keys else None
+        return {
+            key: rec.gags
+            for key, rec in self.characters.items()
+            if rec.gags and (wanted is None or key in wanted)
+        }
+
+    def standing_for(self, key: str) -> str:
+        """The one-line standing, from either place it can be written."""
+        return (self.for_character(key).standing or self.standing.get(key, "")).strip()
 
     def open_thread(self) -> str:
         """What the most recent episode left hanging — the next one owes this."""
@@ -113,18 +165,31 @@ class Canon(BaseModel):
             lines.append(
                 f"THE OPEN THREAD this episode owes the audience: {thread}"
             )
-        standing = {
-            k: v for k, v in self.standing.items()
-            if v.strip() and (cast_keys is None or k in set(cast_keys))
-        }
+        keys = set(cast_keys) if cast_keys is not None else (
+            set(self.characters) | set(self.standing)
+        )
+        standing: list[tuple[str, str]] = []
+        for key in sorted(keys):
+            note = self.standing_for(key)
+            if note:
+                standing.append((key, note))
         if standing:
             from .roster import get_character
 
             lines.append("")
             lines.append("WHERE THE CAST STANDS RIGHT NOW:")
-            for key, note in standing.items():
+            for key, note in standing:
                 char = get_character(key)
-                lines.append(f"- {char.name if char else key}: {note}")
+                rec = self.for_character(key)
+                line = f"- {char.name if char else key}: {note}"
+                if rec.relationships:
+                    rels = "; ".join(
+                        f"{(get_character(k).name if get_character(k) else k)}: {v}"
+                        for k, v in rec.relationships.items() if v.strip()
+                    )
+                    if rels:
+                        line += f"  (with — {rels})"
+                lines.append(line)
         if self.notes.strip():
             lines.append("")
             lines.append(f"THE OPERATOR'S NOTES (these outrank the above): {self.notes.strip()}")
@@ -213,13 +278,153 @@ def record_episode(
 
 
 def episode_brief(store: Store, cast_keys: list[str] | None = None) -> str:
-    """The full Multiverse brief: the world, the cast, and the canon."""
+    """The full Multiverse brief: the world, the cast (with their landed running
+    gags) and the canon."""
     from .roster import cast_block, load_world, resolve
 
     cast = resolve(cast_keys)
+    canon = load_canon(store)
+    keys = [c.key for c in cast]
     blocks = [
         load_world().as_block(),
-        cast_block(cast),
-        load_canon(store).brief_block(cast_keys=[c.key for c in cast] or None),
+        cast_block(cast, gags=canon.gags(keys or None)),
+        canon.brief_block(cast_keys=keys or None),
     ]
     return "\n\n".join(b for b in blocks if b)
+
+
+# --- writing the canon back, automatically ----------------------------------
+
+
+EXTRACT_SYSTEM = """You are the continuity editor for a comic serial. You have just been given a finished episode. Record what it established, so the next episode can build on it.
+
+Be strict about three things:
+- ONE STATUS CHANGE. Name the single thing that changed for someone: who gained, lost or learned. Not a summary of the plot — the change.
+- THE OPEN THREAD. What the ending deliberately left unresolved, in the audience's words. This is the debt the next episode owes.
+- RUNNING GAGS. For each character, any repeatable BIT this episode established or escalated — something a future episode could play again and build on. A one-off line is not a bit. If a character did nothing repeatable, give them an empty list. Never invent a gag that isn't in the episode.
+
+Also note where each character now STANDS in one short line, and any relationship that visibly changed.
+
+Return a SINGLE JSON object, no markdown:
+{
+  "title": "a short episode title",
+  "change": "the one status change, one line",
+  "unresolved": "the open thread, one line",
+  "characters": {
+    "<roster key>": {
+      "standing": "one line on where they now stand",
+      "gags": ["a repeatable bit this episode established"],
+      "relationships": {"<other roster key>": "how they now stand with them"}
+    }
+  }
+}"""
+
+
+class EpisodeRecord(BaseModel):
+    title: str = ""
+    change: str = ""
+    unresolved: str = ""
+    characters: dict[str, CharacterCanon] = Field(default_factory=dict)
+
+
+def _episode_payload(post: dict, cast_keys: list[str]) -> str:
+    from .roster import get_character
+
+    lines = []
+    if cast_keys:
+        names = ", ".join(
+            f"{k} ({get_character(k).name})" if get_character(k) else k
+            for k in cast_keys
+        )
+        lines.append(f"Cast (use these exact roster keys): {names}")
+        lines.append("")
+    lines.append("THE EPISODE:")
+    for i, slide in enumerate(post.get("slides") or [], 1):
+        for field_name in ("headline", "supporting", "body"):
+            text = str((slide or {}).get(field_name) or "").strip()
+            if text:
+                lines.append(f"[slide {i}] {text}")
+    caption = str(post.get("caption") or "").strip()
+    if caption:
+        lines.append(f"[caption] {caption}")
+    return "\n".join(lines)
+
+
+def parse_record(text: str) -> EpisodeRecord:
+    raw = (text or "").strip()
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in the episode record")
+    return EpisodeRecord.model_validate(json.loads(raw[start:end + 1]))
+
+
+def _fallback_record(post: dict, cast_keys: list[str]) -> EpisodeRecord:
+    """What gets written when there's no model to extract with.
+
+    Deliberately not nothing: an episode that isn't recorded breaks the serial
+    far more than a thin entry does, so we keep the hook as the change and the
+    last slide as the open thread and let the operator sharpen it.
+    """
+    slides = post.get("slides") or []
+    first = str((slides[0] or {}).get("headline") or "").strip() if slides else ""
+    last = str((slides[-1] or {}).get("headline") or "").strip() if slides else ""
+    return EpisodeRecord(
+        title=first[:60],
+        change=first or "(not recorded — add what changed)",
+        unresolved=last,
+        characters={k: CharacterCanon() for k in cast_keys},
+    )
+
+
+def record_from_post(
+    store: Store,
+    post: dict,
+    *,
+    cast_keys: list[str],
+    idea_id: str = "",
+    judge=None,
+    use_judge: bool = True,
+) -> Episode:
+    """Extract what an episode established and write it into the canon.
+
+    This is what makes the serial actually serial. Without it the canon only
+    grows if someone remembers to fill it in by hand, and episode 2 opens
+    knowing nothing about episode 1.
+
+    Never raises: on any LLM/parse failure it falls back to a thin entry rather
+    than losing the episode, because a gap in a serial's memory is worse than
+    an imprecise line the operator can edit.
+    """
+    record = None
+    if use_judge and judge is not None:
+        try:
+            record = parse_record(
+                judge.judge(EXTRACT_SYSTEM, _episode_payload(post, cast_keys))
+            )
+        except Exception:  # noqa: BLE001 — never lose an episode to a bad call
+            record = None
+    if record is None:
+        record = _fallback_record(post, cast_keys)
+
+    canon = load_canon(store)
+    episode = record_episode(
+        store, change=record.change, unresolved=record.unresolved,
+        title=record.title, cast=cast_keys, idea_id=idea_id,
+    )
+    # record_episode persisted; re-read so we extend rather than clobber it.
+    canon = load_canon(store)
+    from .roster import get_character
+
+    for key, incoming in (record.characters or {}).items():
+        if get_character(key) is None:
+            continue        # the roster is the allow-list here too
+        rec = canon.characters.setdefault(key, CharacterCanon())
+        if incoming.standing.strip():
+            rec.standing = incoming.standing.strip()
+        rec.add_gags(incoming.gags)
+        for other, note in (incoming.relationships or {}).items():
+            if get_character(other) is not None and str(note).strip():
+                rec.relationships[other] = str(note).strip()
+        rec.episodes += 1
+    save_canon(store, canon)
+    return episode

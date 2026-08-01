@@ -371,6 +371,27 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         with _store(settings) as store:
             return suggestion(store)
 
+    def _roster_with_canon(settings) -> list[dict]:
+        """The roster, plus what the show has actually established for each —
+        so the cast picker shows who's carrying a storyline, not just a trait."""
+        from .roster import load_roster
+        from .series import load_canon
+
+        with _store(settings) as store:
+            canon = load_canon(store)
+        out = []
+        for c in load_roster().values():
+            rec = canon.for_character(c.key)
+            out.append({
+                "key": c.key, "name": c.name, "cls": c.cls, "what": c.what,
+                "trait": c.trait, "protected": c.protected,
+                "catchphrase": c.catchphrase,
+                "standing": canon.standing_for(c.key),
+                "gags": rec.gags,
+                "episodes": rec.episodes,
+            })
+        return out
+
     def _canon_summary(settings) -> dict:
         from .series import load_canon
 
@@ -428,11 +449,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             ],
             session_nudge=_session_nudge(settings),
             # THE MULTIVERSE's own screen: the roster and where the canon is.
-            roster=[
-                {"key": c.key, "name": c.name, "cls": c.cls, "what": c.what,
-                 "trait": c.trait, "protected": c.protected}
-                for c in load_roster().values()
-            ],
+            roster=_roster_with_canon(settings),
             canon=_canon_summary(settings),
             # LIVE WIRE's own screen: the in-season interest territories.
             territories=[

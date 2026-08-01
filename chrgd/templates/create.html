@@ -659,8 +659,10 @@
       {% for c in roster %}
       <button type="button" class="sit" data-cast="{{ c.key }}"
               onclick="pickCast('{{ c.key }}', this)">
-        <span class="sit-t">{{ c.name }}{% if c.protected %} <span class="sit-used">caricature only</span>{% endif %}</span>
+        <span class="sit-t">{{ c.name }}{% if c.episodes %} <span class="sit-used">{{ c.episodes }} ep{{ '' if c.episodes == 1 else 's' }}</span>{% endif %}{% if c.protected %} <span class="sit-used">caricature only</span>{% endif %}</span>
         <span class="sit-s">{{ c.trait }}</span>
+        {% if c.standing %}<span class="sit-s" style="color:var(--accent)">Now: {{ c.standing }}</span>{% endif %}
+        {% if c.gags %}<span class="sit-s" style="color:var(--faint)">Running: {{ c.gags|join('; ') }}</span>{% endif %}
       </button>
       {% endfor %}
     </div>

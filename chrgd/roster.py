@@ -65,6 +65,13 @@ class Character(BaseModel):
     trait: str = ""
     role: str = ""
     visual: str = ""
+    #: The seed jokes. A character defined only by a trait sentence makes the
+    #: engine invent a personality every episode; a catchphrase and two or
+    #: three concrete running gags give it something to play and escalate from
+    #: episode one. What the show actually lands gets added per character in
+    #: the canon (chrgd/series.py) — the roster is where they begin.
+    catchphrase: str = ""
+    bits: list[str] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 
@@ -72,10 +79,18 @@ class Character(BaseModel):
     def protected(self) -> bool:
         return self.cls in PROTECTED
 
-    def brief_line(self) -> str:
+    def brief_line(self, *, extra_bits: list[str] | None = None) -> str:
         line = f"- {self.name} ({self.what}) — {self.trait}"
         if self.role:
             line += f" In the gym: {self.role}"
+        if self.catchphrase:
+            line += f' Catchphrase: "{self.catchphrase}"'
+        gags = list(self.bits) + [b for b in (extra_bits or []) if b not in self.bits]
+        if gags:
+            line += (
+                "\n    Established running gags — play or ESCALATE these, never "
+                "re-explain them: " + "; ".join(gags)
+            )
         if self.protected:
             line += (
                 "  [CARICATURE ONLY — never photoreal, never using or "
@@ -136,15 +151,26 @@ def name_index() -> dict[str, Character]:
     return {c.name.lower(): c for c in load_roster().values()}
 
 
-def cast_block(cast: list[Character]) -> str:
-    """The cast, as the instruction an episode is written from."""
+def cast_block(
+    cast: list[Character], *, gags: dict[str, list[str]] | None = None
+) -> str:
+    """The cast, as the instruction an episode is written from.
+
+    `gags` carries the bits this show has ALREADY landed for each character
+    (from the canon), on top of the seed bits in the roster. That accumulation
+    is what makes a returning character feel like a returning character rather
+    than the same premise re-stated — a running gag is only running if the
+    engine knows it ran.
+    """
     if not cast:
         return ""
     lines = [
         "THIS EPISODE'S CAST — use these characters and no others. Play each "
-        "one's established trait; the trait is the joke engine:",
+        "one's established trait and their running gags; those ARE the joke "
+        "engine. A gag lands harder the third time if it escalates, so build "
+        "on what's established rather than restating it:",
     ]
-    lines += [c.brief_line() for c in cast]
+    lines += [c.brief_line(extra_bits=(gags or {}).get(c.key)) for c in cast]
     return "\n".join(lines)
 
 

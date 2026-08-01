@@ -394,3 +394,241 @@ def test_no_cast_means_no_lock():
 
     assert _cast_lock_for(idea(show="amp")) == ""
     assert _cast_lock_for(idea()) == ""
+
+
+# --- the canon writes itself (and the gags accumulate) ----------------------
+
+
+def _built_episode(*headlines):
+    return {
+        "post_type": "carousel", "hook": headlines[0],
+        "hook_options": ["a", "b", "c"],
+        "slides": [{"headline": h, "supporting": "s", "image_prompt": "a comic panel",
+                    "visual_intent": "v", "role": "hook", "swipe_trigger": "t"}
+                   for h in headlines],
+        "caption": "who wins?", "comment_trigger": "who wins?",
+        "hashtags": ["#gym"] * 6,
+        "route": {"mechanic": "m", "visual_engine": "v", "primary_goal": "g",
+                  "qa": {k: 10 for k in (
+                      "hook", "swipe_loop", "identity_recognition",
+                      "group_chat_share", "comment_fight", "saveability",
+                      "visual_originality", "dopamine_density", "clarity",
+                      "layout_safety", "claim_safety", "overall")}},
+    }
+
+
+class _Continuity:
+    """A stand-in continuity editor: returns whatever record it was given."""
+
+    def __init__(self, record):
+        self._record = record
+
+    def judge(self, system, user):
+        self.saw = user
+        return json.dumps(self._record)
+
+
+def test_the_roster_seeds_every_character_with_real_jokes():
+    """A trait sentence alone makes the engine invent a personality each week."""
+    for char in load_roster().values():
+        assert char.catchphrase, f"{char.key} has no catchphrase"
+        assert len(char.bits) >= 3, f"{char.key} has too few signature bits"
+    line = get_character("orangina").brief_line()
+    assert "But is it clean though?" in line
+    assert "Established running gags" in line
+
+
+def test_landed_gags_are_added_to_the_seed_ones_in_the_brief():
+    from chrgd.roster import cast_block
+
+    block = cast_block(resolve(["orangina"]),
+                       gags={"orangina": ["appeals every ban on ingredient grounds"]})
+    assert "appeals every ban" in block          # the landed one
+    assert "but is it clean" in block.lower()    # and the seed one
+    assert "ESCALATE" in block
+
+
+def test_a_build_records_its_own_episode(store, settings, monkeypatch):
+    """The gap this closes: without it the canon only grows by hand and
+    episode 2 opens knowing nothing about episode 1."""
+    from chrgd import pipeline
+
+    store.add_idea(idea(show="multiverse", cast=["orangina", "ramsay"]))
+    built = _built_episode("Orangina inspects the sauna",
+                           "Ramsay rates her three out of ten")
+
+    class FakeClient:
+        def complete(self, system, user):
+            return pipeline.LLMResult(content=json.dumps(built),
+                                      prompt_tokens=1, completion_tokens=1)
+
+    monkeypatch.setattr(
+        pipeline, "build_user_message", pipeline.build_user_message
+    )
+    # no API key in the test settings → the continuity editor can't be built,
+    # so this exercises the fallback path: the episode is still recorded.
+    result = pipeline.build_single_idea(store, settings, "G1",
+                                        client=FakeClient(), record_run=False)
+    canon = load_canon(store)
+    assert len(canon.episodes) == 1
+    assert canon.episodes[0].idea_id == "G1"
+    assert canon.episodes[0].cast == ["orangina", "ramsay"]
+    assert canon.next_number() == 2
+    assert result.status in (Status.done, Status.review)
+
+
+def test_a_rebuild_updates_the_entry_rather_than_adding_another(store, settings):
+    from chrgd import pipeline
+
+    store.add_idea(idea(show="multiverse", cast=["orangina"]))
+    built = _built_episode("Orangina inspects the sauna")
+
+    class FakeClient:
+        def complete(self, system, user):
+            return pipeline.LLMResult(content=json.dumps(built),
+                                      prompt_tokens=1, completion_tokens=1)
+
+    pipeline.build_single_idea(store, settings, "G1", client=FakeClient(),
+                               record_run=False)
+    pipeline.build_single_idea(store, settings, "G1", client=FakeClient(),
+                               record_run=False)
+    assert len(load_canon(store).episodes) == 1
+
+
+def test_a_non_multiverse_build_records_nothing(store, settings):
+    from chrgd import pipeline
+
+    store.add_idea(idea(show="amp"))
+    built = _built_episode("Amp forgets his trainers")
+
+    class FakeClient:
+        def complete(self, system, user):
+            return pipeline.LLMResult(content=json.dumps(built),
+                                      prompt_tokens=1, completion_tokens=1)
+
+    pipeline.build_single_idea(store, settings, "G1", client=FakeClient(),
+                               record_run=False)
+    assert load_canon(store).episodes == []
+
+
+def test_the_continuity_editor_extracts_gags_and_standings(store):
+    from chrgd.series import record_from_post
+
+    judge = _Continuity({
+        "title": "Clean Living",
+        "change": "Orangina got barred from the sauna",
+        "unresolved": "whether she appeals",
+        "characters": {
+            "orangina": {"standing": "barred from the sauna",
+                         "gags": ["appeals every ban on ingredient grounds"],
+                         "relationships": {"ramsay": "open warfare"}},
+            "ramsay": {"standing": "undefeated at the protein bar",
+                       "gags": ["rates people out of ten unprompted"]},
+        },
+    })
+    record_from_post(store, {"slides": [{"headline": "x"}], "caption": "c"},
+                     cast_keys=["orangina", "ramsay"], idea_id="G1", judge=judge)
+
+    canon = load_canon(store)
+    assert canon.episodes[0].title == "Clean Living"
+    assert canon.open_thread() == "whether she appeals"
+    assert canon.standing_for("orangina") == "barred from the sauna"
+    assert canon.gags()["ramsay"] == ["rates people out of ten unprompted"]
+    assert canon.characters["orangina"].relationships == {"ramsay": "open warfare"}
+    assert canon.characters["orangina"].episodes == 1
+
+
+def test_gags_accumulate_across_episodes(store):
+    from chrgd.series import record_from_post
+
+    for n, gag in enumerate(["appeals every ban", "brings a lawyer"], 1):
+        record_from_post(
+            store, {"slides": [{"headline": "x"}]}, cast_keys=["orangina"],
+            idea_id=f"G{n}",
+            judge=_Continuity({"change": f"c{n}", "unresolved": "u",
+                               "characters": {"orangina": {"gags": [gag]}}}),
+        )
+    canon = load_canon(store)
+    assert canon.gags()["orangina"] == ["appeals every ban", "brings a lawyer"]
+    assert canon.characters["orangina"].episodes == 2
+
+
+def test_a_repeated_gag_is_not_duplicated(store):
+    from chrgd.series import record_from_post
+
+    for n in (1, 2):
+        record_from_post(
+            store, {"slides": [{"headline": "x"}]}, cast_keys=["orangina"],
+            idea_id=f"G{n}",
+            judge=_Continuity({"change": "c", "characters": {
+                "orangina": {"gags": ["appeals every ban"]}}}),
+        )
+    assert load_canon(store).gags()["orangina"] == ["appeals every ban"]
+
+
+def test_gags_are_capped_so_the_brief_stays_lean(store):
+    from chrgd.series import record_from_post
+
+    for n in range(10):
+        record_from_post(
+            store, {"slides": [{"headline": "x"}]}, cast_keys=["orangina"],
+            idea_id=f"G{n}",
+            judge=_Continuity({"change": "c", "characters": {
+                "orangina": {"gags": [f"gag {n}"]}}}),
+        )
+    gags = load_canon(store).gags()["orangina"]
+    assert len(gags) == 6
+    assert gags[-1] == "gag 9"       # the newest survive, the wrung-dry go
+
+
+def test_the_continuity_editor_cannot_invent_a_character(store):
+    """The roster is the allow-list here too."""
+    from chrgd.series import record_from_post
+
+    record_from_post(
+        store, {"slides": [{"headline": "x"}]}, cast_keys=["orangina"],
+        idea_id="G1",
+        judge=_Continuity({"change": "c", "characters": {
+            "orangina": {"gags": ["a real one"]},
+            "andrew_tate": {"gags": ["should never appear"]}}}),
+    )
+    canon = load_canon(store)
+    assert "andrew_tate" not in canon.characters
+    assert "orangina" in canon.characters
+
+
+def test_a_broken_extraction_still_records_the_episode(store):
+    """A gap in a serial's memory is worse than an imprecise line."""
+    from chrgd.series import record_from_post
+
+    class Exploding:
+        def judge(self, system, user):
+            raise RuntimeError("api down")
+
+    record_from_post(store, {"slides": [{"headline": "Orangina vs the sauna"},
+                                        {"headline": "to be continued"}]},
+                     cast_keys=["orangina"], idea_id="G1", judge=Exploding())
+    canon = load_canon(store)
+    assert len(canon.episodes) == 1
+    assert "Orangina vs the sauna" in canon.episodes[0].change
+    assert canon.episodes[0].unresolved == "to be continued"
+
+
+def test_the_accumulated_gags_reach_the_next_episodes_brief(store):
+    """The whole point: what episode 1 landed is in episode 2's instructions."""
+    from chrgd.series import record_from_post
+
+    record_from_post(
+        store, {"slides": [{"headline": "x"}]}, cast_keys=["orangina"],
+        idea_id="G1",
+        judge=_Continuity({"change": "Orangina was barred", "unresolved": "the appeal",
+                           "characters": {"orangina": {
+                               "standing": "barred from the sauna",
+                               "gags": ["appeals every ban on ingredient grounds"]}}}),
+    )
+    msg = build_user_message(idea(show="multiverse", cast=["orangina"]), store=store)
+    assert "appeals every ban on ingredient grounds" in msg   # the landed gag
+    assert "But is it clean though?" in msg                   # the seed catchphrase
+    assert "barred from the sauna" in msg                     # where she stands
+    assert "the appeal" in msg                                # the open thread
+    assert "THIS IS EPISODE 2" in msg

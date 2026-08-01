@@ -364,6 +364,34 @@ role and the **safety class** (`meme_character` / `public_figure` /
 `fictional_ip`). **New `chrgd/roster.py`**: load, cast 2–4 per episode, and
 emit each character's locked prefix, mirroring `character.py`'s proven pattern.
 
+### 3.2b The canon writes itself, and the jokes accumulate · ✅ **BUILT**
+
+The gap in the first cut: `record_episode` existed but nothing called it, so
+the canon only grew by hand and episode 2 opened knowing nothing about episode
+1. And a character was defined by a single trait sentence, which makes the
+engine reinvent their personality every week.
+
+Both closed:
+
+* **Seed jokes in the roster.** Every character now carries a `catchphrase` and
+  three signature `bits` — concrete, reusable gags rather than a description of
+  a temperament. Episode one already has material to play.
+* **`series.record_from_post`** runs after every Multiverse build: a cheap
+  continuity-editor pass extracts the episode's one status change, its open
+  thread, and — per character — any repeatable BIT it established, plus where
+  they now stand and any relationship that shifted. Written straight into the
+  canon. Idempotent per `idea_id`; recorded even when the post is held for
+  review, because the episode was still written.
+* **Gags accumulate and feed forward.** `cast_block` merges a character's seed
+  bits with what the show has actually landed, and tells the engine to *play or
+  escalate* them rather than restate them. Capped at six per character so the
+  brief stays lean — the oldest gags are the ones a serial has wrung dry.
+* **Never loses an episode.** No key, or a failed extraction, falls back to a
+  thin entry built from the hook and the last slide. A gap in a serial's memory
+  is worse than an imprecise line the operator can edit.
+* The roster is the allow-list here too: a continuity pass that invents a
+  character key is ignored.
+
 ### 3.2 Canon, authored in the studio · M
 **New `chrgd/series.py`** + a `series` / `episode` store (`chrgd/db.py`
 `Store`). Each episode writes what changed — who won, who lost, who now hates
