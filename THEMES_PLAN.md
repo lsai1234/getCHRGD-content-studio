@@ -24,6 +24,14 @@ reply "default" and move on where you don't care.
 | D9 | **Live Wire is the overflow lane**, weighted to big gym news and new science, and retargeted from "UK trending" to **what 18–30 UK gym-goers are actually into** (reality TV, football, holidays, money) — fitness-adjacent, not fitness-only | The scout gains an **audience-interest territory model** in place of a generic country-wide trend scan. This is the substantive change to `trends.py`. |
 | D10 | **Shows are named on screen** | Each show's look pack carries a title treatment; a show tag becomes part of its furniture. |
 
+### Round 3
+
+| # | Decision | Consequence |
+|---|---|---|
+| D11 | **The Session is goal-framed** (glutes / strength / conditioning / fat loss / mobility), never gender-labelled — but sessions are free to skew in who they appeal to, and **no-equipment is a standing axis**, not a fallback | The variant matrix's "Who" axis becomes **Goal**; targeting lives in the content, not the caption. |
+| D12 | **Coverage nudges, it never enforces** | The engine tracks what's gone stale and suggests; the operator can run two of the same type in a week without a fight. Applies to The Session's matrix and Amp's situation bank alike. |
+| D13 | **Roster drafted for review** — 13 named characters, meme-led with public figures as guest stars, in `MULTIVERSE_ROSTER.md` | Becomes `config/roster.toml`. Iron Palace (Unit 4, a retail park) is the fixed location; the series engine is "the one place in the multiverse where nobody gets special treatment". |
+
 ---
 
 ## 0. The diagnosis (why the create journey feels like it's doing too much)
@@ -219,22 +227,40 @@ the show. I'll design for that hook and leave it unpopulated.
 | **Reuses** | `five_mistakes` / `read_before` skeletons; the `body` block already in the `Slide` model is exactly the dense readable block a workout needs. |
 | **Needs new** | **The variant matrix** — the show's whole identity is that it's segmented — plus a rotation memory so you don't do "after-work weights" three weeks running, and a legibility check on the session slide. |
 
-**The variant axes I'd build the picker from** (pick one per axis, engine fills the rest):
+**Goal-framed, not gender-framed (D11).** The framing on the slide is always
+the goal — glutes and lower body, upper-body strength, conditioning, fat loss,
+mobility. That doesn't stop a session naturally appealing more to one group: a
+glute-focused session finds its audience without ever needing a "for the girls"
+label on it, and it stays useful to everyone else. The targeting happens in the
+*content*, not the caption.
 
-- **Who** — lads / girls / mixed / beginner / returning-after-a-break / over-40
+**The variant axes** (pick one per axis; the engine fills the rest):
+
+- **Goal** — lower body/glutes · upper-body strength · full-body conditioning · fat loss · endurance · mobility & recovery
 - **When** — 5am before work · lunch break (30 min) · the 6pm rush · late-night quiet gym
-- **What** — weights · cardio · HIIT · hybrid-Hyrox · mobility/recovery
-- **Where** — full gym · hotel/minimal kit · home, no equipment · outdoors
-- **Supplement tie-in** — pre-workout (timing) · intra (hydration/endurance) · post (recovery) · everyday (creatine/protein baseline)
+- **How** — weights · cardio · HIIT · hybrid/Hyrox · circuits
+- **Where** — full gym · minimal kit (hotel, home rack) · **no equipment at all** · outdoors
+- **Level** — first month · returning after a break · experienced
+- **Supplement tie-in** — pre-workout (timing) · intra (hydration/endurance) · post (recovery) · everyday baseline
+
+**No-gym-needed is a first-class axis, not a fallback.** It's the variant with
+the biggest addressable audience — people who haven't joined a gym yet, people
+away for work, January — and it should come round regularly rather than being
+the thing we do when we've run out of ideas.
+
+**Coverage is a nudge, not a rota (D12).** The engine tracks what's been
+covered and *suggests* what's gone stale ("no no-equipment session in four
+weeks"), but it never blocks or forces. If you want two lower-body sessions in
+a week because that's what's landing, you do two.
 
 **Questions for you**
-1. **Who picks the variant?** You choose from the matrix each week, the engine auto-rotates to cover the grid, or it suggests and you confirm? **→ default: suggests-and-you-confirm, driven by what hasn't been covered recently.**
-2. **How prescriptive can the workout be?** Named exercises with sets/reps/rest (most useful, most liability), or a structure with the loading left to the reader? **→ default: named exercises with sets and reps, RPE not %1RM, and a plain "scale it" line.**
-3. Does the supplement tie-in have to be **ours**, generic ("a pre-workout"), or the *category with our product named once*? **→ default: category first, named once, always as timing advice.**
-4. Should each session be **standalone**, or part of a numbered block ("Week 2 of the 6pm-rush plan") that gives people a reason to come back? **→ default: standalone for now — a block is show 2's job.**
+1. ~~Who picks the variant?~~ **DECIDED (D12): the engine suggests from what's gone stale, you pick — and you're free to ignore it entirely.**
+2. **How prescriptive can the workout be?** Named exercises with sets/reps/rest (most useful), or a structure with the loading left to the reader? **→ default: named exercises with sets and reps, RPE not %1RM, and a plain "scale it" line.**
+3. ~~Supplement tie-in~~ Category-only for now (D7); revisit when you have a range.
+4. Should each session be **standalone**, or part of a numbered block ("Week 2 of the 6pm-rush plan")? **→ default: standalone — the serial is show 2's job.**
 5. ~~Not funny?~~ **DECIDED (D8): correct — informative and saveable, no jokes.** The gate for this show scores *usefulness and legibility*, not humour or hot-take heat.
-6. **Gendered variants** — still open. Comfortable posting "for the girls" / "for the lads" framing, or keep it goal-framed (glutes/strength/conditioning)? **→ default: goal-framed — the algorithm segments better on goal than on gender and it ages better.**
-7. Still open from round 1: **who picks the variant** (Q1), **how prescriptive** the sets/reps get (Q2), and the **supplement tie-in** rule (Q3 — noting D7 means there's no own-brand product to name yet, so it's category-only for now).
+6. ~~Gendered variants~~ **DECIDED (D11): goal-framed**, with sessions free to skew in appeal; **no-equipment is a standing axis**; coverage suggests rather than enforces (D12).
+7. Still open: **how prescriptive** the sets/reps get. **→ default: named exercises with sets and reps, RPE rather than %1RM, and a plain "scale it" line.** The supplement tie-in is category-only for now under D7.
 
 ---
 
