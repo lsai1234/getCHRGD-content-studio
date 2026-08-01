@@ -9,6 +9,7 @@ tagline = "A real session you can screenshot and do."
 blurb = "Segmented by goal, time and kit — the most saveable thing the account posts."
 icon = "🏋️"
 weekday = "mon"
+kpi_metric = "saves"
 kpi = "saves per view — the clearest number of the five"
 slides_min = 5
 slides_max = 7

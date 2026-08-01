@@ -73,6 +73,7 @@ def _route(idea: Idea) -> dict:
 # blank since the picker was removed). Pillar, engagement play and slide-count
 # bucket are the levers the rubric says actually drive reach.
 SKEW_TRAITS = (
+    "show",
     "category", "mechanic", "pillar", "engagement_play", "slide_count", "casting",
 )
 
@@ -104,6 +105,10 @@ def _traits(idea: Idea) -> dict:
     """The comparable features of one post."""
     route = _route(idea)
     return {
+        # Which recurring show this was an episode of. The single most useful
+        # trait now that the account posts five formats — everything else here
+        # is a property OF a post, this is a property of the show that made it.
+        "show": route.get("show", ""),
         "category": idea.content_category or "uncategorised",
         "mechanic": route.get("mechanic", ""),
         "style": route.get("style", ""),
@@ -179,6 +184,116 @@ def insights(store: Store, top_n: int = 5) -> dict:
         "scroll_calibration": scroll_calibration(store),
         **rating_summary(store),
     }
+
+
+# Below this many logged posts a show's numbers are noise, and saying so is
+# more useful than a confident median over two posts.
+MIN_POSTS_FOR_VERDICT = 4
+
+
+def show_scoreboard(store: Store) -> dict:
+    """How each show is actually doing, judged on its OWN KPI.
+
+    The reason this exists: without it the five-show plan is a guess that never
+    resolves. Ranking every show on views would be the wrong question — AMP is
+    built for shares and THE SESSION for saves, and a save-heavy show will look
+    mediocre on views while doing exactly its job. So each show declares a
+    `kpi_metric` and is scored on that, per 1,000 views so a show isn't
+    rewarded merely for having been lucky on reach.
+
+    Small-n honesty throughout, matching the rest of this module: a show with
+    fewer than MIN_POSTS_FOR_VERDICT logged posts reports "not enough yet"
+    rather than a number that reads like a finding.
+    """
+    from .shows import load_shows
+
+    logged = [(i, _metrics(i)) for i in store.ideas_with_metrics()]
+    logged = [(i, m) for i, m in logged if m.get("views", 0) > 0]
+    baseline = int(median([m["views"] for _, m in logged])) if logged else 0
+
+    by_show: dict[str, list[tuple]] = {}
+    for idea, m in logged:
+        key = _traits(idea)["show"]
+        if key:
+            by_show.setdefault(key, []).append((idea, m))
+
+    rows: list[dict] = []
+    for show in load_shows().values():
+        posts = by_show.get(show.key, [])
+        metric = show.kpi_metric if show.kpi_metric in METRIC_FIELDS else "views"
+        row = {
+            "show": show.key,
+            "label": show.label,
+            "icon": show.icon,
+            "kpi": show.kpi,
+            "kpi_metric": metric,
+            "posts": len(posts),
+            "median_views": 0,
+            "median_kpi": 0,
+            "kpi_per_1k_views": 0.0,
+            "vs_baseline": 0.0,
+            "ratings": {"hit": 0, "meh": 0, "flop": 0},
+            "best": None,
+            "verdict": "no posts logged yet",
+        }
+        if posts:
+            views = [m["views"] for _i, m in posts]
+            kpis = [m.get(metric, 0) for _i, m in posts]
+            row["median_views"] = int(median(views))
+            row["median_kpi"] = int(median(kpis))
+            total_views = sum(views) or 1
+            row["kpi_per_1k_views"] = round(sum(kpis) / total_views * 1000, 1)
+            row["vs_baseline"] = (
+                round(row["median_views"] / baseline, 1) if baseline else 0.0
+            )
+            for idea, _m in posts:
+                rating = _rating(idea)
+                if rating:
+                    row["ratings"][rating] += 1
+            best = max(posts, key=lambda im: im[1].get(metric, 0))
+            row["best"] = {
+                "idea_id": best[0].idea_id,
+                "hook": best[0].hook or best[0].concept_note,
+                metric: best[1].get(metric, 0),
+                "views": best[1]["views"],
+            }
+            row["verdict"] = _show_verdict(row, baseline)
+        rows.append(row)
+
+    # Best KPI rate first, but any show without enough data sinks to the
+    # bottom — an undecided show must never look like a winner or a loser.
+    rows.sort(key=lambda r: (r["posts"] >= MIN_POSTS_FOR_VERDICT,
+                             r["kpi_per_1k_views"]), reverse=True)
+    return {
+        "baseline_views": baseline,
+        "posts_logged": len(logged),
+        "min_posts_for_verdict": MIN_POSTS_FOR_VERDICT,
+        "shows": rows,
+    }
+
+
+def _show_verdict(row: dict, baseline: int) -> str:
+    """One honest line per show. Never claims a finding from too little data."""
+    if row["posts"] < MIN_POSTS_FOR_VERDICT:
+        need = MIN_POSTS_FOR_VERDICT - row["posts"]
+        return (
+            f"only {row['posts']} logged — {need} more before this means "
+            "anything"
+        )
+    metric = row["kpi_metric"]
+    rate = row["kpi_per_1k_views"]
+    ratings = row["ratings"]
+    parts = [f"{rate} {metric} per 1k views"]
+    if baseline:
+        if row["median_views"] >= baseline * 1.3:
+            parts.append("reach above the account's median")
+        elif row["median_views"] <= baseline * 0.7:
+            parts.append("reach below the account's median")
+    if ratings["hit"] and ratings["hit"] >= ratings["flop"] * 2:
+        parts.append(f"{ratings['hit']} rated a hit")
+    elif ratings["flop"] and ratings["flop"] > ratings["hit"]:
+        parts.append(f"{ratings['flop']} rated a flop — worth a hard look")
+    return " · ".join(parts)
 
 
 def rating_summary(store: Store) -> dict:

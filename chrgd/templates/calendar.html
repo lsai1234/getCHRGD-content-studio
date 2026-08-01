@@ -129,6 +129,13 @@
         <a href="/create">Create something →</a></p>
     </div>
 
+    <div class="tray" id="showperf" style="margin-top:14px" hidden>
+      <h2>🎬 The five shows</h2>
+      <p class="muted" style="font-size:11.5px; margin:0 0 8px">Each judged on
+        what it's actually built to earn, not on views.</p>
+      <div id="showperf-body" style="font-size:12.5px"></div>
+    </div>
+
     <div class="tray" id="insights" style="margin-top:14px">
       <h2>📈 What's working</h2>
       <div id="insights-body" class="muted" style="font-size:12.5px">
@@ -349,7 +356,7 @@ async function rate(id, r){
   await fetch(`/api/ideas/${id}/rate`, {method:'POST',
     headers:{'Content-Type':'application/x-www-form-urlencoded'},
     body:new URLSearchParams({rating:r})});
-  closeCard(); load(); loadInsights();
+  closeCard(); load(); loadInsights(); loadShowPerf();
 }
 function closeCard(){ document.getElementById('card-modal').style.display = 'none'; }
 
@@ -559,6 +566,7 @@ async function saveMetrics(){
   closeMetrics();
   load();
   loadInsights();
+  loadShowPerf();
 }
 
 async function importCsv(input){
@@ -575,7 +583,7 @@ async function importCsv(input){
       const nu = (d.unmatched || []).length;
       out.innerHTML = `✓ Logged <b>${(d.updated||[]).length}</b> of ${d.rows} rows`
         + (nu ? ` · ${nu} unmatched (log those by hand)` : '');
-      load(); loadInsights();
+      load(); loadInsights(); loadShowPerf();
     }
   } catch(e){ out.textContent = '⚠ ' + e; }
   input.value = '';
@@ -620,6 +628,28 @@ async function loadInsights(){
   }
   box.innerHTML = html || box.innerHTML;
 }
+// Per-show performance. Hidden until something is logged — an empty
+// scoreboard is just noise on the screen.
+async function loadShowPerf(){
+  const r = await fetch('/api/shows/performance');
+  if (!r.ok) return;
+  const d = await r.json();
+  if (!d.posts_logged) return;
+  const rows = (d.shows || []).filter(s => s.posts > 0);
+  if (!rows.length) return;
+  document.getElementById('showperf').hidden = false;
+  document.getElementById('showperf-body').innerHTML = rows.map(s => {
+    const thin = s.posts < d.min_posts_for_verdict;
+    const rate = thin ? '' :
+      `<b>${s.kpi_per_1k_views}</b> <span class="muted">${esc2(s.kpi_metric)}/1k views</span>`;
+    return `<div style="margin-top:9px">
+      <div>${esc2(s.icon)} <b>${esc2(s.label)}</b>
+        <span class="muted">· ${s.posts} logged</span> ${rate}</div>
+      <div class="muted" style="font-size:11.5px; margin-top:2px${thin ? '' : '; color:var(--fg)'}">${esc2(s.verdict)}</div>
+    </div>`;
+  }).join('');
+}
+
 const esc2 = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 

@@ -9,6 +9,7 @@ tagline = "The honest answer, without the hype."
 blurb = "What an ingredient actually does, what the evidence supports, and what the label is hiding."
 icon = "🧪"
 weekday = "tue"
+kpi_metric = "saves"
 kpi = "saves and profile visits — this is the show that earns trust"
 slides_min = 4
 slides_max = 6

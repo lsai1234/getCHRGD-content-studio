@@ -12,6 +12,7 @@ tagline = "Every reality leaks into the same knackered gym on a retail park."
 blurb = "A comic serial. Recognisable characters, one squat rack, storylines that carry week to week."
 icon = "💥"
 weekday = "thu"
+kpi_metric = "comments"
 kpi = "comments, and whether they come back next week"
 slides_min = 5
 slides_max = 7

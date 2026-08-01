@@ -1966,6 +1966,18 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         digest["feeding_engine"] = digest["posts_logged"] >= MIN_POSTS_FOR_NOTES
         return digest
 
+    @app.get("/api/shows/performance")
+    def api_show_performance(_: str = Depends(require_user)):
+        """How each show is doing, judged on its OWN KPI.
+
+        Without this the five-show plan is a guess that never resolves: after
+        a couple of months this is what tells you which to double down on and
+        which to kill."""
+        from .learning import show_scoreboard
+
+        with _store(settings) as store:
+            return show_scoreboard(store)
+
     @app.post("/api/metrics/import")
     async def api_metrics_import(
         request: Request,

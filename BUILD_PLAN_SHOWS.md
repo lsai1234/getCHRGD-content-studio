@@ -403,7 +403,29 @@ than a structural requirement.
 
 ---
 
-## Phase 4 — measurement, then video · **M**
+## Phase 4 — measurement, then video · **M** — ✅ **BUILT**
+
+Shipped: `show` as a learning-loop trait, `kpi_metric` on every show,
+`learning.show_scoreboard`, `GET /api/shows/performance`, the "five shows"
+panel on the calendar, and the AMP video pilot's cartoon motion brief. 28 new
+tests (`tests/test_phase4_measurement.py`); 584 pass.
+
+**Each show is judged on its own KPI, per 1,000 views.** Ranking all five on
+views would ask the wrong question: THE SESSION is built for saves and would
+look mediocre on reach while doing exactly its job. Rating per-1k rather than
+per-post stops a show winning on a lucky spike.
+
+**It refuses to report a finding it hasn't earned.** Under four logged posts a
+show says "2 more before this means anything" rather than a median that reads
+like a result, and an undecided show can never outrank a decided one in the
+ordering — otherwise one freak post floats to the top and gets acted on.
+
+**The video pilot needed its own motion brief.** The generic one asks for a
+slow camera push with parallax, which on a flat-vector cartoon just looks like
+a still being zoomed. Amp's brief moves the *character* and pins the camera,
+with a beat per emotional state.
+
+## Phase 4 (original plan) — measurement, then video · **M**
 
 - **Per-show analytics** (`chrgd/analytics.py`, `chrgd/learning.py`): tag
   performance by show against each show's named KPI. After eight weeks you

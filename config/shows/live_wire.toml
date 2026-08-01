@@ -10,6 +10,7 @@ tagline = "The take on what everyone's already talking about."
 blurb = "Big gym news, new science, and the culture that sits alongside the gym in the same person's life."
 icon = "📡"
 weekday = "fri"
+kpi_metric = "comments"
 kpi = "comments and reach — the show most likely to spike"
 slides_min = 4
 slides_max = 6

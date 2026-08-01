@@ -128,7 +128,16 @@ class Show(BaseModel):
     blurb: str = ""
     icon: str = ""
     weekday: str = ""
+    #: The human line: what this show is built to earn.
     kpi: str = ""
+    #: The MACHINE-READABLE version — one of learning.METRIC_FIELDS. This is
+    #: what the scoreboard actually ranks a show on, because "shares, then
+    #: saves" can't be measured and `shares` can. Empty falls back to views.
+    kpi_metric: str = ""
+    #: Whether this show is a candidate for the video pipeline (M6). Amp is
+    #: the pilot (D5): flat vector animates far better than photoreal, so he's
+    #: the right first test when the flag and a key are in place.
+    video_pilot: bool = False
     slides_min: int = 3
     slides_max: int = 8
     #: Which tailored second screen the create journey opens (Phase 0 ships the

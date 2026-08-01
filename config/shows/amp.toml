@@ -9,11 +9,13 @@ tagline = "One relatable disaster, one usable tip, one charge cycle."
 blurb = "The brand's face. Funny, but it always leaves you with something you can actually use."
 icon = "⚡"
 weekday = "wed"
+kpi_metric = "shares"
 kpi = "shares, then saves — the gag earns the share, the tip earns the save"
 slides_min = 4
 slides_max = 6
 front_screen = "seed"
 cast = "amp"
+video_pilot = true
 gate_profile = "comedy_useful"
 engagement_play = "share"
 

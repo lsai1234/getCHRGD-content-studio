@@ -237,14 +237,38 @@ def get_video_provider(settings: Settings) -> VideoProvider:
 # --- motion prompt ----------------------------------------------------------
 
 
-def motion_prompt_for_slide(index: int, total: int, design_system: dict | None = None) -> str:
+def video_pilot_show(idea) -> object | None:
+    """The show this idea belongs to, if that show is a video pilot.
+
+    Amp is the designated pilot (D5): flat vector animates far better than
+    photoreal, his design is already locked, and a wrong frame costs a laugh
+    rather than a likeness problem. Returns None for everything else, which is
+    what keeps this a pass-through — nothing about the video path changes for
+    a post that isn't on a pilot show.
+    """
+    from .shows import show_for_idea
+
+    show = show_for_idea(idea)
+    return show if (show is not None and show.video_pilot) else None
+
+
+def motion_prompt_for_slide(
+    index: int, total: int, design_system: dict | None = None,
+    *, amp_state: str = "",
+) -> str:
     """A short image-to-video motion instruction for one slide.
 
     The clip animates the *already-designed* frame — it must not restyle it or
     add text. We nudge subtle, native-feeling motion (a slow push, a parallax
     drift, sparks/energy) and lean on the design_system's `evolution` beat when
     present so the reel escalates the way the swipe does.
+
+    `amp_state` marks this as a frame from the AMP pilot: a flat-vector cartoon
+    animates differently from a photograph — the character should move, not the
+    camera — and his state decides how.
     """
+    if amp_state:
+        return _amp_motion_prompt(index, total, amp_state)
     parts = [
         "Animate this exact frame into a short vertical clip. Keep the artwork, "
         "characters, colours and every word of on-image text exactly as-is — do "
@@ -259,6 +283,40 @@ def motion_prompt_for_slide(index: int, total: int, design_system: dict | None =
         parts.append("Open with a punchy stop-scroll beat.")
     elif index + 1 >= total:
         parts.append("Land on a confident, resolved hero beat.")
+    return " ".join(parts)
+
+
+#: How Amp moves in each state. A cartoon reads as alive through the CHARACTER
+#: moving, not through a camera push — the generic prompt's slow dolly on a
+#: flat vector frame just looks like a still image being zoomed.
+_AMP_MOTION: dict[str, str] = {
+    "drained": "Amp sags a little further, one slow blink, a faint flicker of dim light.",
+    "flat": "Amp shifts his weight, unimpressed, a slow reluctant blink.",
+    "wired": "Amp vibrates and twitches, erratic sparks flying off him, eyes darting.",
+    "charging": "Amp straightens up as light builds through him, small sparks growing.",
+    "beaming": "Amp glows brighter, arms opening, light blooming warmly around him.",
+    "charged": "Amp crackles with energy, small lightning arcs snapping off him.",
+    "smug": "Amp's grin widens fractionally, one eyebrow lifting, insufferably still.",
+    "knackered_happy": "Amp slumps back contentedly, chest rising, glow softening.",
+}
+
+
+def _amp_motion_prompt(index: int, total: int, state: str) -> str:
+    """The AMP pilot's motion brief for one slide."""
+    beat = _AMP_MOTION.get(state, _AMP_MOTION["charging"])
+    parts = [
+        "Animate this exact 2D cartoon frame into a short vertical clip. Keep "
+        "the character design, colours, line weight and every word of on-image "
+        "text exactly as-is — do not restyle, redraw, add or remove anything.",
+        "This is FLAT VECTOR ANIMATION, not a photograph: the CHARACTER moves, "
+        "the camera stays still. No dolly, no parallax, no 3D depth, no "
+        "photoreal lighting.",
+        beat,
+    ]
+    if index == 0:
+        parts.append("Open on a beat that stops the scroll.")
+    elif index + 1 >= total:
+        parts.append("Land the final pose and hold it.")
     return " ".join(parts)
 
 
@@ -449,6 +507,23 @@ def render_video(
             store.update_job(job_id, **fields)
 
     total = len(images)
+    # The AMP pilot animates as a cartoon, not as a photograph — his per-slide
+    # state decides how he moves. Empty for every other post, which leaves the
+    # generic motion brief exactly as it was.
+    pilot = video_pilot_show(idea)
+    amp_states: list[str] = []
+    if pilot is not None:
+        from .character import charges_for_route, state_for_charge, state_for_route
+        from .images import _route_of
+
+        route = _route_of(idea)
+        free = state_for_route(route)
+        if free:
+            amp_states = [free] * total
+        else:
+            arc = charges_for_route(route, total) or []
+            amp_states = [state_for_charge(c) for c in arc]
+
     for index, image_path in enumerate(images):
         key = str(index)
         entry = clips_state.get(key) or {}
@@ -461,7 +536,10 @@ def render_video(
         external_id = entry.get("external_id")
         if not external_id:
             _persist(f"submitting clip {index + 1}/{total}", int(index * 90 / total))
-            motion = motion_prompt_for_slide(index, total, design_system)
+            motion = motion_prompt_for_slide(
+                index, total, design_system,
+                amp_state=amp_states[index] if index < len(amp_states) else "",
+            )
             external_id = provider.submit(image_path, motion, seed=seed)
             entry = {"external_id": external_id, "status": "QUEUED"}
             clips_state[key] = entry
