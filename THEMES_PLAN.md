@@ -8,10 +8,21 @@ reply "default" and move on where you don't care.
 
 | # | Decision | Consequence |
 |---|---|---|
-| D1 | **The Villa is a serial** — 3–5 named regulars, cliffhanger + a vote that becomes canon next episode | `chrgd/series.py`, series/episode storage and the continuity gate get built (the `STORY_ENGINE_PLAN.md` build). Episodes can't be pre-batched ahead of a vote. |
+| D1 | **The parody show is a serial** (then THE VILLA, now THE MULTIVERSE — see D6) — recurring characters, cliffhanger + a vote that becomes canon next episode | `chrgd/series.py`, series/episode storage and the continuity gate get built (the `STORY_ENGINE_PLAN.md` build). Episodes can't be pre-batched ahead of a vote. |
 | D2 | **Straight Up is educational + sourced** — say what the evidence supports, cite internally, never promise an outcome; opinionated about the *industry* (pricing, labelling, marketing), never about physiology | The show's gate is a **claims gate**, not the hot-take rubric: a separate pass that fails outcome promises and unsourced numbers. |
-| D3 | **The Villa breaks the house look; the other four share the furniture** with their own palette, type and photography | Furniture toggles (wordmark / scrim / counter / footer) move into the show's look pack, defaulting to `brand.toml [identity]`. The Villa runs handle-only. |
-| D4 | **Build order: Amp + Live Wire first** | Phase 1 is the Show layer proved against the two shows that are already ~80% built. Straight Up + The Session next, The Villa last. |
+| D3 | **The parody show breaks the house look; the other four share the furniture** with their own palette, type and photography | Furniture toggles (wordmark / scrim / counter / footer) move into the show's look pack, defaulting to `brand.toml [identity]`. The Multiverse runs handle-only. |
+| D4 | **Build order: Amp + Live Wire first** | Phase 1 is the Show layer proved against the two shows that are already ~80% built. Straight Up + The Session next, The Multiverse last. |
+
+### Round 2
+
+| # | Decision | Consequence |
+|---|---|---|
+| D5 | **Amp is tip-led**; stories must still be useful. He plays himself, but his state ranges freely — deflated and low one week, beaming and full of colour the next. He may appear in other shows where useful, and he is the **video pilot** | `charge_arc()`'s forced rising-charge arc becomes *one* Amp spine, not the mandatory one; his state becomes a per-slide expression + palette system. Amp's gate adds a **usefulness** check. M6 turns on against Amp first. |
+| D6 | **The Villa becomes THE MULTIVERSE** — a comic universe of *recognisable* characters: public figures (caricatured) plus AI-slop meme characters (Orangina and family). The engine remembers past storylines; each episode extends canon but still lands cold for a newcomer | Needs a **character roster store** (locked comic visual + trait + safety class per character), a **canon/events log**, a **recap generator**, and a **likeness gate**. "Love Island but at the gym" becomes a *season* the roster is cast into, not the show itself. |
+| D7 | **Straight Up stays general** category education; own-brand products are a later enhancement | The ingredient library carries an empty `our_product` slot per entry from day one, so wiring a range in later is filling a field, not a re-architecture. |
+| D8 | **The Session isn't funny** — informative and saveable | Its gate scores usefulness and legibility, not humour or hot-take heat. |
+| D9 | **Live Wire is the overflow lane**, weighted to big gym news and new science, and retargeted from "UK trending" to **what 18–30 UK gym-goers are actually into** (reality TV, football, holidays, money) — fitness-adjacent, not fitness-only | The scout gains an **audience-interest territory model** in place of a generic country-wide trend scan. This is the substantive change to `trends.py`. |
+| D10 | **Shows are named on screen** | Each show's look pack carries a title treatment; a show tag becomes part of its furniture. |
 
 ---
 
@@ -63,57 +74,97 @@ has a shape and the audience learns the appointment.
 
 | | |
 |---|---|
-| **What it is** | Amp gets flattened by something relatable, fights back, ends fully charged. Two sub-modes: **Story** (pure comedy arc, no lesson) and **Tip** (the turnaround *is* the tip — one usable thing, taught through the gag). |
-| **Spine** | 1 drained + the drain event · 2 it gets worse · 3 the turn (what he tries) · 4 charging (it's working, with the actual tip if Tip mode) · 5 fully charged + "Stay amped." |
-| **Look** | Flat vector, sticker energy, bold outlines, electric cyan `#29C2F2` on the brand near-black. **No photoreal, ever.** Reads as a comic strip, not a gym photo. |
-| **Cast** | Amp, locked. `chrgd/character.py` `CANONICAL_PROMPT` + `STYLE_LOCK` + `charge_arc()` already do this. |
-| **Wants** | Recognition + a smile. KPI: shares ("this is me on leg day"). |
-| **Reuses** | `character.py` (built), `amp_charge_cycle` in `config/mechanics.toml` (built), the Amp slot already in the concept sketch prompt (built). |
-| **Needs new** | The Story/Tip split; a **drain-event bank** so he isn't drained by leg day every week; the charge-cycle spine enforced as a real skeleton rather than a suggestion; a *comedy* gate instead of the hot-take gate. |
+| **What it is** | **Tip-led.** Amp teaches one genuinely usable thing through a gag. Story weeks still exist, but a story that isn't useful to the viewer doesn't ship — "useful" is a gate condition, not a nice-to-have. |
+| **Spine** | 1 the relatable state (drained, wired, buzzing — whatever the post needs) · 2 it gets worse / the pull · 3 the turn — **the tip itself, stated plainly** · 4 it's working · 5 the payoff state + "Stay amped." |
+| **Look** | Flat vector, sticker energy, bold outlines. **Amp's colour and state carry the emotion** — a dim grey-blue slump one week, full-saturation beaming the next. No photoreal, ever. |
+| **Cast** | Amp, solo, locked (`chrgd/character.py`). He plays himself — no supporting cast for now. |
+| **Wants** | A share and a save. KPI: shares plus saves — the tip is what earns the save. |
+| **Reuses** | `character.py` (built), `amp_charge_cycle` (built), the Amp slot in the concept sketch prompt (built). |
+| **Needs new** | The **usefulness gate** (every Amp post must name the one thing the viewer takes away); an **expression/palette system** replacing the strict rising-charge arc; a **situation bank** so he isn't drained by leg day every week. |
 
-**The risk I'd flag:** one mechanic, weekly, forever = sameness. The charge
-cycle is a strong container but the *drain* has to be genuinely new each time
-(4am airport, the 3pm slump, a stag do, a broken lift, January in a full gym,
-a shaker leaking in a gym bag). I'd build the drain bank as a stored, tickable
-list so you can see what's been used — same idea as the "already pitched"
-memory in `concepts.py`.
+**What changes from what's built.** `charge_arc()` currently forces a
+monotonically rising charge % across the slides — Amp always starts flat and
+ends charged. You want his state to be free: sometimes deflated and low,
+sometimes beaming and full of colour. So the charge cycle stops being the
+mandatory arc and becomes **one of Amp's spines**, while his emotional state
+becomes a per-slide expression + palette system the story drives. The locked
+character prefix stays exactly as it is — that's what keeps him on-model.
+
+**The sameness risk still stands.** One character weekly needs new *situations*
+each time (4am airport, the 3pm slump, a broken lift, January in a packed gym,
+a shaker leaking in a gym bag). I'd store the situation bank as a tickable
+list, same idea as the "already pitched" memory in `concepts.py`.
 
 **Questions for you**
-1. **Story vs Tip split** — alternate weekly, or Amp is always a story and the tip is a bonus on the last slide? **→ default: alternate, with the Tip weeks carrying one genuinely useful thing.**
-2. Does Amp ever **talk** (speech bubbles) or is it always narration + his face? **→ default: speech bubbles, sparingly — they're funnier.**
-3. Is Amp allowed to **cameo** in the other four shows (e.g. a corner sticker on a supplement post), or is he ring-fenced to his own day? **→ default: ring-fenced for now — cameos dilute the appointment.**
-4. Do you want **a supporting cast** for Amp (a gym-bro rival, a knackered mate) or is he a solo act? **→ default: solo for the first 8 weeks, then one rival.**
-5. Is the Amp day the one that could become **video** first (M6 is built, flagged off) — flat vector animates far better than photoreal? **→ default: yes, Amp is the video pilot when you turn it on.**
+1. ~~Story vs Tip~~ **DECIDED (D5): tip-led, and stories must be useful too.**
+2. ~~Cameos~~ **DECIDED (D5): Amp can appear in other shows where he's useful** — e.g. fronting a Straight Up explainer. Should there be a *limit* (say never more than one non-Amp post a week), or judge it case by case? **→ default: case by case, but never in THE MULTIVERSE as a lead.**
+3. ~~Video pilot~~ **DECIDED (D5): yes, Amp is the M6 pilot.**
+4. Does Amp **talk** (speech bubbles) or is it narration + his face? **→ default: speech bubbles, sparingly.**
+5. How **technical** can Amp's tips get? A form cue and a timing trick are easy to draw; "creatine loading protocols" is not. **→ default: keep Amp on behaviour and habit tips, and send the biochemistry to Straight Up.**
 
 ---
 
-### Show 2 · **THE VILLA** — gym reality-format parody (serial)
+### Show 2 · **THE MULTIVERSE** — the weirdest crossover in fitness (comic serial)
 
-*Fun · colourful · zero brand furniture · the one people follow for*
+*Fun · comic-book · zero brand furniture · the one people follow for*
+
+> Renamed from THE VILLA. It isn't one format any more — it's a **world with a
+> roster**, and "Love Island but at the gym" becomes one *season* the roster
+> gets cast into rather than the whole show.
 
 | | |
 |---|---|
-| **What it is** | A reality dating-show format transplanted into a UK commercial gym at 6pm. Own cast, own villa. **A serial** — the same people come back next week, and last week's vote is this week's canon. |
-| **Spine** | 1 recap-that-also-works-cold · 2 the situation + the threat · 3 the complication · 4 escalation · 5 the turn · 6 cliffhanger + **the vote** |
-| **Look** | **Deliberately not the house look.** Sunlit, saturated, holiday-bright — coral/turquoise/hot-yellow, reality-TV lower-third name bars, on-screen captions in the show's own type. No near-black, no scrim, no battery, no Amp. |
-| **Cast** | 3–5 named regulars with a locked visual per character (the same locked-prefix trick Amp uses, one per cast member). |
-| **Wants** | Comments and returns. KPI: comment volume on the vote + week-2 retention. |
-| **Reuses** | `STORY_ENGINE_PLAN.md` is already the full blueprint for this (bible → arc → beat sheet → copy → continuity gate); the locked-character pattern from `character.py`. |
-| **Needs new** | Everything in that plan: `chrgd/series.py`, series + episode storage, the continuity gate, the vote mechanic. **This is the only show that needs real new engine, not just config.** |
+| **What it is** | A recurring comic universe where instantly recognisable characters collide in gym storylines. Two kinds of cast: **recognisable public figures** (caricatured) and **AI-slop meme characters** (Orangina and that whole brainrot family). The joke is the collision — the world's weirdest multiverse, and it's set in a PureGym at 6pm. |
+| **Spine** | 1 cold-open recap that works for a newcomer · 2 the situation + the threat · 3 the complication · 4 escalation · 5 the turn · 6 cliffhanger + the hook into next week |
+| **Look** | **Comic book.** Bold ink outlines, halftone shading, saturated flat colour, panel captions and speech bubbles, characters *clearly* recognisable at thumb size. No near-black, no scrim, no wordmark — handle only (D3). |
+| **Cast** | A **roster**, not a fixed cast. Each character carries a locked comic-style visual prompt (the `character.py` locked-prefix trick, one per character), a joke-generating trait, and a **safety class**. Each episode casts 2–4 of them. |
+| **Wants** | Comments and returns. KPI: comment volume + week-2 return rate. |
+| **Reuses** | `STORY_ENGINE_PLAN.md`'s stage split (bible → arc → beats → copy → continuity gate) and the locked-character pattern from `character.py`. |
+| **Needs new** | `chrgd/series.py` + a **character roster store** + a **canon/events log** so episode N+1 genuinely extends N; the continuity gate; the recap generator; and a **likeness gate** (below). The only show needing real new engine. |
 
-**Brand safety, decided up front:** parody the *format*, never the property. No
-show name, no logo, no real islanders — our own villa, our own cast. Costs
-nothing creatively (the comedy is in the format and the characters) and keeps
-the account off a rights-holder's radar. Already argued in `STORY_ENGINE_PLAN.md`
-and I'd hold that line.
+**Canon memory — the thing that makes it a universe.** Every episode writes
+what changed to an events log: who won, who lost, who now hates whom, what's
+unresolved. The next episode reads that log, so storylines compound. But slide
+1 is always a cold-open recap written for someone who's never seen it — the
+recap does the work, the canon does the reward. That's the "extends the story
+but still makes sense to a newcomer" requirement, and it's mechanical enough to
+enforce in code.
+
+**One thing I want to flag before it gets built.** Recognisable public figures
+in AI-generated comics, on a supplement brand's account, is the one part of
+this plan with genuine outside risk — personality/publicity rights, and TikTok's
+own rules on synthetic likenesses of real people. It is very workable, and
+parody of public figures in caricature is well-trodden ground; it just needs
+lines drawn *in the engine* rather than remembered each week. So I'd encode a
+**likeness gate** for this show:
+
+1. **Caricature, never photoreal.** The comic style you asked for is also the
+   safety line — a stylised drawing reads as commentary, a photoreal render of
+   a real person reads as a fake.
+2. **No endorsement, ever.** A real person is never shown using, holding or
+   recommending a getCHRGD product, and the brand furniture stays off these
+   posts anyway (D3). Implied endorsement is the sharpest legal edge and the
+   easiest one to simply not go near.
+3. **No fabricated statements presented as real.** Absurd situations, yes;
+   realistic quotes, fake announcements or news framing, no.
+4. **Punch at status and situation** — never at appearance, protected
+   characteristics, or anything sexual, criminal or health-related.
+5. **Living public figures only, no private individuals, no minors.**
+6. **A roster you approve.** The engine casts from your allow-list; it never
+   free-picks a person.
+7. **Labelled** — a visible "parody" tag in the show's furniture plus the
+   platform's AI-content toggle on publish.
+
+The AI-slop meme characters are the safest and probably funniest half of the
+roster — nobody has publicity rights in Orangina — so I'd weight episodes
+toward them and use the real-person caricatures as guest stars.
 
 **Questions for you**
-1. ~~Serial or standalone?~~ **DECIDED (D1): serial**, with a named cast, a cliffhanger and a canon vote.
-2. **One format or a rotating parody slot?** Villa forever, or does this slot rotate — villa / mockumentary office (your Hyrox-boss idea) / talent-show / dating-app? **→ default: Villa runs a full "series" of ~8 episodes, then the slot rotates to the next format. Seasons, not forever.**
-3. **Cast** — do you want to write the 3–5 characters yourself (fastest way to find out if it's funny), or should I generate a bible for you to edit? **→ default: I generate a first bible, you rewrite the traits — the trait is the joke engine and it should be yours.**
-4. **The vote** — is the audience's choice genuinely canon next week (strongest mechanic, means you can't pre-batch episodes), or a soft "who's your favourite"? **→ default: genuinely canon. It's the whole reason to comment.**
-5. Real-ish **photographic** cast (gritty flash photo, feels like a real gym) or **illustrated**? Photographic is funnier and harder to keep consistent. **→ default: photographic, with a locked portrait per character.**
-6. Does the brand appear at all — shakers in shot, a logo on a vest — or is it pure entertainment with the handle only? **→ default: props only, never a pitch.**
+1. ~~Serial or standalone?~~ **DECIDED (D1): serial** — now a universe with canon memory (D6).
+2. **The roster is the show — name it.** Give me 8–12 you want in the world: which public figures, and which meme/AI-slop characters. **→ default if you'd rather I draft: a roster weighted ~2:1 toward meme characters, with fitness-adjacent public figures as guests, for you to cut.**
+3. **Seasons or open world?** Does a format arc run ~6–8 episodes (the villa season, then a tournament season, then the Hyrox-boss mockumentary) or is it a new collision every week in a persistent world? **→ default: seasons — an arc gives the cliffhanger somewhere to go.**
+4. **The vote** — still want the audience choosing what happens next (canon), or is the cliffhanger enough on its own? **→ default: keep the vote; it's the strongest comment driver you have.**
+5. Is **Amp** in this universe (D5 lets him appear where useful) — a recurring bit-part in the multiverse, or does he stay out? **→ default: rare cameo, never the lead.**
 
 ---
 
@@ -126,7 +177,7 @@ and I'd hold that line.
 | **What it is** | The honest answer to a question people genuinely search: what creatine actually does, whether you need EAAs, what "proprietary blend" hides, when protein timing matters and when it doesn't. No hype, no fear. |
 | **Spine** | 1 the question, in their words · 2 the short answer (given away immediately — trust beats tease here) · 3 why / the mechanism, plainly · 4 what it means for you (dose, timing, practicalities) · 5 what to ignore / the myth · 6 save-this |
 | **Look** | Bright, clean, editorial. Light background or crisp product-on-seamless, generous whitespace, one accent, large legible type. The *opposite* of the gritty night-flash look. Legibility is the aesthetic. |
-| **Cast** | None. No Amp, no characters — a mascot undercuts authority. |
+| **Cast** | None by default — authority comes from the plainness. Amp may front a post where a gag genuinely helps the explanation (D5), but never where it undercuts the evidence. |
 | **Wants** | Saves + follows. KPI: saves and profile visits. |
 | **Reuses** | The `facts` door (paste research → angles) is already exactly this journey's front end; `myth_fact` / `insider_mechanism` in `config/mechanics.toml`; the `claim_safety` QA score already in the contract. |
 | **Needs new** | A **claims gate** with teeth (a separate pass, not one score inside a self-audit); a source/citation field carried through to the slides; an ingredient/product library so the show has a backlog rather than being invented weekly. |
@@ -137,15 +188,19 @@ uselessness" is the failure mode on the other side. So the gate needs an
 explicit, written line — see the question below, it's the one I most need you
 to answer.
 
+**Built general now, product-aware later (D7).** There are no getCHRGD
+products to talk about yet, so the show is category education: ingredients,
+mechanisms, marketing lies. The important part is that I build the ingredient
+library with an **empty `our_product` slot on every entry** from day one — so
+when you do have a range, wiring it in is filling a field, not re-architecting
+the show. I'll design for that hook and leave it unpopulated.
+
 **Questions for you**
 1. ~~How far do we go on claims?~~ **DECIDED (D2): educational + sourced.**
-   Say what the evidence does and doesn't support, cite internally, never
-   promise an outcome. Opinionated about the *industry* (pricing, labelling,
-   marketing lies), never about physiology.
-2. Does this show **sell getCHRGD products**, or stay product-neutral education with the brand as the trusted voice? **→ default: neutral education, with our product mentioned only where it's honestly the answer — maybe 1 in 4.**
+2. ~~Sell products?~~ **DECIDED (D7): general category education for now, product hook designed in and left empty.**
 3. Do you want **visible sources** on-slide (a "source: …" line), or sources kept internal for your own confidence? **→ default: internal, with a source line only on the eyebrow-raising numbers.**
-4. Where does the material come from — **your product range** (an ingredient library I'd seed from your labels), **audience questions** (comments/DMs), or **the trend scout**? **→ default: an ingredient library as the spine, topped up by real audience questions.**
-5. Should this show ever be a **single-slide** post (one fact, no swipe)? The engine supports 1–10. **→ default: yes, occasionally — a single hard fact is very saveable.**
+4. Where does the material come from — an **ingredient library** I seed (creatine, caffeine, beta-alanine, EAAs, electrolytes, ashwagandha, collagen…), **audience questions**, or **the science feed from Live Wire**? **→ default: the ingredient library as the spine, topped up by audience questions.**
+5. Should this show ever be a **single-slide** post (one fact, no swipe)? **→ default: yes, occasionally — a single hard fact is very saveable.**
 6. Tone: **calm expert** or **blunt myth-buster**? They need different type, palette and hooks. **→ default: calm expert with a sharp edge on marketing lies.**
 
 ---
@@ -177,47 +232,80 @@ to answer.
 2. **How prescriptive can the workout be?** Named exercises with sets/reps/rest (most useful, most liability), or a structure with the loading left to the reader? **→ default: named exercises with sets and reps, RPE not %1RM, and a plain "scale it" line.**
 3. Does the supplement tie-in have to be **ours**, generic ("a pre-workout"), or the *category with our product named once*? **→ default: category first, named once, always as timing advice.**
 4. Should each session be **standalone**, or part of a numbered block ("Week 2 of the 6pm-rush plan") that gives people a reason to come back? **→ default: standalone for now — a block is show 2's job.**
-5. Are you happy for this show to **not be funny**? It's the one where usefulness beats personality. **→ default: yes. Dry and useful.**
-6. **Gendered variants** — comfortable posting "for the girls" / "for the lads" framing, or keep it goal-framed (glutes/strength/conditioning) instead? **→ default: goal-framed, because the algorithm segments better on goal than on gender and it ages better.**
+5. ~~Not funny?~~ **DECIDED (D8): correct — informative and saveable, no jokes.** The gate for this show scores *usefulness and legibility*, not humour or hot-take heat.
+6. **Gendered variants** — still open. Comfortable posting "for the girls" / "for the lads" framing, or keep it goal-framed (glutes/strength/conditioning)? **→ default: goal-framed — the algorithm segments better on goal than on gender and it ages better.**
+7. Still open from round 1: **who picks the variant** (Q1), **how prescriptive** the sets/reps get (Q2), and the **supplement tie-in** rule (Q3 — noting D7 means there's no own-brand product to name yet, so it's category-only for now).
 
 ---
 
-### Show 5 · **LIVE WIRE** — today, and our take on it
+### Show 5 · **LIVE WIRE** — what our lot are actually talking about
 
-*Topical · native · unpolished on purpose*
+*Topical · native · unpolished on purpose · the overflow lane*
 
 | | |
 |---|---|
-| **What it is** | The show that already exists. Whatever the UK is actually talking about this week, leapt into a gym angle — the Burnham → "make gyms free" move that the concept engine was built around. |
-| **Spine** | 1 the take, stated flat · 2 the receipt (the real thing that happened) · 3 the twist / the gym analogy · 4 the side worth arguing over · 5 pick one, comment |
-| **Look** | Native and slightly rough: phone flash, screenshots, notes-app, meme-shaped. This one should look like it wasn't designed. |
-| **Cast** | None (occasional Amp cameo only if you unlock cameos). |
-| **Wants** | Comments and reach. KPI: comments + reach, and it's the show that will occasionally spike. |
-| **Reuses** | Nearly all of it is built: `chrgd/trends.py` (scout), `chrgd/concepts.py` (sketch + develop), the radar lanes, the conceptgate tournament, the "already pitched" freshness memory. |
-| **Needs new** | Almost nothing structurally — mostly **narrowing** the current everything-machine down to this one show's job, so the other four stop inheriting its hot-take voice. |
+| **What it is** | Not "UK trending". **What a 18–30 UK gym-goer is actually into this week** — which is big gym and fitness news, the latest science worth knowing, and the culture that sits alongside the gym in the same person's life: reality TV, football, holidays, nights out, money. Fitness-adjacent, not fitness-only. |
+| **Spine** | 1 the take, stated flat · 2 the receipt (the real thing that happened) · 3 the twist / the gym angle · 4 the side worth arguing over · 5 pick one, comment |
+| **Look** | Native and slightly rough: phone flash, screenshots, notes-app, meme-shaped. Should look like it wasn't designed. |
+| **Cast** | None, usually. |
+| **Wants** | Comments and reach. The show most likely to spike. |
+| **Reuses** | `chrgd/trends.py` (scout), `chrgd/concepts.py` (sketch + develop), the radar lanes, the conceptgate tournament, the freshness memory. |
+| **Needs new** | **A retargeted scout.** This is the real work here — see below. |
+
+**Why the current trending feels generic, and the fix.** `trends.py` scouts
+*UK topical* signal and `concepts.py` leaps it into a gym angle. Both stages are
+good; the **input** is the problem. A generic UK-trending scan returns the news
+everyone's posting, so the leap starts from material your audience has already
+scrolled past twice.
+
+The fix is to give the scout an **audience-interest model** instead of a
+country: a set of named **territories** it scans, weighted, rather than "what's
+trending in the UK". Draft territories:
+
+| Territory | What it pulls | Weight |
+|---|---|---|
+| **Gym & fitness news** | chain prices, viral gym drama, a supplement recall, a Hyrox/marathon moment | heavy |
+| **The science** | a new study worth knowing, plainly explained, honestly caveated | heavy |
+| **Reality TV & telly** | the Love Island / big-format moment everyone's watching | medium |
+| **Football** | the weekend, the transfer, the fitness angle | medium |
+| **Holidays & summer** | the "shredded by June" cycle, airport gyms, all-inclusives | seasonal |
+| **Money & going out** | payday, cost of a night out vs a membership, meal deals | medium |
+
+The gym leap still applies — but now the raw material is something your
+audience already cares about, so the leap lands instead of feeling forced.
+
+**Overflow, not a fixed slot (D9).** Live Wire jumps the queue when something
+genuinely lands, rather than waiting for its day. Practically that means the
+week has four appointment shows and Live Wire fills the fifth slot by default
+but can bump any of them.
 
 **Questions for you**
-1. Is Live Wire **one post a week** (Friday's take), or the **overflow slot** — the thing you post when something big breaks, on top of the five? **→ default: one scheduled slot, plus permission to jump the queue when something genuinely lands.**
-2. How **political** is it allowed to be? Current prompt says light-touch, non-partisan, play the analogy not the person. Hold that? **→ default: hold it.**
-3. Does it include **fitness-industry** news (a chain's prices, a viral gym drama, a supplement recall) as well as general UK news? **→ default: yes — industry news is safer and more on-brand than politics.**
-4. Should this show be allowed to be **ragebait**? The lane exists today. **→ default: opinionated yes, bad-faith no — a take you'd defend out loud.**
+1. ~~Overflow or scheduled?~~ **DECIDED (D9): overflow lane, and weighted toward big gym news + science.**
+2. **The territories above — right list?** Add, cut or re-weight. **→ default: as drafted, with gym news and science heaviest.**
+3. When Live Wire bumps another show, does the bumped show **slip a day** or **get skipped that week**? **→ default: slip, so each show still gets its turn.**
+4. How **political** is it allowed to be? Current prompt says light-touch, non-partisan, play the analogy not the person. Hold that? **→ default: hold it.**
+5. Should it be allowed to be **ragebait** (the lane exists today)? **→ default: opinionated yes, bad-faith no — a take you'd defend out loud.**
 
 ---
 
 ## 2. The week
 
+Four appointment shows, plus Live Wire as the overflow lane (D9) — it takes the
+fifth slot by default and can bump any of the others when something genuinely
+lands.
+
 | Day | Show | Job |
 |---|---|---|
 | Mon | **THE SESSION** | useful, sets the week up, saveable |
 | Tue | **STRAIGHT UP** | authority |
-| Wed | **AMP** | personality, mid-week lift |
-| Thu | **THE VILLA** | the appointment — cliffhanger + vote |
+| Wed | **AMP** | personality + the tip, mid-week lift |
+| Thu | **THE MULTIVERSE** | the appointment — cliffhanger, and the weekend to collect comments |
 | Fri | **LIVE WIRE** | topical, most likely to spike into the weekend |
 
 **Questions for you**
-1. Is this five posts a week, one per weekday — or five *types* spread across a different posting frequency? **→ default: five a week, Mon–Fri.**
-2. Happy with that day order? Thursday for the Villa deliberately gives the vote the weekend to collect comments. **→ default: yes.**
-3. Should the calendar **hard-assign** shows to days (the create screen opens on today's show), or stay free? **→ default: hard-assign with an override — the whole point is an appointment.**
+1. Is this five posts a week, one per weekday — or five *types* at a different posting frequency? **→ default: five a week, Mon–Fri.**
+2. Happy with that day order? **→ default: yes — Thursday gives the Multiverse cliffhanger the weekend.**
+3. Should the calendar **hard-assign** shows to days (create opens on today's show), or stay free? **→ default: hard-assign with an override — the appointment is the point.**
 
 ---
 
@@ -241,16 +329,26 @@ own 2nd screen  system prompt         house furniture    legibility / hot-take)
 ```
 
 **New**
-- `config/shows/*.toml` — one file per show. Label, tagline, weekday, spine
-  (slide roles), a voice block, a look pack (palette, type, motif, style
-  preset, and **furniture toggles** — wordmark/scrim/counter/footer on or off
-  per show, which is how the Villa stops looking like a CHRGD ad), cast
-  (`none` | `amp` | `series:<key>`), gate profile, default engagement play,
-  slide-count range.
+- `config/shows/*.toml` — one file per show. Label, **on-screen title
+  treatment** (D10), tagline, weekday, spine (slide roles), a voice block, a
+  look pack (palette, type, motif, style preset, and **furniture toggles** —
+  wordmark/scrim/counter/footer on or off per show, which is how the Multiverse
+  stops looking like a CHRGD ad), cast (`none` | `amp` | `roster:<key>`), gate
+  profile, default engagement play, slide-count range.
 - `chrgd/shows.py` — loader + `Show` model, mirroring how `chrgd/mechanics.py`
   and `chrgd/brand.py` already load their configs.
-- `chrgd/series.py` + series/episode storage — **Villa only**, per
-  `STORY_ENGINE_PLAN.md`.
+- `chrgd/roster.py` + a character store — **Multiverse (D6)**: per character a
+  locked comic-style visual prompt, the joke-generating trait, and a **safety
+  class** (`public_figure` | `meme_character` | `original`) that drives which
+  rules apply to them.
+- `chrgd/series.py` + a **canon/events log** — what changed each episode, so
+  episode N+1 reads N; plus the cold-open recap generator that keeps it
+  legible to a newcomer.
+- **Gate profiles** — the one rubric becomes several, selected per show:
+  comedy + usefulness (Amp), continuity + likeness (Multiverse), claims
+  (Straight Up), usefulness + legibility (The Session), hot-take (Live Wire).
+- **The interest-territory model** for the scout (D9) — named, weighted
+  territories replacing the generic UK-trending scan.
 
 **Changed (all small, all additive)**
 - `route_json["show"] = "<key>"` on the idea — the same place `mechanic_lock`
@@ -265,11 +363,14 @@ own 2nd screen  system prompt         house furniture    legibility / hot-take)
 - `concepts.py` — `sketch_concepts(show=…)`: five ideas **inside one show's
   format**, instead of five generic ones. This is the biggest quality win in
   the whole plan for the smallest change.
+- `trends.py` — scouts the show's **territories** rather than "what's trending
+  in the UK" (D9); the leap in `concepts.py` is unchanged, it just gets better
+  raw material.
 - `/create` — opens on five show tiles (plus a small "off-format" escape to
   the current doors), each leading to its own tailored second screen: Amp →
-  pick the drain; Villa → next episode; Straight Up → pick the ingredient or
-  question; The Session → the variant matrix; Live Wire → today's concepts as
-  they are now.
+  pick the situation + his state; Multiverse → next episode (who's in it, what
+  canon says); Straight Up → pick the ingredient or question; The Session →
+  the variant matrix; Live Wire → today's concepts, retargeted.
 - `calendar` — show-aware slots, "what's due this week".
 - `learning.py` / `analytics.py` — tag performance **by show**, so after a
   month you know which of the five to double down on and which to kill.
@@ -279,7 +380,7 @@ own 2nd screen  system prompt         house furniture    legibility / hot-take)
    the architecture with the two shows that are nearly built.
 2. **Straight Up + The Session** — config + the claims gate (D2) + the variant
    matrix.
-3. **The Villa** — the real build (`STORY_ENGINE_PLAN.md`), last, because it's
+3. **The Multiverse** — the real build (`STORY_ENGINE_PLAN.md`), last, because it's
    the only one that needs new engine (D1) and the one most worth hand-testing
    before automating.
 
@@ -289,7 +390,7 @@ own 2nd screen  system prompt         house furniture    legibility / hot-take)
 
 These change the shape of the build more than any single show.
 
-1. ~~Look independence.~~ **DECIDED (D3): the Villa gets its own world**
+1. ~~Look independence.~~ **DECIDED (D3): the Multiverse gets its own world**
    (handle only, no wordmark/scrim/counter/footer); the other four share the
    brand furniture with their own palette, type and photography style.
 2. **Is a show ever allowed to break format?** A locked spine gives
@@ -305,8 +406,8 @@ These change the shape of the build more than any single show.
 5. **How do we know a show works?** Nothing currently ties published
    performance back per format. **→ default: per-show KPI (each show above
    names one) plus a simple 8-week review, and be willing to kill one.**
-6. **Naming.** AMP / THE VILLA / STRAIGHT UP / THE SESSION / LIVE WIRE are
-   placeholders. Do the shows get names on-screen at all (a title card, a
-   consistent slide-1 tag), or are they invisible scaffolding the audience
-   only feels? **→ default: name them on-screen. A named recurring show is
-   what turns viewers into followers.**
+6. ~~Naming.~~ **DECIDED (D10): named on screen.** Each show gets a title
+   treatment in its look pack. Still open: are **AMP / THE MULTIVERSE /
+   STRAIGHT UP / THE SESSION / LIVE WIRE** the actual names, or placeholders
+   you want to re-christen? **→ default: keep them; they're short, they fit a
+   slide tag, and they say what they are.**
