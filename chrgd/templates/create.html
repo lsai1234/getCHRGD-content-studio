@@ -83,6 +83,12 @@
   .canon-box summary{cursor:pointer; font-weight:600; color:var(--muted)}
   .canon-box ul{margin:8px 0 0; padding-left:18px; color:var(--muted); line-height:1.5}
   .canon-open{margin:8px 0 0; color:var(--accent)}
+  .danger-link{margin-top:10px; padding:6px 10px; border-radius:8px; cursor:pointer;
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    font-size:11.5px; transition:border-color .15s, color .15s, background .15s}
+  .danger-link:hover{border-color:#ff8a8a; color:#ff8a8a}
+  .danger-link.armed{border-color:#ff8a8a; color:#ff8a8a;
+    background:rgba(255,138,138,.1); font-weight:600}
   .cta-wide{display:block; width:100%; margin:2px 0 14px; padding:12px;
     border-radius:12px; border:1px solid var(--accent); cursor:pointer;
     background:rgba(79,195,247,.12); color:inherit; font-weight:600;
@@ -650,6 +656,9 @@
       <summary>The story so far ({{ canon.history|length }} episode{{ '' if canon.history|length == 1 else 's' }})</summary>
       <ul>{% for line in canon.history %}<li>{{ line }}</li>{% endfor %}</ul>
       {% if canon.open_thread %}<p class="canon-open">Left open: {{ canon.open_thread }}</p>{% endif %}
+      <button type="button" id="canon-reset" class="danger-link"
+              data-episodes="{{ canon.history|length }}"
+              onclick="resetCanon(this)">Start again from episode 1</button>
     </details>
     {% else %}
     <p class="hint" style="margin-bottom:10px">Nothing in the canon yet — this is episode one.</p>
@@ -1160,6 +1169,36 @@ function pickCast(key, el){
   } else state.cast.push(key);
   el.classList.toggle('sel', state.cast.includes(key));
 }
+// Wiping the world is irreversible, so it takes two deliberate taps and the
+// second one names exactly what's about to be lost. The server wants a typed
+// RESET as well — that guard is there to stop a stray API call, and this is
+// the deliberate confirmation on top of it.
+let canonResetTimer = null;
+async function resetCanon(el){
+  if (!el.classList.contains('armed')) {
+    const n = Number(el.dataset.episodes || 0);
+    el.classList.add('armed');
+    el.textContent = `Wipe ${n} episode${n === 1 ? '' : 's'} and everything the `
+      + `cast has established? Tap again — this can't be undone.`;
+    clearTimeout(canonResetTimer);
+    canonResetTimer = setTimeout(() => {
+      el.classList.remove('armed');
+      el.textContent = 'Start again from episode 1';
+    }, 6000);
+    return;
+  }
+  clearTimeout(canonResetTimer);
+  el.disabled = true;
+  el.textContent = 'Resetting…';
+  const body = new URLSearchParams({confirm: 'RESET'});
+  const r = await post('/api/canon/reset', body);
+  if (!r) { el.disabled = false; el.textContent = 'Start again from episode 1'; return; }
+  toast('The Multiverse is back to episode 1.');
+  // The cast cards carry standings and gag counts, and the heading carries the
+  // episode number — all stale now, so repaint rather than patch them.
+  setTimeout(() => location.reload(), 600);
+}
+
 async function startEpisode(){
   if (state.cast.length < 2) { toast('Pick at least two characters.'); return; }
   const beat = document.getElementById('mv-beat').value.trim();

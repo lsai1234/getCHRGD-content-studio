@@ -718,3 +718,95 @@ def test_a_non_multiverse_brief_carries_none_of_it():
     msg = build_user_message(idea(show="amp"))
     assert "THE STANDARD TO WRITE TO" not in msg
     assert "BACK SOON" not in msg
+
+
+# --- the reset button -------------------------------------------------------
+
+
+def test_a_reset_returns_the_world_to_episode_one(store):
+    """The operator's escape hatch: forget the history, start clean."""
+    from chrgd.series import record_from_post
+
+    for n in (1, 2, 3):
+        record_from_post(
+            store, {"slides": [{"headline": "x"}]}, cast_keys=["tracy_beaker"],
+            idea_id=f"G{n}",
+            judge=_Continuity({"change": f"episode {n}", "unresolved": "u",
+                               "characters": {"tracy_beaker": {
+                                   "standing": "secretly competent",
+                                   "gags": [f"gag {n}"]}}}),
+        )
+    assert load_canon(store).next_number() == 4
+
+    reset_canon(store)
+    canon = load_canon(store)
+    assert canon.next_number() == 1
+    assert canon.episodes == []
+    assert canon.gags() == {}                       # the accumulated bits go
+    assert canon.standing_for("tracy_beaker") == ""  # and the standings
+    assert "FIRST episode" in canon.brief_block()
+
+
+def test_a_reset_does_not_touch_the_roster(store):
+    """Seed bits live in config, not the canon — a reset forgets what the show
+    established, not who the characters are."""
+    from chrgd.series import record_from_post
+
+    record_from_post(store, {"slides": [{"headline": "x"}]},
+                     cast_keys=["tracy_beaker"], idea_id="G1",
+                     judge=_Continuity({"change": "c", "characters": {
+                         "tracy_beaker": {"gags": ["a landed one"]}}}))
+    reset_canon(store)
+
+    tracy = get_character("tracy_beaker")
+    assert tracy.catchphrase == "My name is Tracy Beaker."
+    assert len(tracy.bits) >= 3
+    assert "My name is Tracy Beaker." in build_user_message(
+        idea(show="multiverse", cast=["tracy_beaker"]), store=store
+    )
+
+
+def test_the_reset_endpoint_demands_an_explicit_confirmation(settings, store):
+    from fastapi.testclient import TestClient
+
+    from chrgd.config import Settings
+    from chrgd.webapp import create_app
+
+    st = Settings(CHRGD_DB_PATH=settings.db_path,
+                  CHRGD_OUTPUT_DIR=settings.output_dir,
+                  CHRGD_WEB_USERNAME="a", CHRGD_WEB_PASSWORD="b",
+                  CHRGD_SECRET_KEY="k" * 32)
+    client = TestClient(create_app(st))
+    client.post("/login", data={"username": "a", "password": "b"},
+                follow_redirects=False)
+
+    assert client.post("/api/canon/reset", data={"confirm": "yes"}).status_code == 400
+    assert client.post("/api/canon/reset", data={}).status_code in (400, 422)
+    assert client.post("/api/canon/reset", data={"confirm": "RESET"}).status_code == 200
+
+
+def test_the_reset_button_is_on_the_multiverse_screen(settings, store):
+    """It only appears once there's history — nothing to reset before that."""
+    from fastapi.testclient import TestClient
+
+    from chrgd.config import Settings
+    from chrgd.series import record_from_post
+    from chrgd.webapp import create_app
+
+    st = Settings(CHRGD_DB_PATH=settings.db_path,
+                  CHRGD_OUTPUT_DIR=settings.output_dir,
+                  CHRGD_WEB_USERNAME="a", CHRGD_WEB_PASSWORD="b",
+                  CHRGD_SECRET_KEY="k" * 32)
+    client = TestClient(create_app(st))
+    client.post("/login", data={"username": "a", "password": "b"},
+                follow_redirects=False)
+
+    assert 'id="canon-reset"' not in client.get("/create").text
+
+    record_from_post(store, {"slides": [{"headline": "x"}]},
+                     cast_keys=["tracy_beaker"], idea_id="G1",
+                     judge=_Continuity({"change": "something happened"}))
+    page = client.get("/create").text
+    assert 'id="canon-reset"' in page
+    assert 'data-episodes="1"' in page      # the confirmation names the cost
+    assert "Episode 2" in page
