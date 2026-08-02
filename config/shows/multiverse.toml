@@ -7,30 +7,32 @@
 
 [show]
 key = "multiverse"
-label = "THE MULTIVERSE"
+label = "CHRGD MULTIVERSE"
 tagline = "Every reality leaks into the same knackered gym on a retail park."
 blurb = "A comic serial. Recognisable characters, one squat rack, storylines that carry week to week."
 icon = "💥"
 weekday = "thu"
 kpi_metric = "comments"
 kpi = "comments, and whether they come back next week"
-slides_min = 5
-slides_max = 7
+slides_min = 6
+slides_max = 8
 front_screen = "seed"
 cast = "roster"
 gate_profile = "continuity_likeness"
 engagement_play = "comment"
 
 [spine]
-roles = ["cold_open_recap", "the_threat", "the_complication", "the_escalation", "the_turn", "the_cliffhanger"]
+roles = ["the_situation", "the_stakes", "the_evidence", "the_false_lead", "the_reveal", "the_why", "the_choice", "the_payoff"]
 flex = 1
 briefs = [
-  "A cold open that works for someone who has never seen this before AND rewards someone who has. Establish who's here and what's at stake in one line — never 'previously on' housekeeping, always a hook that happens to catch you up.",
-  "The situation and the threat. Something specific is about to be lost — a rack, a spot, a reputation, a place in the queue.",
-  "The complication: the thing that makes it worse, caused by a character's established trait rather than by coincidence.",
-  "Escalation. Raise the cost, never restate it. Whatever was at stake is now worse.",
-  "The turn — the reveal that reframes what came before. Exactly one status change per episode: someone gains, loses or learns.",
-  "The cliffhanger. Resolve THIS beat, open the next question, and make the comment section argue about what happens next."
+  "THE SITUATION. State the thing that has happened, in two or three lines, as a fact. Something has CHANGED at Iron Palace and it is concrete and visible. No preamble, no scene-setting — open on the change. End the slide on the question the whole episode answers.",
+  "THE STAKES. Why this is a PROBLEM, not a win. Someone reacts and their reaction tells the reader what is actually at risk. This is where the episode stops being an event and becomes a story.",
+  "THE EVIDENCE. A physical clue is found. It must be a real object the reader can picture, and it must POINT AT THE WRONG PERSON. Plant it properly — the real reveal on slide 5 has to be visible in hindsight.",
+  "THE FALSE LEAD. The wrong person is accused, or claims it. Let them be wrong at length; it is funnier and it buys the real answer room. End by noticing someone who has said nothing.",
+  "THE REVEAL. The real answer, and it recontextualises the evidence. Name the character in full here. They should DENY it while the proof is in the frame — a reveal is stronger when the character fights it.",
+  "THE WHY. How and when they actually did it, and the lie they tell to cover it. This is the character beat: the reader learns something true about them under a thing that isn't.",
+  "THE CHOICE. The one status change, and it must be caused by the character's FLAW. They choose the thing that costs them, for a reason the reader now completely understands. End on an action whose purpose isn't clear yet.",
+  "THE PAYOFF. What that action was for — the image the whole episode was walking toward. Land it in one line. Then, in the last beat, show that somebody saw. That is next week's episode."
 ]
 
 [voice]
@@ -44,7 +46,25 @@ CAST 2-4 CHARACTERS PER EPISODE, no more — a carousel cannot hold five and the
 
 EXACTLY ONE STATUS CHANGE per episode, caused by a character's flaw rather than by coincidence, and it must open the next question.
 
-THE SWIPE RULE: every slide but the last ends mid-tension — a question raised, an interruption, a reveal half-shown. If a slide's last line is a complete thought, the swipe stops there.
+HOW TO ACTUALLY TELL THE STORY — this is the difference between a story and six slides about a theme, and it is the part that matters most:
+
+EVERY SLIDE IS A CHAPTER, AND SOMETHING HAPPENS ON IT. An event, not a mood. If a slide could be deleted and the reader would still follow the plot, it is not a chapter and it does not belong. Never restate the premise; always advance it.
+
+WRITE IN SCENES, NOT SUMMARY. Show the thing happening — a line of dialogue, an object, an action. "Clarkson put down his coffee for the first time since March" is a scene. "Everyone was annoyed" is a summary and it kills the swipe.
+
+THE SWIPE RULE: every slide but the last ends on an OPEN QUESTION the next slide answers — and then that slide asks a new one. If a slide's last line is a complete thought, the swipe stops there. The reader should never have to decide to keep going.
+
+PLANT, THEN PAY OFF. The reveal must be visible in hindsight: put the clue on the page two or three slides before it means anything. A twist nobody could have predicted is not clever, it is arbitrary. A twist the reader could have caught is the one they send to a mate.
+
+THE TURN IS CAUSED BY A CHARACTER'S FLAW, never by coincidence. Someone chooses the thing that costs them, for a reason the reader understands completely by then. That choice IS the episode.
+
+ONE CHARACTER PER BEAT. Two characters talking is fine; three things happening at once is unreadable at thumb size.
+
+MAKE IT INSTANTLY CLEAR WHO IS WHO. A reader arriving cold must never be confused about which character is speaking:
+- Use a character's FULL NAME the first time they appear in an episode — "Tracy Beaker", never just "Tracy". Their name is the joke; the recognition IS the hook.
+- Use their catchphrase where it fits naturally. It is the fastest identification a reader gets, and a returning viewer is waiting for it.
+- Attribute dialogue explicitly. "Orangina:" or "Clarkson said" — never an unattributed line the reader has to guess at.
+- Play the trait the reader already knows them for. If a character does nothing recognisable, the reader does not know why they are in it.
 
 LIKENESS RULES — these are hard limits, not preferences, and they apply to every real person and every owned character:
 - Caricature only. Never photoreal. The comic style is the point and it is also the line.
@@ -68,10 +88,12 @@ house_style = "A comic book page. Bold black ink outlines, halftone dot shading,
 palette = "Saturated comic primaries — hot yellow, coral red, turquoise — on bright grounds. Deliberately NOT the brand's near-black; this show lives in its own world."
 type_style = "Comic lettering: bold, slightly irregular, all-caps in narration boxes and speech bubbles, with heavy outlines. It should read as drawn, not typeset."
 motif = "The Iron Palace itself — the same knackered retail-park gym interior, the BACK SOON sign on the lat pulldown, the single squat rack — recurring in every episode."
-title_card = "THE MULTIVERSE"
-title_note = "a comic masthead treatment across the top of slide 1, in the show's lettering — plus a small episode number"
+title_card = "CHRGD MULTIVERSE"
+title_note = "a comic-book masthead across the top of slide 1 reading CHRGD MULTIVERSE — bold, inked, in the show's lettering, with the CHRG in the brand's electric blue and a small EPISODE number badge beside it, like the title bar of a comic issue"
 
-# D3 — this show breaks the house look entirely. Handle only, no CHRGD frame.
+# The show keeps its own comic world (D3) but is now openly a CHRGD product:
+# the masthead brands it, so the wordmark stays off the frame and the branding
+# lives in the title bar instead of fighting the artwork.
 [look.furniture]
 wordmark = false
 scrim = false

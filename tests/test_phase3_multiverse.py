@@ -210,7 +210,7 @@ def test_the_episode_brief_reaches_the_build(store):
     assert "Erling Haaland" in msg              # the cast
     assert "took the last rack" in msg          # the canon
     assert "who gets it tomorrow" in msg        # the open thread
-    assert "EPISODE OF **THE MULTIVERSE**" in msg   # and the show's own brief
+    assert "EPISODE OF **CHRGD MULTIVERSE**" in msg  # and the show's own brief
 
 
 def test_the_build_works_without_a_store():
@@ -632,3 +632,89 @@ def test_the_accumulated_gags_reach_the_next_episodes_brief(store):
     assert "barred from the sauna" in msg                     # where she stands
     assert "the appeal" in msg                                # the open thread
     assert "THIS IS EPISODE 2" in msg
+
+
+# --- story craft: what makes a slide worth swiping --------------------------
+
+
+def test_the_spine_is_chapters_with_events_not_abstract_roles():
+    """A spine of moods produces six slides about a theme. A spine of chapters
+    produces a story."""
+    from chrgd.shows import get_show
+
+    show = get_show("multiverse")
+    assert show.spine.roles == [
+        "the_situation", "the_stakes", "the_evidence", "the_false_lead",
+        "the_reveal", "the_why", "the_choice", "the_payoff",
+    ]
+    briefs = " ".join(show.spine.briefs)
+    # the two structural demands the story depends on
+    assert "POINT AT THE WRONG PERSON" in briefs      # the clue misdirects
+    assert "recontextualises the evidence" in briefs  # and the reveal pays it off
+    assert "FLAW" in briefs                           # the turn is character-driven
+
+
+def test_the_brief_teaches_swipe_craft():
+    from chrgd.shows import get_show
+
+    voice = get_show("multiverse").voice.block
+    for rule in ("EVERY SLIDE IS A CHAPTER", "WRITE IN SCENES, NOT SUMMARY",
+                 "THE SWIPE RULE", "PLANT, THEN PAY OFF",
+                 "ONE CHARACTER PER BEAT"):
+        assert rule in voice, rule
+
+
+def test_the_brief_demands_the_reader_can_tell_who_is_who():
+    from chrgd.shows import get_show
+
+    voice = get_show("multiverse").voice.block
+    assert "FULL NAME the first time" in voice
+    assert "Tracy Beaker" in voice and "never just" in voice
+    assert "Attribute dialogue explicitly" in voice
+
+
+def test_tracy_beaker_introduces_herself_properly():
+    """The recognition IS the hook — 'Tracy' alone means nothing to a scroller."""
+    tracy = get_character("tracy_beaker")
+    assert tracy.catchphrase == "My name is Tracy Beaker."
+    bits = " ".join(tracy.bits).lower()
+    assert "full name" in bits
+    assert "hollywood" in bits          # the mum lie, her most recognisable trait
+    assert "Tracy Beaker" in tracy.brief_line()
+
+
+def test_the_show_is_branded_as_a_chrgd_product():
+    """It keeps its own comic world, but it is openly a CHRGD thing."""
+    from chrgd.shows import get_show
+
+    show = get_show("multiverse")
+    assert show.label == "CHRGD MULTIVERSE"
+    assert show.look.title_card == "CHRGD MULTIVERSE"
+    assert "electric blue" in show.look.title_note
+    # the masthead does the branding, so the frame stays out of the artwork
+    assert show.look.furniture.wordmark is False
+
+
+def test_the_worked_example_is_loaded_as_a_standard_not_a_plot():
+    from chrgd.roster import load_example
+
+    example = load_example()
+    assert "THE STANDARD TO WRITE TO" in example
+    assert "completely different story" in example   # never reuse the plot
+    assert "BACK SOON" in example                    # the episode itself
+    # and it demonstrates the rules it's teaching
+    assert example.count("SLIDE") >= 8
+
+
+def test_the_example_reaches_an_episode_brief(store):
+    msg = build_user_message(idea(show="multiverse", cast=["tracy_beaker"]),
+                             store=store)
+    assert "THE STANDARD TO WRITE TO" in msg
+    assert "My name is Tracy Beaker." in msg     # her catchphrase, in the cast block
+    assert "EVERY SLIDE IS A CHAPTER" in msg
+
+
+def test_a_non_multiverse_brief_carries_none_of_it():
+    msg = build_user_message(idea(show="amp"))
+    assert "THE STANDARD TO WRITE TO" not in msg
+    assert "BACK SOON" not in msg

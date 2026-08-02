@@ -280,7 +280,7 @@ def record_episode(
 def episode_brief(store: Store, cast_keys: list[str] | None = None) -> str:
     """The full Multiverse brief: the world, the cast (with their landed running
     gags) and the canon."""
-    from .roster import cast_block, load_world, resolve
+    from .roster import cast_block, load_example, load_world, resolve
 
     cast = resolve(cast_keys)
     canon = load_canon(store)
@@ -289,6 +289,7 @@ def episode_brief(store: Store, cast_keys: list[str] | None = None) -> str:
         load_world().as_block(),
         cast_block(cast, gags=canon.gags(keys or None)),
         canon.brief_block(cast_keys=keys or None),
+        load_example(),
     ]
     return "\n\n".join(b for b in blocks if b)
 

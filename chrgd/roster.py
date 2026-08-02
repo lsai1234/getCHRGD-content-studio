@@ -28,6 +28,12 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 ROSTER_FILE = Path(__file__).resolve().parent.parent / "config" / "roster.toml"
+#: The worked episode the engine writes against. An abstract spine tells a model
+#: what SHAPE to make; a good example tells it what good feels like, and that is
+#: the difference between six slides about a theme and a story people swipe.
+EXAMPLE_FILE = (
+    Path(__file__).resolve().parent.parent / "config" / "multiverse_example.md"
+)
 
 #: Route key the episode's cast rides on.
 ROUTE_KEY = "cast"
@@ -172,6 +178,21 @@ def cast_block(
     ]
     lines += [c.brief_line(extra_bits=(gags or {}).get(c.key)) for c in cast]
     return "\n".join(lines)
+
+
+def load_example() -> str:
+    """The gold-standard episode, as a block for the brief. '' if missing."""
+    if not EXAMPLE_FILE.exists():
+        return ""
+    body = EXAMPLE_FILE.read_text(encoding="utf-8").strip()
+    return (
+        "THE STANDARD TO WRITE TO — a worked episode of this show. Match its "
+        "STRUCTURE and its craft, never its plot: study how each slide is a "
+        "chapter with an event in it, how every slide hands off to the next on "
+        "an open question, how the clue is planted before the reveal pays it "
+        "off, and how clearly you always know who is speaking. Your episode "
+        "must be a completely different story.\n\n" + body
+    )
 
 
 def visual_block(cast: list[Character]) -> str:

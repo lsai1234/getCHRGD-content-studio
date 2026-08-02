@@ -173,14 +173,17 @@ bits = [
 name = "Tracy Beaker"
 class = "fictional_ip"
 what = "Grown up, and no calmer."
-trait = "Care-home kid energy in an adult body. Tells enormous, elaborate lies. Fights everyone. Fiercely loyal about ten seconds after screaming at you."
+trait = "Care-home kid energy in an adult body. Tells enormous, elaborate lies — especially about her mum. Fights everyone. Fiercely loyal about ten seconds after screaming at you."
 role = "Took a free trial pass in 2019 and simply never left. Has a permanent, escalating feud with the front desk."
 visual = "A young woman with wild curly dark hair and a permanent scowl, drawn in OUR bold comic-ink style — our own design, never a copy of any existing illustration of the character."
-catchphrase = "That wasn't me."
-# Signature running gags — the concrete jokes, not just the trait.
+# She narrates to camera and announces herself — that self-introduction IS the
+# recognition, so she says her full name, never just 'Tracy'.
+catchphrase = "My name is Tracy Beaker."
 bits = [
+    "Introduces herself by her full name, to camera, mid-scene",
+    "Denies something she is visibly holding the evidence of — 'that wasn't me'",
+    "Claims her mum is a famous something in Hollywood, a different job each time, and nobody contradicts her",
     "Escalates a front-desk disagreement into a formal incident",
-    "Tells an enormous, unnecessary and immediately disprovable lie",
     "Is furious for ninety seconds and then aggressively loyal",
 ]
 
