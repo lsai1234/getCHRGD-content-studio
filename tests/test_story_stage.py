@@ -51,16 +51,38 @@ GOOD_STORY = {
 }
 
 
+GOOD_PREMISE = {
+    "lead": "tracy_beaker",
+    "flaw": "cannot be seen being kind",
+    "trap": "she gets caught doing something nice",
+    "self_inflicted": "she fixes it herself, at 3am, and leaves evidence",
+    "reversal": "she has to hand the credit to someone who did nothing",
+    "the_joke": "the funny is: she has to sabotage her own good deed to stay awful",
+    "cost": "she loses the repair and watches Orangina take a bow for it",
+}
+
+PASS = {"is_a_story": True, "retell": "Tracy hid that she fixed it",
+        "who_wanted_what": "Tracy wanted nobody to know", "character_count": 2,
+        "funniest_line": "I have never fixed anything in my life",
+        "who_lost_what": "she lost the credit, publicly"}
+
+
 class FakeWriter:
-    """Returns a queued sequence of stories, recording what it was asked."""
+    """Stands in for the writer. Serves the premise pitch first (the stage 0
+    call), then a queued sequence of stories."""
 
     def __init__(self, *payloads):
         self._payloads = list(payloads)
         self.prompts: list[str] = []
+        self.premise_prompts: list[str] = []
 
     def complete(self, system, user):
-        self.prompts.append(user)
-        payload = self._payloads.pop(0) if self._payloads else GOOD_STORY
+        if "pitch the COMIC IDEAS" in system:
+            self.premise_prompts.append(user)
+            payload = {"premises": [GOOD_PREMISE]}
+        else:
+            self.prompts.append(user)
+            payload = self._payloads.pop(0) if self._payloads else GOOD_STORY
 
         class R:
             content = json.dumps(payload)
@@ -74,8 +96,10 @@ class FakeJudge:
         self.seen: list[str] = []
 
     def judge(self, system, user):
+        if "picking which ONE comic idea" in system:
+            return json.dumps({"winner": 0, "why": "it lands instantly"})
         self.seen.append(user)
-        v = self._verdicts.pop(0) if self._verdicts else {"is_a_story": True}
+        v = self._verdicts.pop(0) if self._verdicts else PASS
         return json.dumps(v)
 
 
@@ -191,7 +215,7 @@ def test_a_premise_fails_the_cold_read_and_is_rewritten(store, settings):
         {"is_a_story": False, "retell": "nothing — it describes a rack",
          "who_wanted_what": "nobody", "what_it_cost": "nothing",
          "verdict": "this is a situation, not a story"},
-        {"is_a_story": True, "retell": "Tracy Beaker hid that she fixed it"},
+        PASS,
     )
     story, _spend = write_story(Idea(idea_id="G1", concept_note=""), settings,
                                 store, cast_keys=["tracy_beaker"],
@@ -330,10 +354,14 @@ def test_the_two_stage_build_end_to_end(store, settings, monkeypatch):
         def complete(self, system, user):
             self.n += 1
             seen[self.n] = user
+            if "pitch the COMIC IDEAS" in system:
+                return pipeline.LLMResult(
+                    content=json.dumps({"premises": [GOOD_PREMISE]}),
+                    prompt_tokens=1, completion_tokens=1)
             if "PROSE" in system:
                 return pipeline.LLMResult(content=json.dumps(GOOD_STORY),
                                           prompt_tokens=1, completion_tokens=1)
-            leaking = self.n <= 2      # first cut smuggles art direction in
+            leaking = self.n <= 3      # first cut smuggles art direction in
             post = {
                 "post_type": "carousel", "hook": "h",
                 "hook_options": ["a", "b", "c"],
@@ -354,9 +382,10 @@ def test_the_two_stage_build_end_to_end(store, settings, monkeypatch):
 
     class Judge:
         def judge(self, system, user):
+            if "picking which ONE comic idea" in system:
+                return json.dumps({"winner": 0, "why": "it lands"})
             if "is_a_story" in system:
-                return json.dumps({"is_a_story": True,
-                                   "retell": "Tracy hid that she fixed it"})
+                return json.dumps(PASS)
             return json.dumps({"safe": True, "flags": []})
 
     monkeypatch.setattr(claims_mod, "OpenAIClaimsJudge", lambda s: Judge())
@@ -370,13 +399,16 @@ def test_the_two_stage_build_end_to_end(store, settings, monkeypatch):
     result = pipeline.build_single_idea(store, settings, "G1", client=client,
                                         record_run=False)
 
-    # stage 1 wrote prose from the editor's premise
-    assert "EDITOR'S PREMISE" in seen[1] and "won't admit it" in seen[1]
+    # stage 0 pitched comic ideas from the editor's direction
+    assert "EDITOR'S DIRECTION" in seen[1] and "won't admit it" in seen[1]
+    # stage 1 wrote prose against the chosen joke
+    assert "THE COMIC IDEA" in seen[2]
+    assert "sabotage her own good deed" in seen[2]
     # stage 2 was told to cut, not invent, and carried the story
-    assert "THIS EPISODE IS ALREADY WRITTEN" in seen[2]
-    assert "grease on both hands" in seen[2]
+    assert "THIS EPISODE IS ALREADY WRITTEN" in seen[3]
+    assert "grease on both hands" in seen[3]
     # the leak earned a rewrite rather than shipping
-    assert client.n >= 3 and "image brief" in seen[3]
+    assert client.n >= 4 and "image brief" in seen[4]
     saved = store.get_idea("G1")
     assert "=" not in json.loads(saved.slides_json)[0]["supporting"]
     # and the prose is on the idea, for the editor to read before rendering
@@ -422,6 +454,7 @@ def test_a_non_serial_build_skips_the_story_stage(store, settings):
         def complete(self, system, user):
             calls["n"] += 1
             assert "PROSE" not in system, "no story stage off the serial"
+            assert "COMIC IDEAS" not in system, "no premise stage off the serial"
             return pipeline.LLMResult(content=json.dumps({
                 "post_type": "carousel", "hook": "h",
                 "hook_options": ["a", "b", "c"],
@@ -521,9 +554,7 @@ def test_a_line_that_needed_re_reading_fails():
 
 
 def test_a_clean_verdict_passes():
-    assert StoryVerdict(is_a_story=True, retell="Tracy hid that she fixed it",
-                        who_wanted_what="Tracy wanted nobody to know",
-                        character_count=2).passed()
+    assert StoryVerdict(**PASS).passed()
 
 
 def test_dense_prose_is_rewritten_even_when_the_judge_is_happy(store, settings):
@@ -531,8 +562,7 @@ def test_dense_prose_is_rewritten_even_when_the_judge_is_happy(store, settings):
     every time rather than whenever a judge happens to mention it."""
     dense = {**GOOD_STORY, "prose": REAL_FAILURE}
     writer = FakeWriter(dense, GOOD_STORY)
-    judge = FakeJudge({"is_a_story": True, "retell": "fine", "character_count": 2},
-                      {"is_a_story": True, "retell": "fine", "character_count": 2})
+    judge = FakeJudge(PASS, PASS)
 
     story, _ = write_story(Idea(idea_id="G1", concept_note=""), settings, store,
                            cast_keys=["tracy_beaker"], client=writer, judge=judge)
@@ -553,3 +583,137 @@ def test_the_worked_example_models_the_plainness_it_teaches():
     prose = "\n".join(line.lstrip("> ").strip() for line in body.splitlines()
                        if line.strip().startswith(">"))
     assert lint_prose(prose) == []
+
+
+# --- the joke: the stage both failures skipped -----------------------------
+
+
+def test_a_premise_needs_a_named_joke_and_self_infliction():
+    """'First names on the board' had a want, an obstacle and a choice — and
+    no comic idea underneath, because nothing ever asked for one."""
+    from chrgd.story import Premise
+
+    assert Premise(**GOOD_PREMISE).is_usable()
+    assert not Premise(lead="x", flaw="y", trap="z").is_usable()
+    assert not Premise(the_joke="the funny is: ...").is_usable()  # no self-infliction
+
+
+def test_the_premise_prompt_teaches_the_method():
+    from chrgd.story import PREMISE_SYSTEM
+
+    for rule in ("PICK ONE CHARACTER", "BUILD THE TRAP",
+                 "MAKE THEM SPRING IT THEMSELVES", "FIND THE REVERSAL",
+                 "NAME THE JOKE IN ONE SENTENCE", "NAME THE COST"):
+        assert rule in PREMISE_SYSTEM, rule
+    assert "Bad luck is not comedy" in PREMISE_SYSTEM
+
+
+def test_the_pitch_is_run_before_a_word_is_written(store, settings):
+    writer, judge = FakeWriter(GOOD_STORY), FakeJudge()
+    story, _ = write_story(Idea(idea_id="G1", concept_note=""), settings, store,
+                           cast_keys=["tracy_beaker"], client=writer, judge=judge)
+    assert writer.premise_prompts, "no premises were pitched"
+    # the writer was handed the chosen joke, not left to find one
+    assert "THE COMIC IDEA" in writer.prompts[0]
+    assert GOOD_PREMISE["the_joke"] in writer.prompts[0]
+    # and the joke rides on the story so the editor can see it
+    assert story.the_joke == GOOD_PREMISE["the_joke"]
+
+
+def test_the_process_document_reaches_the_pitch(store, settings):
+    writer = FakeWriter(GOOD_STORY)
+    write_story(Idea(idea_id="G1", concept_note=""), settings, store,
+                cast_keys=["tracy_beaker"], client=writer, judge=FakeJudge())
+    pitch = writer.premise_prompts[0]
+    assert "THE PROCESS FOR FINDING THE JOKE" in pitch
+    assert "name the flaw" in pitch.lower()
+    assert "First names on the board" in pitch     # the failure, worked through
+
+
+def test_the_funniest_premise_is_picked(settings):
+    from chrgd.story import Premise, pick_premise
+
+    premises = [Premise(**{**GOOD_PREMISE, "the_joke": f"joke {i}"})
+                for i in range(3)]
+
+    class Picker:
+        def judge(self, system, user):
+            assert "picking which ONE comic idea" in system
+            return json.dumps({"winner": 2, "why": "it lands instantly"})
+
+    chosen, why, _ = pick_premise(premises, settings, judge=Picker())
+    assert chosen.the_joke == "joke 2"
+    assert why == "it lands instantly"
+
+
+def test_a_bogus_winner_index_falls_back_rather_than_crashing(settings):
+    from chrgd.story import Premise, pick_premise
+
+    premises = [Premise(**GOOD_PREMISE), Premise(**GOOD_PREMISE)]
+
+    class Wrong:
+        def judge(self, system, user):
+            return json.dumps({"winner": 99})
+
+    chosen, _why, _spend = pick_premise(premises, settings, judge=Wrong())
+    assert chosen is premises[0]
+
+
+def test_a_failed_pitch_still_produces_an_episode(store, settings):
+    """The premise stage is a booster, not a dependency."""
+    class NoPremises:
+        def __init__(self):
+            self.prompts = []
+
+        def complete(self, system, user):
+            if "pitch the COMIC IDEAS" in system:
+                raise RuntimeError("api hiccup")
+            self.prompts.append(user)
+
+            class R:
+                content = json.dumps(GOOD_STORY)
+                prompt_tokens = completion_tokens = 5
+            return R()
+
+    writer = NoPremises()
+    story, _ = write_story(Idea(idea_id="G1", concept_note=""), settings, store,
+                           cast_keys=["tracy_beaker"], client=writer,
+                           judge=FakeJudge())
+    assert story is not None and story.is_usable()
+    assert "THE COMIC IDEA" not in writer.prompts[0]
+
+
+def test_the_story_prompt_demands_the_joke_land():
+    from chrgd.story import STORY_SYSTEM
+
+    assert "YOU HAVE BEEN GIVEN THE JOKE" in STORY_SYSTEM
+    assert "CLEAR IS THE DELIVERY, FUNNY IS THE JOB" in STORY_SYSTEM
+    assert "THE LAST LINE IS THE PUNCHLINE" in STORY_SYSTEM
+    assert "Escalate in THREES" in STORY_SYSTEM or "escalate in THREES" in STORY_SYSTEM
+    assert "SOMEBODY LOSES SOMETHING" in STORY_SYSTEM
+    # it names the exact failure it exists to prevent
+    assert "stood still" in STORY_SYSTEM
+
+
+def test_a_clear_story_with_no_joke_in_it_fails():
+    """'First names on the board': readable, well-formed, and pointless."""
+    v = StoryVerdict(is_a_story=True,
+                     retell="a man wanted a treadmill and got signed up for squats",
+                     who_wanted_what="Tralalero wanted the treadmill",
+                     character_count=3, funniest_line="", who_lost_what="")
+    assert not v.passed()
+    note = v.failure_note()
+    assert "THERE IS NO JOKE IN IT" in note
+    assert "Nobody lost anything" in note
+
+
+def test_an_episode_that_trails_off_fails():
+    v = StoryVerdict(**{**PASS, "ends_on_its_best_line": False})
+    assert "trails off" in v.failure_note()
+
+
+def test_the_joke_is_protected_when_the_story_is_cut_into_slides():
+    story = Story(**{**GOOD_STORY, "the_joke": "the funny is: she sabotages herself"})
+    brief = story.as_brief()
+    assert "THE JOKE this episode is landing" in brief
+    assert "must not be softened" in brief

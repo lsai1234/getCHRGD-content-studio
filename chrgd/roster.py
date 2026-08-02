@@ -34,6 +34,10 @@ ROSTER_FILE = Path(__file__).resolve().parent.parent / "config" / "roster.toml"
 EXAMPLE_FILE = (
     Path(__file__).resolve().parent.parent / "config" / "multiverse_example.md"
 )
+#: How to find the joke before writing. The step both failed episodes skipped.
+PROCESS_FILE = (
+    Path(__file__).resolve().parent.parent / "config" / "story_process.md"
+)
 
 #: Route key the episode's cast rides on.
 ROUTE_KEY = "cast"
@@ -193,6 +197,17 @@ def load_example() -> str:
         "line. Easy to follow is the standard; clever writing that costs "
         "comprehension is the way this show fails. Your episode must be a "
         "completely different story.\n\n" + body
+    )
+
+
+def load_process() -> str:
+    """The written process for finding a comic idea. '' if missing."""
+    if not PROCESS_FILE.exists():
+        return ""
+    return (
+        "THE PROCESS FOR FINDING THE JOKE — follow it, in order. Both previous "
+        "failures skipped straight to writing.\n\n"
+        + PROCESS_FILE.read_text(encoding="utf-8").strip()
     )
 
 
