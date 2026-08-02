@@ -83,6 +83,13 @@
   .canon-box summary{cursor:pointer; font-weight:600; color:var(--muted)}
   .canon-box ul{margin:8px 0 0; padding-left:18px; color:var(--muted); line-height:1.5}
   .canon-open{margin:8px 0 0; color:var(--accent)}
+  #write-story{margin:0 0 14px; padding:12px 14px; border-radius:12px;
+    background:var(--card); border:1px solid var(--line)}
+  .story-h{font-weight:700; font-size:13px; letter-spacing:.02em}
+  .story-l{margin:6px 0 0; font-size:12.5px; color:var(--accent)}
+  .story-p{margin:8px 0 0; font-size:13px; line-height:1.55; white-space:pre-wrap}
+  .story-o{margin:8px 0 0; font-size:12px; color:var(--muted)}
+  .story-n{margin:8px 0 0; font-size:11px; color:var(--faint)}
   .danger-link{margin-top:10px; padding:6px 10px; border-radius:8px; cursor:pointer;
     background:transparent; border:1px solid var(--line); color:var(--muted);
     font-size:11.5px; transition:border-color .15s, color .15s, background .15s}
@@ -676,8 +683,9 @@
       {% endfor %}
     </div>
 
-    <label style="margin-top:14px">What happens this episode? <span class="muted">(optional — the engine will find it)</span></label>
-    <input id="mv-beat" placeholder="e.g. someone finally fixes the lat pulldown and claims it as theirs">
+    <label style="margin-top:14px">Got the story? <span class="muted">(optional — leave it blank and the engine writes one)</span></label>
+    <input id="mv-beat" placeholder="e.g. Tracy Beaker fixes the lat pulldown at 3am and won't admit it">
+    <p class="hint" style="margin-top:6px; font-size:12px">One line is plenty — <b>who wants what, and what's in the way</b>. The engine writes the full episode as a story first, checks a cold reader can follow it, and only then cuts it into slides.</p>
 
     <div class="cta-row" style="margin-top:16px">
       <button type="button" onclick="startEpisode()">Write episode {{ canon.episode }} →</button>
@@ -837,6 +845,7 @@
     <div id="write-done" style="display:none">
       <h2>How does it read?</h2>
       <p class="meta-line" id="write-meta"></p>
+      <div id="write-story" style="display:none"></div>
       <p class="throughline" id="write-throughline" style="display:none"></p>
       <p class="throughline psych-line" id="write-psych" style="display:none"></p>
 
@@ -2400,6 +2409,20 @@ async function openWriteStep(autoJump = true){
     `${d.idea_id} · ${d.status}` + (d.mechanic ? ` · ${d.mechanic}` : '') +
     (d.style ? ` · style: ${d.style}` : '') +
     (d.take && d.take.title ? ` · take: ${d.take.title}` : '');
+
+  // The prose episode, shown BEFORE the render — the cheapest quality gate in
+  // the pipeline. A bad story costs ten seconds to reject here; the same story
+  // costs eight paid images if it gets past this screen.
+  const sb = document.getElementById('write-story');
+  if (d.story && d.story.prose) {
+    sb.innerHTML =
+      `<div class="story-h">📖 The story ${d.story.title ? '— “' + esc(d.story.title) + '”' : ''}</div>`
+      + (d.story.logline ? `<p class="story-l">${esc(d.story.logline)}</p>` : '')
+      + `<p class="story-p">${esc(d.story.prose)}</p>`
+      + (d.story.unresolved ? `<p class="story-o">Left open: ${esc(d.story.unresolved)}</p>` : '')
+      + `<p class="story-n">Written and cold-read before the slides were cut. If the story's wrong, fix it here — not after the images.</p>`;
+    sb.style.display = '';
+  } else { sb.style.display = 'none'; }
 
   // the swipe journey — the spine every slide is a beat of
   const tl = document.getElementById('write-throughline');

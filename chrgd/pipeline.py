@@ -52,8 +52,8 @@ in exactly this shape:
   ],
   "slides": [
     {
-      "headline": "string",
-      "supporting": "string",
+      "headline": "string — the words a READER READS on the slide. In ai_design mode every character of this is painted onto the artwork, so it must be finished, human-facing copy: a line of the story, a line of dialogue, or a narration box. NEVER a description of the picture, never a note to the illustrator, never shorthand.",
+      "supporting": "string — the second line of STORY copy, read by a human, painted onto the artwork exactly as written. This field is NOT a notes field and NOT art direction. Every visual instruction belongs in image_prompt and NOTHING visual belongs here. Banned outright, because they have all appeared on finished slides: prop glosses ('velvet rope = lifting straps'), set-dressing notes ('wonky 20:00 sign', 'battered neon sign'), camera or composition language (shot, frame, panel, close-up, foreground, background), and any 'X = Y' or 'X / Y' shorthand. If you would not say it out loud to a reader, it does not go here. Empty string is far better than a note.",
       "body": "string — OPTIONAL detail block, empty string for most slides. Use it ONLY on a slide that genuinely earns density (usually the escalation or payoff): 2-5 tight sentences or a short list telling the full story/mechanism/details — the slide people stop and actually READ, then screenshot or save. Written to be read on a phone: short sentences, concrete specifics, no filler. Never pad a slide with a body just to look thorough.",
       "role": "string — this slide's job in the arc: one of hook / recognition / escalation / payoff / cta. The slides in order must form a real story with rising tension, NOT parallel restatements of the theme.",
       "swipe_trigger": "string — the OPEN LOOP this slide leaves dangling: the specific reason the viewer swipes to the NEXT slide (a question raised, a reveal promised, a tension unresolved). The last slide's trigger is the social action (rank/confess/tag/argue/save). Every non-final slide MUST hand off to the next one.",
@@ -577,6 +577,17 @@ def _seed_context(idea: Idea, prefs: dict, store: Store | None = None) -> list[s
             lines.append("")
             lines.append(block)
 
+        # When the story stage has run, the episode is ALREADY WRITTEN and this
+        # call's job changes completely: cut it into slides rather than invent
+        # one. That split is the whole fix — writing a story and formatting a
+        # story are different jobs, and collapsing them is why the story lost.
+        from .story import story_from_route
+
+        story = story_from_route(prefs)
+        if story is not None:
+            lines.append("")
+            lines.append(story.as_brief())
+
     # An Amp post needs the mascot in the WORDS too — without this the engine
     # writes a normal carousel that only looks like Amp once the images render.
     # Outside the mechanic branch on purpose: Amp is now a SHOW, so a post
@@ -636,8 +647,9 @@ def creation_prefs(idea: Idea) -> dict:
             # STRAIGHT UP's subject and THE SESSION's point in the variant
             # matrix — each written by that show's own screen.
             "ingredient", "session_variant",
-            # THE MULTIVERSE's cast for this episode (chrgd/roster.py).
-            "cast",
+            # THE MULTIVERSE's cast for this episode (chrgd/roster.py), and
+            # the prose episode written before the slides (chrgd/story.py).
+            "cast", "story",
         )
         if k in route
     }
@@ -711,6 +723,13 @@ def run_pipeline_for_idea(
 
         last_post = post
         failures = post.qa_failures()
+        # Art direction printed on the artwork is the loudest "this is AI" tell
+        # the account can emit, and it is invisible to the QA scores because the
+        # engine doesn't know it wrote a note instead of a line. Deterministic,
+        # so it earns the rewrite every time rather than most times.
+        from .copylint import reasons as copy_reasons
+
+        failures = failures + copy_reasons(post.model_dump(mode="json"))
         if not failures:
             return BuildResult(
                 idea_id=idea.idea_id,
@@ -871,6 +890,10 @@ def build_single_idea(
         raise ValueError(f"no such idea {idea_id}")
     if client is None:
         client = OpenAIChatClient(settings)
+    # The un-narrated client, kept for the story stage below: `client` is about
+    # to be wrapped for progress reporting, and an injected test double has to
+    # reach BOTH stages or the two-stage path can't be tested end to end.
+    raw_client = client
 
     # Narrate the actual call lifecycle so the queue shows real steps, not a
     # spinner: request sent → waiting → response received → validating.
@@ -901,6 +924,29 @@ def build_single_idea(
     from .profile import brand_build_notes as _brand_notes
     from .trends import meta_notes as _build_meta_notes
 
+    # STAGE 1 for a serial: write the episode as PROSE and make it survive a
+    # cold read, before anything is cut into slides. Persisted on the idea so
+    # the editor can read the episode in the journey before a penny is spent on
+    # images. Falls through silently when it can't run.
+    story_spend = 0.0
+    cast_keys = [str(k) for k in (creation_prefs(idea).get("cast") or [])]
+    if cast_keys:
+        from .story import ROUTE_KEY as STORY_KEY, write_story
+
+        story, story_spend = write_story(
+            idea, settings, store, cast_keys=cast_keys,
+            client=raw_client, notify=lambda m: _prog(10, m),
+        )
+        if story is not None:
+            route = json.loads(idea.route_json) if idea.route_json else {}
+            route[STORY_KEY] = story.model_dump()
+            store.conn.execute(
+                "UPDATE ideas SET route_json = ? WHERE idea_id = ?",
+                (json.dumps(route), idea_id),
+            )
+            store.conn.commit()
+            idea = store.get_idea(idea_id)
+
     try:
         result = run_pipeline_for_idea(
             idea,
@@ -920,6 +966,8 @@ def build_single_idea(
         if run_id is not None:
             store.finish_run(run_id, notes=f"error: {exc}")
         return BuildResult(idea_id=idea_id, status=Status.queued, error=str(exc))
+
+    result.spend_usd += story_spend
 
     if result.post is not None:
         extra = _build_extra_route(store, idea)

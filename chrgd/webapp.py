@@ -1312,6 +1312,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "design_system": route.get("design_system", {}),
             "render_mode": render_mode_for_idea(idea, brand),
             "concept_brief": route.get("concept_brief"),
+            # The prose episode, so the editor reads the story in the journey
+            # BEFORE paying for eight images. The cheapest quality gate here.
+            "story": (route.get("story") or None),
             "mechanic": (route.get("mechanic_lock") or {}).get("name")
             or route.get("mechanic", ""),
             # Per-slide charge % on an Amp post (empty for every other post) —

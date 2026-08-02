@@ -25,7 +25,7 @@ engagement_play = "comment"
 roles = ["the_situation", "the_stakes", "the_evidence", "the_false_lead", "the_reveal", "the_why", "the_choice", "the_payoff"]
 flex = 1
 briefs = [
-  "THE SITUATION. State the thing that has happened, in two or three lines, as a fact. Something has CHANGED at Iron Palace and it is concrete and visible. No preamble, no scene-setting — open on the change. End the slide on the question the whole episode answers.",
+  "THE SITUATION. Open on the LEAD CHARACTER, named, mid-action, with something already going wrong for them. Not the building, not a sign, not an empty room — a person in trouble. Two or three lines, as events. End the slide on the question the whole episode answers.",
   "THE STAKES. Why this is a PROBLEM, not a win. Someone reacts and their reaction tells the reader what is actually at risk. This is where the episode stops being an event and becomes a story.",
   "THE EVIDENCE. A physical clue is found. It must be a real object the reader can picture, and it must POINT AT THE WRONG PERSON. Plant it properly — the real reveal on slide 5 has to be visible in hindsight.",
   "THE FALSE LEAD. The wrong person is accused, or claims it. Let them be wrong at length; it is funnier and it buys the real answer room. End by noticing someone who has said nothing.",
@@ -60,6 +60,12 @@ THE TURN IS CAUSED BY A CHARACTER'S FLAW, never by coincidence. Someone chooses 
 
 ONE CHARACTER PER BEAT. Two characters talking is fine; three things happening at once is unreadable at thumb size.
 
+SOMEBODY IS IN EVERY PANEL. This is a character serial: a slide showing an empty room is a slide with no story on it. Every single slide must have at least one named cast member visibly IN it, doing something — set `feature_character` true on every slide, and name the character in that slide's image brief so the artwork knows who to draw. An establishing shot of the gym with nobody in it is what you draw when you do not have a story yet; never open on one.
+
+SLIDE 1 OPENS ON A PERSON, MID-ACTION. Not on the building, not on a sign, not on a piece of equipment. A character is doing something and it is already going wrong. The reader must meet a person in the first half-second, because the person is the reason they care what happens next.
+
+WHAT GOES ON THE SLIDE IS WHAT A READER READS. The words on the artwork are narration and dialogue only — the story, in finished sentences. Never a note about the picture, never a prop gloss like "velvet rope = lifting straps", never a description of the set. Everything visual goes in the image brief and nothing visual goes in the copy. A slide that captions its own scenery reads as a machine made it, because one did.
+
 MAKE IT INSTANTLY CLEAR WHO IS WHO. A reader arriving cold must never be confused about which character is speaking:
 - Use a character's FULL NAME the first time they appear in an episode — "Tracy Beaker", never just "Tracy". Their name is the joke; the recognition IS the hook.
 - Use their catchphrase where it fits naturally. It is the fastest identification a reader gets, and a returning viewer is waiting for it.
@@ -73,6 +79,9 @@ LIKENESS RULES — these are hard limits, not preferences, and they apply to eve
 - Punch at status and at the situation. NEVER at appearance, protected characteristics, or anything sexual, criminal or health-related.
 - Owned fictional characters are parodied in OUR drawing style, never copied from the original design."""
 banned = [
+  "a slide with no character visible in it",
+  "opening on an establishing shot of the gym instead of a person",
+  "art direction, prop notes or set dressing written in the on-slide copy",
   "photoreal rendering of any real person",
   "any real person using, holding or endorsing a product",
   "fabricated quotes, fake news framing or realistic statements attributed to a real person",
