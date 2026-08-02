@@ -468,6 +468,262 @@ def test_rule_4_long_words_are_flagged_but_cast_names_are_exempt():
     assert not any("CHIMPANZINI" in r for r in reasons)
 
 
+# === STAGE 4: physical state, blocking, props, crowd, progress ==============
+
+
+@pytest.fixture()
+def show():
+    from chrgd.shows import get_show
+
+    return get_show("multiverse")
+
+
+def built(slides, cast=CAST, *, show=None):
+    kw = {}
+    if show is not None:
+        kw = {"props": show.props, "crowd_base": show.crowd_base,
+              "title_card": show.look.title_card, "title_note": show.look.title_note}
+    return build_manifest(post(*slides), cast, **kw)
+
+
+# --- blocking (defect 5) ----------------------------------------------------
+
+
+def test_blocking_states_what_each_character_is_doing():
+    m = built([slide("MOLLY-MAE FINDS THE TRIPOD",
+                     art="Molly-Mae kneels by the frame holding a phone tripod up")])
+    assert "Molly-Mae: Molly-Mae kneels by the frame holding a phone tripod up" \
+        in m.panels[0].blocking
+
+
+def test_blocking_never_takes_a_line_of_dialogue_as_staging():
+    """'Tracy Beaker: I have never fixed anything' is somebody talking, not a
+    description of where she is standing."""
+    m = built([slide("TRACY BEAKER IS CAUGHT",
+                     supporting="Tracy Beaker: I have never fixed anything",
+                     art="Tracy Beaker stands at the machine with both palms up")])
+    blocking = m.panels[0].blocking
+    assert "palms up" in blocking
+    assert "never fixed anything" not in blocking
+
+
+def test_directional_relationships_are_called_out():
+    m = built([slide("SHE POINTS AT MOLLY-MAE",
+                     art="Tracy Beaker pointing at Molly-Mae across the room")])
+    assert "who points at whom" in m.panels[0].blocking
+
+
+def test_a_countable_quantity_is_stated_rather_than_guessed():
+    m = built([slide("THREE PLATES", art="Tracy Beaker loading 3 plates on the bar")])
+    assert "COUNTABLE IN FRAME: 3 plates" in m.panels[0].blocking
+
+
+def test_a_weight_is_stated_as_a_weight_not_a_count():
+    m = built([slide("SHE LIFTS IT", art="Tracy Beaker with a 20 kg plate in one hand")])
+    blocking = m.panels[0].blocking
+    assert "WEIGHT SHOWN: 20kg" in blocking
+    assert "draw exactly that many" not in blocking
+
+
+def test_two_characters_placed_by_one_sentence_are_named_together():
+    m = built([slide("THE ROOM TURNS",
+                     art="Tracy Beaker at the back, Molly-Mae centre")])
+    assert "Tracy Beaker, Molly-Mae:" in m.panels[0].blocking
+
+
+# --- camera, crowd, progress (defects 3, 4, 6) ------------------------------
+
+
+def test_the_camera_is_chosen_from_what_the_panel_holds():
+    m = built([
+        slide("Tracy Beaker alone"),
+        slide("Molly-Mae arrives"),
+        slide("Jeremy Clarkson walks in"),
+    ])
+    assert m.panels[0].camera.startswith("close")
+    assert m.panels[1].camera.startswith("medium two-shot")
+    assert m.panels[2].camera.startswith("wide")
+
+
+def test_crowd_density_is_fixed_and_only_ever_ramps(show):
+    m = built([
+        slide("Tracy Beaker denies it"),
+        slide("Molly-Mae films it"),
+        slide("Everyone turns to look"),
+        slide("Tracy Beaker says nothing"),
+    ], show=show)
+    counts = [p.crowd_count for p in m.panels]
+    assert counts[0] == counts[1] == show.crowd_base   # fixed, not re-rolled
+    assert counts[2] > counts[1]                       # the room turns
+    assert counts == sorted(counts), "crowd density went down"
+
+
+def test_the_progress_element_is_computed_from_the_index():
+    """Improvised, it came out near-full on panel 1 and identical on three
+    panels running."""
+    m = built([slide("a"), slide("b"), slide("c"), slide("d")])
+    assert "step 1 of 4" in m.panels[0].progress
+    assert "1 segment(s) filled and 3 segment(s) empty" in m.panels[0].progress
+    assert "step 4 of 4" in m.panels[3].progress
+    assert "4 segment(s) filled and 0 segment(s) empty" in m.panels[3].progress
+    assert len({p.progress for p in m.panels}) == 4    # never identical
+
+
+def test_the_unbound_evolution_string_is_suppressed_when_a_panel_states_it():
+    """`design_system.evolution` was injected identically on every frame with no
+    value attached — 'a progress motif fills', on all of them."""
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    ds = {"palette": "p", "evolution": "a progress motif fills"}
+    slides = [Slide(headline="a"), Slide(headline="b")]
+    m = built([slide("a"), slide("b")])
+
+    old = compose_design_prompt(slides[1], load_brand(), None, slides=slides,
+                                index=1, design_system=ds)
+    assert "Show visible motion from the last frame" in old
+
+    new = compose_design_prompt(slides[1], load_brand(), None, slides=slides,
+                                index=1, design_system=ds, panel=m.panels[1])
+    assert "Show visible motion from the last frame" not in new
+    assert "step 2 of 2" in new
+
+
+# --- the locked prop sheet (defect 4) ---------------------------------------
+
+
+def test_props_named_in_the_beat_get_locked_descriptions(show):
+    m = built([slide("THE LAT PULLDOWN WORKED",
+                     art="the lat pulldown, cable frayed")], show=show)
+    panel = m.panels[0]
+    assert "lat_pulldown" in panel.props_present
+    block = cast_block(panel, show)
+    assert "the lat pulldown (locked — hold this identical in every panel)" in block
+    assert "cracked black seat pad" in block
+
+
+def test_writing_on_a_prop_joins_the_closed_set(show):
+    """Otherwise the closed-set rule forbids the BACK SOON sign's own words."""
+    m = built([slide("THE MACHINE", art="the lat pulldown")], show=show)
+    labels = [e for e in m.panels[0].text_elements if e.role == "prop_label"]
+    assert labels and labels[0].content == "BACK SOON"
+    assert labels[0].anchor == "lat_pulldown"
+
+
+def test_a_prop_description_is_byte_identical_across_panels(show):
+    m = built([slide("A", art="the lat pulldown"),
+               slide("B", art="Tracy Beaker at the lat pulldown")], show=show)
+    from chrgd.manifest import prompt_consistency
+
+    prompts = [cast_block(p, show) for p in m.panels]
+    assert prompt_consistency(prompts) == []
+    line = "the lat pulldown (locked"
+    a, b = prompts[0], prompts[1]
+    assert a[a.index(line):a.index(line) + 180] == b[b.index(line):b.index(line) + 180]
+
+
+def test_rule_7_catches_a_re_summarised_lock():
+    from chrgd.manifest import prompt_consistency
+
+    reasons = prompt_consistency([
+        "the squat rack (locked — hold this identical): One battered yellow rack.",
+        "the squat rack (locked — hold this identical): A yellow power rack.",
+    ])
+    assert any("differs from the one used earlier" in r for r in reasons)
+
+
+# --- physical state (defect 3) ----------------------------------------------
+
+
+def test_a_prop_state_change_is_tracked_from_the_copy(show):
+    m = built([
+        slide("THE SIGN HAS BEEN UP SINCE 2019", art="the lat pulldown, out of order"),
+        slide("TODAY THE LAT PULLDOWN WORKED", art="the lat pulldown, cable running"),
+        slide("TRACY BEAKER BREAKS THE LAT PULLDOWN AGAIN",
+              art="Tracy Beaker snaps the cable"),
+    ], show=show)
+    assert "lat_pulldown=broken" in m.panels[0].state
+    assert "lat_pulldown=working" in m.panels[1].state
+    assert "lat_pulldown=broken" in m.panels[2].state
+    assert m.panels[2].state_changes == ["lat_pulldown"]
+
+
+def test_a_denial_does_not_change_the_state_of_anything(show):
+    """'I have never fixed anything' was reading as the machine being fixed,
+    and then propagating forward for the rest of the episode."""
+    m = built([slide("TRACY BEAKER IS CAUGHT",
+                     supporting="Tracy Beaker: I have never fixed anything",
+                     art="Tracy Beaker at the lat pulldown, palms up")], show=show)
+    assert "lat_pulldown=" not in m.panels[0].state
+
+
+def test_rule_5_two_panels_of_the_same_moment_are_refused():
+    m = built([slide("Tracy Beaker stands there"), slide("Tracy Beaker stands there")])
+    assert any("the same moment twice" in r for r in validate(m))
+
+
+def test_rule_6_an_uncaused_state_change_is_refused():
+    """Well-founded version: the object moved and nothing in the panel moved
+    it. A fixed-broken-fixed cycle is the plot, not a defect."""
+    m = Manifest(cast=CAST, panels=[
+        Panel(index=0, cast_present=CAST, state="a|rack=free|wide",
+              progress="step 1 of 2"),
+        Panel(index=1, cast_present=CAST, state="b|rack=occupied|wide",
+              progress="step 2 of 2"),
+    ])
+    assert any("nothing in this panel changes it" in r for r in validate(m))
+
+    caused = m.model_copy(deep=True)
+    caused.panels[1].state_changes = ["rack"]
+    assert not any("nothing in this panel changes it" in r for r in validate(caused))
+
+
+def test_a_legitimate_re_break_is_not_a_regression(show):
+    m = built([
+        slide("THE LAT PULLDOWN IS OUT OF ORDER", art="the lat pulldown, dead"),
+        slide("TODAY THE LAT PULLDOWN WORKED", art="the lat pulldown, running"),
+        slide("TRACY BEAKER BREAKS THE LAT PULLDOWN", art="Tracy Beaker snaps the cable"),
+    ], show=show)
+    assert not any("configuration the story has not put it in" in r
+                   for r in validate(m))
+
+
+def test_rule_8_the_progress_value_must_match_the_index():
+    m = Manifest(cast=CAST, panels=[
+        Panel(index=0, total=2, cast_present=CAST, state="a", progress="step 1 of 2"),
+        Panel(index=1, total=2, cast_present=CAST, state="b", progress="step 1 of 2"),
+    ])
+    assert any("other than 'step 2 of 2'" in r for r in validate(m))
+
+
+def test_the_staging_block_reaches_the_prompt(show):
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    m = built([slide("TRACY BEAKER SNAPS THE CABLE",
+                     art="Tracy Beaker at the lat pulldown, pointing at the squat rack")],
+              show=show)
+    prompt = compose_design_prompt(
+        Slide(headline="TRACY BEAKER SNAPS THE CABLE"), load_brand(), None,
+        panel=m.panels[0])
+    assert "BLOCKING —" in prompt
+    assert "CAMERA:" in prompt
+    assert "BACKGROUND: exactly 4 other figures" in prompt
+    assert "step 1 of 1" in prompt
+
+
+def test_off_format_posts_get_no_staging():
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    prompt = compose_design_prompt(Slide(headline="H"), load_brand(), None)
+    for absent in ("BLOCKING —", "CAMERA:", "BACKGROUND: exactly", "step 1 of"):
+        assert absent not in prompt, absent
+
+
 def test_normal_writing_survives_all_of_it():
     """A validator that fires on good copy is one that gets switched off."""
     m = build_manifest(post(

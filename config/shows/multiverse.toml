@@ -23,6 +23,9 @@ cast = "roster"
 lean_prompt = true
 gate_profile = "continuity_likeness"
 engagement_play = "comment"
+# Fixed background density. It was jumping arbitrarily between panels because
+# nothing ever stated it; a story that turns the room ramps up from here.
+crowd_base = 4
 
 [spine]
 roles = ["the_situation", "the_stakes", "the_evidence", "the_false_lead", "the_reveal", "the_why", "the_choice", "the_payoff"]
@@ -111,6 +114,33 @@ title_note = "a comic-book masthead across the top of slide 1 reading CHRGD MULT
 # The show keeps its own comic world (D3) but is now openly a CHRGD product:
 # the masthead brands it, so the wordmark stays off the frame and the branding
 # lives in the title bar instead of fighting the artwork.
+# THE STANDING OBJECTS. Locked descriptions, injected verbatim into every panel
+# they appear in — props were drifting frame to frame for the same reason the
+# characters were, which is that nothing described them. `label` is the writing
+# physically on the object; it becomes a declared text element so it lives
+# inside the closed set instead of being forbidden as incidental signage.
+[props.lat_pulldown]
+name = "the lat pulldown"
+aliases = ["lat pulldown", "pulldown", "the machine"]
+visual = "A knackered cable machine with a cracked black seat pad, a chipped chrome frame and a frayed cable. A rectangle of card is cable-tied to the top bar."
+label = "BACK SOON"
+
+[props.squat_rack]
+name = "the squat rack"
+aliases = ["squat rack", "the rack"]
+visual = "One battered power rack in scuffed yellow, the only one in the building, with a chalk-dusted bar racked at shoulder height and mismatched plates stacked either side."
+
+[props.sign]
+name = "the BACK SOON sign"
+aliases = ["back soon sign", "the sign"]
+visual = "A rectangle of card in biro capitals, cable-tied on at a slight angle, softened at the corners from years on the machine."
+label = "BACK SOON"
+
+[props.tannoy]
+name = "the tannoy"
+aliases = ["tannoy", "the intercom", "the PA"]
+visual = "A grey plastic wall speaker above the doors, grille dented, one screw missing so it hangs slightly off level."
+
 [look.furniture]
 wordmark = false
 scrim = false

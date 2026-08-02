@@ -78,15 +78,30 @@ class Panel(BaseModel):
 
     #: The closed set of words in this panel. Nothing else may be lettered.
     text_elements: list[TextElement] = Field(default_factory=list)
-    #: Objects the panel must contain. Currently only the sources a broadcast
-    #: line issues from — a tannoy line with no tannoy in frame is a floating
-    #: label. The full prop ledger arrives with the blocking stage.
+    #: Objects that must be in frame — the props the beat names, plus any
+    #: source a broadcast line issues from.
     props_present: list[str] = Field(default_factory=list)
-
-    # --- filled in by later stages, declared here so the shape is stable ---
+    #: Who is where, doing what, facing whom. Left implicit, the generator
+    #: invented it — which is how a caption saying one thing ended up over
+    #: artwork showing another.
     blocking: str = ""
+    #: wide / medium / close, chosen from what the panel actually holds.
     camera: str = ""
+    #: Background figures. Fixed per story unless the beat turns the room, and
+    #: then it only ever goes up.
     crowd_count: int | None = None
+    #: The panel's physical configuration, as a comparable string. This is what
+    #: makes "two consecutive panels are the same moment" and "the prop is back
+    #: in its before state" checkable without looking at an image.
+    state: str = ""
+    #: The escalating motif's exact configuration at this index. Improvised, it
+    #: came out near-full on panel 1 and identical on three panels running.
+    progress: str = ""
+    #: Props whose configuration THIS beat causes to change. What makes the
+    #: causal check well-founded: a state that moves with nothing in the panel
+    #: moving it is the broken case, and a state that moves because the copy
+    #: says so is the story working.
+    state_changes: list[str] = Field(default_factory=list)
 
 
 class Manifest(BaseModel):
@@ -312,8 +327,229 @@ def _text_for(slide: dict, cast: list[str], *, index: int,
     return elements
 
 
+# --- deriving the physical state --------------------------------------------
+
+#: Directional relationships the artwork has to honour. Left implicit, the
+#: generator invents them — a character points at the wrong person, an object
+#: sits somewhere other than where the copy says it was put.
+_DIRECTION = re.compile(
+    r"\b(?:point(?:s|ed|ing)?\s+at|look(?:s|ed|ing)?\s+at|star(?:es|ed|ing)\s+at"
+    r"|turn(?:s|ed|ing)?\s+to|hand(?:s|ed|ing)?|show(?:s|ed|ing)?\s+\w+\s+to"
+    r"|next\s+to|behind|in\s+front\s+of|beside|between|under|over|on\s+top\s+of"
+    r"|hold(?:s|ing)?|carr(?:ies|ying)|drop(?:s|ped|ping)?|put(?:s|ting)?)\b",
+    re.I,
+)
+
+#: A number the reader can count in the frame. Left to the generator these come
+#: out wrong, so the configuration is stated instead of implied.
+_QUANTITY = re.compile(
+    r"\b(\d+)\s*(kg|kilos?|plates?|reps?|sets?|minutes?|seconds?|people|of them)\b",
+    re.I,
+)
+
+#: Prop configurations, as tokens that can be compared between panels. The
+#: named failure this catches: an object shown in a "before" configuration
+#: after it has already been moved.
+_PROP_STATES: tuple[tuple[str, re.Pattern], ...] = (
+    ("broken", re.compile(r"\b(?:break(?:s|ing)?|broke(?:n)?|bust(?:ed)?"
+                          r"|out of order|snap(?:s|ped|ping)?|jam(?:s|med)?"
+                          r"|packed in|stopped working)\b", re.I)),
+    ("working", re.compile(r"\b(?:work(?:s|ed|ing)|fixed|repaired|running again"
+                           r"|back on|mended)\b", re.I)),
+    ("gone", re.compile(r"\b(?:gone|removed|taken (?:down|away)|missing"
+                        r"|disappeared)\b", re.I)),
+    ("occupied", re.compile(r"\b(?:taken|occupied|in use|being used)\b", re.I)),
+    ("free", re.compile(r"\b(?:free|empty|nobody on it|unused)\b", re.I)),
+)
+
+#: Beats that turn the room. Crowd density only ever ramps from one of these.
+_CROWD_TURN = re.compile(
+    r"\b(?:everyone|the whole (?:gym|room|place)|the room (?:turns|turned|stops)"
+    r"|heads turn\w*|nobody (?:says|said)|a crowd|people (?:gather|start)"
+    r"|the queue)\b",
+    re.I,
+)
+
+
+def _staging_text(slide: dict) -> str:
+    """What the PICTURE is, as sentences — the source blocking comes from.
+
+    Dialogue is dropped: a line somebody says is not a description of where
+    they are standing, and leaving it in produced blocking that read
+    "Tracy Beaker: I have never fixed anything". The image brief goes last so
+    it wins on specificity, since it is the field that actually describes the
+    shot.
+    """
+    lines: list[str] = []
+    for field in ("headline", "supporting", "body"):
+        raw = str(slide.get(field) or "").strip()
+        if not raw:
+            continue
+        match = _SPEAKER_PREFIX.match(raw)
+        if match and match.group(1).lower() not in _NARRATION:
+            continue
+        lines.append(raw.rstrip(".") + ".")
+    art = _slide_art(slide).strip()
+    if art:
+        lines.append(art.rstrip(".") + ".")
+    return " ".join(lines)
+
+
+def _clause_for(name: str, text: str) -> str:
+    """The WHOLE sentence that names this entity.
+
+    Whole, not the tail from the match onwards: starting mid-string produced
+    fragments like "BEAKER HAS GREASE ON BOTH HANDS" because a surname matched
+    inside a word. A complete sentence is both readable and the thing a person
+    reviewing the manifest can actually check.
+    """
+    clauses = _clauses_for(name, text)
+    # Later sentences win: the image brief is appended last and describes the
+    # shot, where the copy only describes the story.
+    return clauses[-1] if clauses else ""
+
+
+def _clauses_for(name: str, text: str) -> list[str]:
+    """Every sentence that names this entity, in order."""
+    pattern = re.compile(rf"(?<!\w){re.escape(name)}(?!\w)", re.I)
+    out: list[str] = []
+    for sentence in _SENTENCE.split(text or ""):
+        if not pattern.search(sentence):
+            continue
+        clean = " ".join(sentence.split()).strip(" .")
+        if clean:
+            out.append(clean[:110])
+    return out
+
+
+def _props_in(text: str, props) -> list[str]:
+    """Prop ids named anywhere in this panel."""
+    lowered = (text or "").lower()
+    return [p.key for p in props.values()
+            if any(alias in lowered for alias in p.names())]
+
+
+#: A cue inside a negation is not a state change. "I have never fixed anything"
+#: was reading as the machine being fixed, which then propagated forward as the
+#: prop's configuration for the rest of the episode.
+_NEGATED = re.compile(r"\b(?:never|not|no|nobody|hasn't|haven't|didn't|isn't"
+                      r"|wasn't|won't|can't|couldn't)\b", re.I)
+
+
+def _prop_state(slide: dict, prop) -> str:
+    """The configuration a prop is in, from the sentence that names it.
+
+    Read from the staging text, not the raw copy: a line of dialogue is somebody
+    talking, not the state of the room, and taking cues from it had a character
+    DENYING they fixed something register as the something being fixed.
+    """
+    text = _staging_text(slide)
+    clauses: list[str] = []
+    for alias in prop.names():
+        for clause in _clauses_for(alias, text):
+            if clause not in clauses:
+                clauses.append(clause)
+    # Every sentence that names it, not just the last: the copy often states
+    # the change ("BREAKS THE LAT PULLDOWN AGAIN") while the image brief only
+    # describes the shot, and taking the last one alone lost the change.
+    for clause in clauses:
+        for token, pattern in _PROP_STATES:
+            match = pattern.search(clause)
+            if not match:
+                continue
+            if _NEGATED.search(clause[:match.start()][-40:]):
+                continue
+            return token
+    return ""
+
+
+def _camera_for(present: list[str], props: list[str]) -> str:
+    """One dramatic moment per panel, framed for what it actually holds."""
+    if not present:
+        return ("wide, eye level — the room and the object, with no character "
+                "in the frame")
+    if len(present) == 1:
+        return ("close, eye level — one character filling the frame, the "
+                "background simplified so the text has clear space")
+    if len(present) == 2:
+        return ("medium two-shot, eye level — both characters fully in frame "
+                "and facing each other")
+    return ("wide, slightly low — all of the characters in one frame, clearly "
+            "separated so none of them overlaps another")
+
+
+def _blocking_for(slide: dict, present: list[str], props, prop_ids: list[str]) -> str:
+    """Who is where, doing what, facing whom — stated rather than left implied."""
+    from .roster import get_character
+
+    text = _staging_text(slide)
+    # One sentence often places two characters at once ("Tracy at the back,
+    # Molly-Mae centre") — say it once and name both, rather than repeating it.
+    grouped: list[tuple[list[str], str]] = []
+    for key in present:
+        char = get_character(key)
+        if char is None:
+            continue
+        clause = (_clause_for(char.name, text)
+                  or _clause_for(char.name.split()[-1], text)
+                  or "in frame, reacting to the beat")
+        for names, existing in grouped:
+            if existing == clause:
+                names.append(char.name)
+                break
+        else:
+            grouped.append(([char.name], clause))
+    bits = [f"{', '.join(names)}: {clause}" for names, clause in grouped]
+    said = {clause for _names, clause in grouped}
+    for key in prop_ids:
+        prop = props.get(key)
+        if prop is None:
+            continue
+        clause = _clause_for(prop.name, text)
+        # A prop described by the same sentence as a character is already
+        # placed; repeating it verbatim just pads the prompt.
+        if clause and clause in said:
+            continue
+        bits.append(f"{prop.name}: {clause or 'in frame'}")
+    if not bits:
+        return ""
+    out = "; ".join(bits)
+    if _DIRECTION.search(text):
+        out += (". Honour the directions exactly as stated — who points at "
+                "whom, who looks at whom, and where each object sits relative "
+                "to which character")
+    quantities = _QUANTITY.findall(text)
+    if quantities:
+        counted = [(n, u) for n, u in quantities if not _is_mass(u)]
+        weights = [(n, u) for n, u in quantities if _is_mass(u)]
+        if counted:
+            out += (". COUNTABLE IN FRAME: "
+                    + ", ".join(f"{n} {u}" for n, u in counted)
+                    + " — draw exactly that many, arranged so a reader could "
+                      "count them")
+        if weights:
+            out += (". WEIGHT SHOWN: "
+                    + ", ".join(f"{n}{u}" for n, u in weights)
+                    + " — the plates in frame must read as exactly that, and "
+                      "any number written on them must match")
+    return out
+
+
+def _is_mass(unit: str) -> bool:
+    return unit.lower().rstrip("s") in ("kg", "kilo")
+
+
+def _state_for(present: list[str], prop_states: dict[str, str], camera: str) -> str:
+    """The panel's physical configuration, as one comparable string."""
+    who = "+".join(present) or "empty"
+    things = ",".join(f"{k}={v}" for k, v in sorted(prop_states.items()) if v)
+    shot = camera.split(",")[0].strip()
+    return f"{who}|{things}|{shot}"
+
+
 def build_manifest(post: dict, cast_keys: list[str], *,
-                   title_card: str = "", title_note: str = "") -> Manifest:
+                   title_card: str = "", title_note: str = "",
+                   props: dict | None = None, crowd_base: int = 0) -> Manifest:
     """Resolve the whole episode into per-panel state, before any generation.
 
     Presence carries forward: once a character is in the room they stay there
@@ -331,7 +567,13 @@ def build_manifest(post: dict, cast_keys: list[str], *,
     scans = [_scan(f"{_slide_copy(s)} {_slide_art(s)}", cast) for s in slides]
     entrance = _entrances(scans, cast)
 
+    sheet = dict(props or {})
     in_room: set[str] = set()
+    #: The last known configuration of each prop, carried forward — this is what
+    #: makes "the object is back in its before state" visible without an image.
+    prop_states: dict[str, str] = {}
+    crowd = crowd_base
+
     for i, slide in enumerate(slides):
         named, _arriving, departing = scans[i]
         # Anyone whose entrance is this panel or earlier, and who has been
@@ -339,6 +581,7 @@ def build_manifest(post: dict, cast_keys: list[str], *,
         in_room |= {k for k in named if entrance.get(k, i) <= i}
 
         copy = _slide_copy(slide)
+        text = f"{copy} {_slide_art(slide)}"
         # An explicitly person-free beat (an object, a sign, a wide of the room)
         # empties the frame without emptying the continuity state — they didn't
         # leave, the camera looked elsewhere. Copy naming somebody outranks it:
@@ -348,22 +591,86 @@ def build_manifest(post: dict, cast_keys: list[str], *,
             _scan(copy, cast)[0]
         )
         here = set() if person_free else set(in_room)
+        present = [k for k in cast if k in here]
 
         elements = _text_for(slide, cast, index=i, title_card=title_card,
                              title_note=title_note)
+
+        # Props: the ones this beat names, plus any broadcast source. Their
+        # configurations carry forward, so a prop that is fixed on panel 3 stays
+        # fixed until something breaks it again.
+        prop_ids = _props_in(text, sheet)
+        changed: list[str] = []
+        for key in prop_ids:
+            found = _prop_state(slide, sheet[key])
+            if found and found != prop_states.get(key):
+                changed.append(key)
+            if found:
+                prop_states[key] = found
+        sources = [e.anchor for e in elements if e.role == "broadcast" and e.anchor]
+        for key in sources:
+            if key not in prop_ids:
+                prop_ids.append(key)
+        # Writing physically on a prop is still writing on the artwork, so it
+        # goes INSIDE the closed set rather than being forbidden as incidental
+        # signage — otherwise the BACK SOON sign becomes uncaptionable.
+        for key in prop_ids:
+            prop = sheet.get(key)
+            if prop is None or not prop.label.strip():
+                continue
+            if any(e.content.strip().lower() == prop.label.strip().lower()
+                   for e in elements):
+                continue
+            elements.append(TextElement(
+                id=f"t{len(elements) + 1}", role="prop_label",
+                content=prop.label.strip(), anchor=key,
+                placement=f"the words physically on {prop.name}",
+                style="hand-lettered on the object itself, as it would really "
+                      "be written",
+            ))
+
+        # Crowd density: fixed, and only ever ramped by a beat that turns the
+        # room. It was jumping arbitrarily because nothing ever stated it.
+        if crowd_base and _CROWD_TURN.search(copy):
+            crowd = min(crowd + 3, crowd_base + 9)
+
+        camera = _camera_for(present, prop_ids)
         manifest.panels.append(Panel(
             index=i,
             total=total,
             beat_text=copy,
-            cast_present=[k for k in cast if k in here],
+            cast_present=present,
             cast_forbidden=[k for k in cast if k not in here],
             text_elements=elements,
-            props_present=sorted({
-                e.anchor for e in elements if e.role == "broadcast" and e.anchor
-            }),
+            props_present=sorted(set(prop_ids)),
+            blocking=_blocking_for(slide, present, sheet, sorted(set(prop_ids))),
+            camera=camera,
+            crowd_count=crowd if crowd_base else None,
+            state=_state_for(present, {k: prop_states.get(k, "") for k in prop_ids},
+                             camera),
+            progress=_progress_for(i, total),
+            state_changes=sorted(changed),
         ))
         in_room -= departing
     return manifest
+
+
+def _progress_for(index: int, total: int) -> str:
+    """The escalating motif's exact configuration at this index.
+
+    Improvised, it came back near-full on panel 1 and identical on three panels
+    running, because the intended state was never computed or stated — the
+    design system said "the motif fills" on every panel with no value attached.
+    """
+    filled, empty = index + 1, total - (index + 1)
+    return (
+        f"This is step {filled} of {total} of the escalation. Any progress or "
+        f"filling motif in the design must be drawn at EXACTLY this value: "
+        f"{filled} segment(s) filled and {empty} segment(s) empty, in a single "
+        "row reading left to right, in the same position and at the same size "
+        "as every other panel. Do not estimate it and do not round it — "
+        f"{filled} filled, {empty} empty."
+    )
 
 
 # --- storage ----------------------------------------------------------------
@@ -423,18 +730,20 @@ def manifest_for(idea) -> Manifest | None:
 
 
 def title_for(idea) -> dict:
-    """The show's masthead, which is words on the artwork and therefore has to
-    be IN the closed set — granting it in one place and forbidding it in
-    another is how the model ends up inventing more text."""
+    """Everything the manifest needs from the show: the masthead (which is words
+    on the artwork and therefore has to be IN the closed set — granting it in
+    one place and forbidding it in another is how the model ends up inventing
+    more text), the locked prop sheet, and the fixed crowd density."""
     from .shows import show_for_idea
 
     show = show_for_idea(idea)
-    if show is None or not show.look.title_card.strip():
+    if show is None:
         return {}
-    return {
-        "title_card": show.look.title_card.strip(),
-        "title_note": show.look.title_note.strip(),
-    }
+    out: dict = {"props": show.props, "crowd_base": show.crowd_base}
+    if show.look.title_card.strip():
+        out["title_card"] = show.look.title_card.strip()
+        out["title_note"] = show.look.title_note.strip()
+    return out
 
 
 # --- validation: rules 1 and 2 ----------------------------------------------
@@ -502,6 +811,98 @@ def validate(manifest: Manifest) -> list[str]:
             )
 
         reasons += _text_problems(panel, manifest.cast, present, where, label)
+    reasons += _sequence_problems(manifest)
+    return reasons
+
+
+def _sequence_problems(manifest: Manifest) -> list[str]:
+    """Rules 5, 6 and 8 — the shape of the set, checked in one pass.
+
+    On rule 6, be straight about the limit. Full causal validation is not
+    something a string comparison can do, and the literal rule — "flag a prop
+    that returns to an earlier configuration" — is wrong anyway: a machine that
+    is fixed, broken and fixed again is the plot, not a defect. What IS
+    well-founded, and catches the failure the brief actually names, is an
+    UNCAUSED change: the object is in a different configuration and nothing in
+    that panel moved it. A beat that is merely out of narrative order with no
+    prop or cast change behind it will pass, and the review stop is where that
+    is seen.
+    """
+    reasons: list[str] = []
+    panels = sorted(manifest.panels, key=lambda p: p.index)
+
+    # Rule 5 — two consecutive panels resolving to the same physical state are
+    # the same moment drawn twice.
+    for prev, panel in zip(panels, panels[1:]):
+        if prev.state and panel.state and prev.state == panel.state:
+            reasons.append(
+                f"panels {prev.index + 1} and {panel.index + 1} are the same "
+                f"physical state ({panel.state}) — the same moment twice. Each "
+                "panel is one dramatic moment and something has to change."
+            )
+
+    # Rule 6 — a prop's configuration only moves when this beat moves it.
+    last: dict[str, str] = {}
+    for panel in panels:
+        for key, value in _states_in(panel.state).items():
+            was = last.get(key)
+            if was is not None and value != was and key not in panel.state_changes:
+                reasons.append(
+                    f"panel {panel.index + 1}: {key} is drawn '{value}' when it "
+                    f"was last '{was}', and nothing in this panel changes it — "
+                    "an object in a configuration the story has not put it in"
+                )
+            last[key] = value
+
+    # Rule 8 — the escalation's value increments once per panel, 1/N to N/N.
+    stated = [p for p in panels if p.progress]
+    for i, panel in enumerate(stated):
+        want = f"step {panel.index + 1} of {panel.total}"
+        if want not in panel.progress:
+            reasons.append(
+                f"panel {panel.index + 1}: the progress element says something "
+                f"other than '{want}' — it must be computed from the index, "
+                "never estimated"
+            )
+    return reasons
+
+
+def _states_in(state: str) -> dict[str, str]:
+    """The prop configurations out of a state string."""
+    parts = (state or "").split("|")
+    if len(parts) < 2 or not parts[1]:
+        return {}
+    out = {}
+    for chunk in parts[1].split(","):
+        if "=" in chunk:
+            key, value = chunk.split("=", 1)
+            if value:
+                out[key] = value
+    return out
+
+
+def prompt_consistency(prompts: list[str]) -> list[str]:
+    """Rule 7 — locked descriptions are byte-identical across the whole set.
+
+    Run on the composed prompt strings themselves, which is the only place the
+    guarantee actually matters and is free to check: a locked line that appears
+    in two panels must appear identically in both.
+    """
+    reasons: list[str] = []
+    seen: dict[str, str] = {}
+    for i, prompt in enumerate(prompts, 1):
+        for line in (prompt or "").splitlines():
+            match = re.match(r"^(.{1,60}?) \(locked[^)]*\): (.+)$", line.strip())
+            if not match:
+                continue
+            subject, description = match.group(1), match.group(2)
+            if subject in seen and seen[subject] != description:
+                reasons.append(
+                    f"panel {i}: the locked description of {subject} differs "
+                    "from the one used earlier in the set — it must be the same "
+                    "string every time, never re-summarised"
+                )
+            seen.setdefault(subject, description)
     return reasons
 
 
@@ -604,7 +1005,7 @@ def _long_words(text: str, cast: list[str]) -> list[str]:
 # --- what the image prompt is told ------------------------------------------
 
 
-def cast_block(panel: Panel) -> str:
+def cast_block(panel: Panel, show=None) -> str:
     """The locked designs for THIS panel, plus the refusal of everyone else.
 
     The negative is not optional and it is not a summary. Each absent character
@@ -637,13 +1038,63 @@ def cast_block(panel: Panel) -> str:
             "they have already left, and drawing them here spends the story "
             "before it is told."
         )
-    if panel.props_present:
-        parts.append(
-            "REQUIRED IN FRAME — "
-            + ", ".join(sorted(panel.props_present))
-            + ". A line of text issues from this object, so it must be visibly "
-            "in the panel with clear space around it for the text to sit."
+    props = _prop_sheet(panel, show)
+    if props:
+        parts.append(props)
+    return "\n\n".join(parts)
+
+
+def _prop_sheet(panel: Panel, show=None) -> str:
+    """The locked descriptions for this panel's objects, verbatim.
+
+    Byte-identical wherever a prop appears, which is guaranteed rather than
+    hoped for: `Prop.visual_lock()` is a pure function of the prop, so there is
+    no route by which one panel gets a re-summarised version of it.
+    """
+    sheet = getattr(show, "props", None) or {}
+    lines = [sheet[k].visual_lock() for k in panel.props_present if k in sheet]
+    unknown = [k for k in panel.props_present if k not in sheet]
+    out: list[str] = []
+    if lines:
+        out.append(
+            "OBJECTS IN THIS PANEL (locked — hold each identical in every panel "
+            "it appears in):\n" + "\n".join(lines)
         )
+    if unknown:
+        out.append(
+            "ALSO REQUIRED IN FRAME — "
+            + ", ".join(sorted(unknown))
+            + ". Text issues from this object, so it must be visibly in the "
+            "panel with clear space around it."
+        )
+    return "\n\n".join(out)
+
+
+def staging(panel: Panel) -> str:
+    """Blocking, camera, crowd density and the escalation's exact value.
+
+    All four were previously left for the generator to invent per frame, which
+    is why consecutive panels came out as the same moment, why a caption could
+    contradict its own artwork, and why the background crowd changed size for
+    no reason.
+    """
+    parts: list[str] = []
+    if panel.blocking:
+        parts.append(
+            "BLOCKING — the exact configuration of this moment, and it is not "
+            "open to interpretation: " + panel.blocking + "."
+        )
+    if panel.camera:
+        parts.append(f"CAMERA: {panel.camera}.")
+    if panel.crowd_count is not None:
+        parts.append(
+            f"BACKGROUND: exactly {panel.crowd_count} other figures in the gym "
+            "behind the action, generic and unrecognisable, none of them a cast "
+            "member. This number is fixed for the panel — do not add more to "
+            "fill the frame and do not thin them out."
+        )
+    if panel.progress:
+        parts.append(panel.progress)
     return "\n\n".join(parts)
 
 

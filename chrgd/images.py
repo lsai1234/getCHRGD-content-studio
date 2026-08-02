@@ -302,6 +302,7 @@ def _sequence_block(
     index: int,
     design_system: dict | None,
     show_dots: bool = False,
+    panel=None,
 ) -> str:
     """Where this frame sits in the swipe journey + how it continues/evolves."""
     if not slides or len(slides) <= 1:
@@ -326,10 +327,21 @@ def _sequence_block(
             "this must look like the very next frame of that sequence, never a new "
             "design."
         )
-    if ds.get("evolution"):
+    # The evolution string was injected IDENTICALLY on every frame with no value
+    # attached — "a progress motif fills", on all of them — which is why the
+    # progress element came out near-full on panel 1 and unchanged across three
+    # panels running. With a manifest the escalation carries its exact value at
+    # this index (see `manifest.staging`), so the unbound version is suppressed
+    # rather than left to contradict it.
+    if ds.get("evolution") and panel is None:
         out.append(
             "Show visible motion from the last frame — how the design escalates as "
             f"the story builds: {ds['evolution']}"
+        )
+    elif ds.get("evolution"):
+        out.append(
+            "The design escalates across the set as follows, and this panel sits "
+            f"at the exact point stated below: {ds['evolution']}"
         )
     if index + 1 < total:
         out.append(
@@ -541,7 +553,8 @@ def compose_design_prompt(
     if ds_block:
         parts.append(ds_block)
     seq_block = _sequence_block(
-        slide, slides, index, design_system, show_dots=brand.generation.progress_dots
+        slide, slides, index, design_system,
+        show_dots=brand.generation.progress_dots, panel=panel,
     )
     if seq_block:
         parts.append(seq_block)
@@ -560,8 +573,11 @@ def compose_design_prompt(
     # have to go together: adding a specification while leaving the
     # contradicting instruction in place just gives the model two orders.
     if panel is not None:
-        from .manifest import text_spec
+        from .manifest import staging, text_spec
 
+        stage = staging(panel)
+        if stage:
+            prompt += "\n\n" + stage
         return prompt + "\n\n" + text_spec(panel)
 
     prompt += "\n\nTEXT TO PLACE ON IMAGE:"
@@ -656,11 +672,12 @@ def _cast_lock_for(idea: Idea, slide_index: int | None = None) -> str:
 
     if slide_index is not None:
         from .manifest import cast_block, manifest_for
+        from .shows import show_for_idea
 
         manifest = manifest_for(idea)
         panel = manifest.panel(slide_index) if manifest is not None else None
         if panel is not None:
-            return cast_block(panel)
+            return cast_block(panel, show_for_idea(idea))
     return visual_block(resolve([str(k) for k in keys]))
 
 

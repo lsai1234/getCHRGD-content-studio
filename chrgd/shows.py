@@ -121,6 +121,37 @@ class Look(BaseModel):
         return " ".join(bits)
 
 
+class Prop(BaseModel):
+    """A named object with a locked description, and any text written on it.
+
+    Props drifted between panels for the same reason characters did: nothing
+    described them, so the generator redrew them each frame. The description
+    here is injected verbatim into every panel the prop appears in, and `label`
+    — the words physically on the object — becomes a `prop_label` text element,
+    which puts it inside the closed set rather than leaving it as incidental
+    signage the closed-set rule would otherwise forbid.
+    """
+
+    key: str = ""
+    name: str = ""
+    #: What it looks like. Held identical everywhere it appears.
+    visual: str = ""
+    #: Words written on the object itself, if any.
+    label: str = ""
+    #: Extra spellings the copy might use ("pulldown" for "the lat pulldown").
+    aliases: list[str] = Field(default_factory=list)
+
+    def names(self) -> list[str]:
+        out = [self.name] + list(self.aliases)
+        return [n.strip().lower() for n in out if n.strip()]
+
+    def visual_lock(self) -> str:
+        line = f"{self.name} (locked — hold this identical in every panel): {self.visual}"
+        if self.label:
+            line += f' The words "{self.label}" are physically on it.'
+        return line
+
+
 class Show(BaseModel):
     key: str
     label: str
@@ -162,6 +193,13 @@ class Show(BaseModel):
     spine: Spine = Field(default_factory=Spine)
     voice: Voice = Field(default_factory=Voice)
     look: Look = Field(default_factory=Look)
+    #: The show's standing objects, keyed by prop id. Empty for every show that
+    #: doesn't have recurring furniture, which is the pass-through.
+    props: dict[str, Prop] = Field(default_factory=dict)
+    #: How many background figures the room holds. Fixed, so crowd density stops
+    #: jumping arbitrarily between panels; a story that turns the room ramps it
+    #: monotonically from here rather than re-rolling it.
+    crowd_base: int = 0
 
     # --- what the write call is told ----------------------------------------
 
@@ -292,6 +330,11 @@ def load_shows(directory: Path = SHOWS_DIR) -> dict[str, Show]:
         for section in ("spine", "voice", "look"):
             if section in data:
                 spec[section] = data[section]
+        if "props" in data:
+            spec["props"] = {
+                key: Prop(key=key, **prop)
+                for key, prop in (data["props"] or {}).items()
+            }
         show = Show(**spec)
         out[show.key] = show
     return out
