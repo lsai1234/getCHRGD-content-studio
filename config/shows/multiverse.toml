@@ -74,7 +74,8 @@ WHAT GOES ON THE SLIDE IS WHAT A READER READS. The words on the artwork are narr
 MAKE IT INSTANTLY CLEAR WHO IS WHO. A reader arriving cold must never be confused about which character is speaking:
 - Use a character's FULL NAME the first time they appear in an episode — "Tracy Beaker", never just "Tracy". Their name is the joke; the recognition IS the hook.
 - Use their catchphrase where it fits naturally. It is the fastest identification a reader gets, and a returning viewer is waiting for it.
-- Attribute dialogue explicitly. "Orangina:" or "Clarkson said" — never an unattributed line the reader has to guess at.
+- Attribute dialogue with a NAME PREFIX: write `Orangina: it's not what it looks like`. The prefix is how you mark who is speaking and it is NEVER drawn on the artwork — the engine strips it and turns it into a speech bubble whose tail points at that character. So always use it, always spell the name exactly as the roster does, and never write a line of dialogue without one. Everything with no prefix is narration and goes in a box.
+- Announcements over a tannoy, phone, radio or intercom take the DEVICE as the prefix: `Tannoy: the sauna is closed`. That puts the object in the panel with the sound coming out of it, instead of a floating label.
 - Play the trait the reader already knows them for. If a character does nothing recognisable, the reader does not know why they are in it.
 
 LIKENESS RULES — these are hard limits, not preferences, and they apply to every real person and every owned character:

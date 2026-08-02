@@ -398,6 +398,7 @@ def compose_design_prompt(
     amp_state: str = "",
     cast_lock: str = "",
     show=None,
+    panel=None,
 ) -> str:
     """Full-slide design prompt (ai_design mode): the model designs the whole
     piece — concept, layout, and the approved copy rendered as typography.
@@ -549,6 +550,20 @@ def compose_design_prompt(
     if not ds_block and brand.generation.consistency_clause:
         parts.append(brand.generation.consistency_clause)
     prompt = "\n\n".join(parts)
+
+    # A manifest panel specifies the lettering as a bounded, closed set —
+    # roles, placements, anchors and the three rules — and REPLACES everything
+    # below. The old path implied the text instead of declaring it, and the
+    # brand's embedded-typography treatment then instructed the model to render
+    # the copy as gym signage ("sprayed on a wall… written on the whiteboard"),
+    # which is where the duplicated caption-as-wall-art came from. Both halves
+    # have to go together: adding a specification while leaving the
+    # contradicting instruction in place just gives the model two orders.
+    if panel is not None:
+        from .manifest import text_spec
+
+        return prompt + "\n\n" + text_spec(panel)
+
     prompt += "\n\nTEXT TO PLACE ON IMAGE:"
     prompt += f"\nHeadline text: {slide.headline}"
     if slide.supporting:
@@ -608,6 +623,18 @@ def _charge_for(idea: Idea, slide_index: int, slide_count: int) -> int | None:
     if arc is None or not 0 <= slide_index < len(arc):
         return None
     return arc[slide_index]
+
+
+def _panel_for(idea: Idea, slide_index: int):
+    """This slide's manifest panel, or None when the post has no manifest.
+
+    None is the pass-through: every off-format post keeps the previous text
+    handling exactly, so nothing outside the cast shows changes behaviour.
+    """
+    from .manifest import manifest_for
+
+    manifest = manifest_for(idea)
+    return manifest.panel(slide_index) if manifest is not None else None
 
 
 def _cast_lock_for(idea: Idea, slide_index: int | None = None) -> str:
@@ -1069,6 +1096,7 @@ def render_slide(
                     amp_state=_amp_state_for(idea),
                     cast_lock=_cast_lock_for(idea, slide_index),
                     show=show,
+                    panel=_panel_for(idea, slide_index),
                 )
             else:
                 prompt = compose_image_prompt(slide.image_prompt, brand, style)

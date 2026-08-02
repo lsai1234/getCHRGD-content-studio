@@ -770,7 +770,10 @@ def test_the_brief_demands_the_reader_can_tell_who_is_who():
     voice = get_show("multiverse").voice.block
     assert "FULL NAME the first time" in voice
     assert "Tracy Beaker" in voice and "never just" in voice
-    assert "Attribute dialogue explicitly" in voice
+    # the name prefix is the machine-readable attribution — stripped before it
+    # can reach the artwork, and turned into a bubble tail
+    assert "NAME PREFIX" in voice
+    assert "NEVER drawn on the artwork" in voice
 
 
 def test_tracy_beaker_introduces_herself_properly():

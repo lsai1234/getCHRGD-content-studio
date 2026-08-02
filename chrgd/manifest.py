@@ -43,19 +43,24 @@ ROUTE_KEY = "panels"
 
 
 class TextElement(BaseModel):
-    """A bounded piece of lettering. Populated by the text-specification stage.
+    """A bounded piece of lettering: exactly these words, in exactly this place.
 
-    Declared now because presence and attribution are the same problem: a
-    dialogue bubble's tail has to point at a character who is actually in the
-    panel, and that check is only possible once both halves exist.
+    The words were previously *implied* — the beat text was concatenated into
+    the image prompt as narrative context, so the model treated it as things
+    that exist in the world and rendered it wherever it liked: as the caption,
+    and again as a poster, and again on the wall. Declaring a closed set of
+    bounded elements is what stops that.
     """
 
     id: str = ""
-    #: caption | dialogue | broadcast | prop_label
+    #: caption | dialogue | broadcast | prop_label | title
     role: str = "caption"
     content: str = ""
     placement: str = ""
     style: str = ""
+    #: Roster key or prop id this element's tail points at. The tail IS the
+    #: attribution, which is what lets the name prefix come off the artwork.
+    anchor: str = ""
 
 
 class Panel(BaseModel):
@@ -71,12 +76,17 @@ class Panel(BaseModel):
     #: in, so every one of them has to be named and refused by name.
     cast_forbidden: list[str] = Field(default_factory=list)
 
+    #: The closed set of words in this panel. Nothing else may be lettered.
+    text_elements: list[TextElement] = Field(default_factory=list)
+    #: Objects the panel must contain. Currently only the sources a broadcast
+    #: line issues from — a tannoy line with no tannoy in frame is a floating
+    #: label. The full prop ledger arrives with the blocking stage.
+    props_present: list[str] = Field(default_factory=list)
+
     # --- filled in by later stages, declared here so the shape is stable ---
     blocking: str = ""
-    props_present: list[str] = Field(default_factory=list)
     camera: str = ""
     crowd_count: int | None = None
-    text_elements: list[TextElement] = Field(default_factory=list)
 
 
 class Manifest(BaseModel):
@@ -190,7 +200,120 @@ def _entrances(scans: list[tuple[set[str], set[str], set[str]]],
     return entrance
 
 
-def build_manifest(post: dict, cast_keys: list[str]) -> Manifest:
+# --- deriving the text ------------------------------------------------------
+
+#: A glyph budget, enforced before generation. The model garbles text in
+#: proportion to how much of it there is and how small it renders, and the only
+#: cheap lever is constraining the input. These are the caps, not suggestions.
+MAX_ELEMENT_CHARS = 90
+MAX_PANEL_CHARS = 180
+#: Long, unusual words garble disproportionately. Set at 12 rather than the 10
+#: the brief suggested, because 10 fires on ordinary English — "handwriting" and
+#: "recognisable" are not the risk, and a check that refuses normal writing is
+#: one that gets switched off, at which point it protects nothing. Character
+#: names are exempt on top of that: "Chimpanzini Bananini" cannot be written
+#: shorter and is the whole joke.
+MAX_WORD_CHARS = 12
+
+#: `Orangina:` at the head of a line. The writer is TOLD to mark the speaker
+#: this way, because it is a reliable machine-readable signal — and then it is
+#: stripped here so it never reaches the artwork. The prefix is an annotation,
+#: not copy. This is what "attribute by position, not by prefix" means in
+#: practice: the convention stays, the label comes off.
+_SPEAKER_PREFIX = re.compile(r"^\s*([A-Za-z][\w'’\- ]{1,28}?)\s*:\s*(.+)$", re.S)
+
+#: A "speaker" that is a device, not a person: the line is mediated sound and
+#: needs its source object visibly in frame for the tail to point at.
+_DEVICE = {
+    "tannoy": "the tannoy", "intercom": "the intercom", "pa": "the PA speaker",
+    "speaker": "the speaker", "speakers": "the speakers", "radio": "the radio",
+    "phone": "the phone", "tv": "the TV", "television": "the television",
+    "screen": "the screen", "loudspeaker": "the loudspeaker",
+    "announcement": "the tannoy", "megaphone": "the megaphone",
+}
+
+#: Prefixes that mark narration. Stripped, and the box IS the attribution.
+_NARRATION = {"narrator", "narration", "caption", "voiceover", "vo"}
+
+_QUOTES = "\"'“”‘’"
+
+
+def _split_speaker(text: str, cast: list[str]) -> tuple[str, str, str, str]:
+    """(role, content, anchor, anchor_label) for one line of copy.
+
+    An unrecognised prefix is left alone rather than guessed at — it comes back
+    as a caption still carrying its label, and rule 10 refuses it. Silently
+    printing "DAVE:" on the artwork is the failure this whole stage exists to
+    stop, so an unattributable line has to be a blocker, not a shrug.
+    """
+    from .likeness import _keys_in
+    from .roster import get_character, name_index
+
+    raw = (text or "").strip()
+    match = _SPEAKER_PREFIX.match(raw)
+    if not match:
+        return "caption", raw, "", ""
+    label, said = match.group(1).strip(), match.group(2).strip()
+    said = said.strip(_QUOTES).strip()
+
+    if label.lower() in _NARRATION:
+        return "caption", said, "", ""
+    device = _DEVICE.get(label.lower())
+    if device:
+        return "broadcast", said, label.lower(), device
+    speaking = _keys_in(label, name_index()) & set(cast)
+    if len(speaking) == 1:
+        key = next(iter(speaking))
+        char = get_character(key)
+        return "dialogue", said, key, (char.name if char else key)
+    return "caption", raw, "", ""
+
+
+def _text_for(slide: dict, cast: list[str], *, index: int,
+              title_card: str = "", title_note: str = "") -> list[TextElement]:
+    """This panel's closed set of lettering, in reading order."""
+    elements: list[TextElement] = []
+    if index == 0 and title_card.strip():
+        # The show's masthead is words on the artwork, so it has to be IN the
+        # closed set — otherwise the prompt grants it in one place and forbids
+        # it in another, and the model resolves that by inventing more text.
+        elements.append(TextElement(
+            id="t0", role="title", content=title_card.strip(),
+            placement=title_note.strip() or "a masthead across the top of the panel",
+            style="the show's own lettering, small enough not to compete with "
+                  "the panel's own words",
+        ))
+    for field in ("headline", "supporting", "body"):
+        raw = str(slide.get(field) or "").strip()
+        if not raw:
+            continue
+        role, content, anchor, anchor_label = _split_speaker(raw, cast)
+        if not content:
+            continue
+        if role == "dialogue":
+            placement = (f"a speech bubble whose tail points to "
+                         f"{anchor_label}'s mouth")
+            style = "comic bubble lettering, bold all-caps, heavy outline"
+        elif role == "broadcast":
+            placement = (f"text issuing from {anchor_label}, its tail anchored "
+                         f"to {anchor_label} with clear space around it")
+            style = ("harder-edged than a speech bubble, slightly distorted, "
+                     "so it reads as mediated sound rather than a voice in the "
+                     "room")
+        else:
+            placement = ("a narration box in the top band of the panel"
+                         if field == "headline" else
+                         "a narration box in the lower band of the panel")
+            style = "narration-box lettering, bold all-caps, heavy outline"
+        elements.append(TextElement(
+            id=f"t{len(elements) + 1}", role=role, content=content,
+            placement=placement, style=style, anchor=anchor,
+        ))
+    return elements
+
+
+def build_manifest(post: dict, cast_keys: list[str], *,
+                   title_card: str = "", title_note: str = "") -> Manifest:
     """Resolve the whole episode into per-panel state, before any generation.
 
     Presence carries forward: once a character is in the room they stay there
@@ -226,12 +349,18 @@ def build_manifest(post: dict, cast_keys: list[str]) -> Manifest:
         )
         here = set() if person_free else set(in_room)
 
+        elements = _text_for(slide, cast, index=i, title_card=title_card,
+                             title_note=title_note)
         manifest.panels.append(Panel(
             index=i,
             total=total,
             beat_text=copy,
             cast_present=[k for k in cast if k in here],
             cast_forbidden=[k for k in cast if k not in here],
+            text_elements=elements,
+            props_present=sorted({
+                e.anchor for e in elements if e.role == "broadcast" and e.anchor
+            }),
         ))
         in_room -= departing
     return manifest
@@ -290,7 +419,22 @@ def manifest_for(idea) -> Manifest | None:
     stored = manifest_from_route(route)
     if stored is not None and stored.source == fingerprint(slides):
         return stored
-    return build_manifest({"slides": slides}, cast)
+    return build_manifest({"slides": slides}, cast, **title_for(idea))
+
+
+def title_for(idea) -> dict:
+    """The show's masthead, which is words on the artwork and therefore has to
+    be IN the closed set — granting it in one place and forbidding it in
+    another is how the model ends up inventing more text."""
+    from .shows import show_for_idea
+
+    show = show_for_idea(idea)
+    if show is None or not show.look.title_card.strip():
+        return {}
+    return {
+        "title_card": show.look.title_card.strip(),
+        "title_note": show.look.title_note.strip(),
+    }
 
 
 # --- validation: rules 1 and 2 ----------------------------------------------
@@ -357,21 +501,104 @@ def validate(manifest: Manifest) -> list[str]:
                 "at somebody who is never drawn"
             )
 
-        # Rule 1, strict form: a bubble's tail is the attribution, so its anchor
-        # has to be in the panel. Inert until the text stage populates these,
-        # which is deliberate — a validator that fires on unpopulated fields is
-        # one that gets switched off, and then it protects nothing.
-        for element in panel.text_elements:
-            anchors = _scan(element.placement, manifest.cast)[0]
-            stranded = anchors - present
-            if stranded:
-                reasons.append(
-                    f"{where}: the {element.role} \"{element.content[:40]}\" is "
-                    f"anchored to {', '.join(sorted(label(k) for k in stranded))}, "
-                    "who is not in the panel — the bubble would have nothing to "
-                    "point at"
-                )
+        reasons += _text_problems(panel, manifest.cast, present, where, label)
     return reasons
+
+
+def _text_problems(panel: Panel, cast: list[str], present: set[str],
+                   where: str, label) -> list[str]:
+    """Rules 3, 4, 10 and 11 — the closed set, the glyph budget and attribution."""
+    reasons: list[str] = []
+    if not panel.text_elements:
+        return reasons
+
+    # Rule 3 — every declared string is unique within its panel. A repeated
+    # string is a licence to render it twice, which is half of the wall-art bug.
+    seen: dict[str, int] = {}
+    for element in panel.text_elements:
+        key = element.content.strip().lower()
+        seen[key] = seen.get(key, 0) + 1
+    for text, count in seen.items():
+        if count > 1 and text:
+            reasons.append(
+                f"{where}: \"{text[:40]}\" is declared {count} times — each "
+                "string may appear exactly once, or it gets drawn twice"
+            )
+
+    total = 0
+    for element in panel.text_elements:
+        content = element.content.strip()
+        total += len(content)
+
+        # Rule 4 — the glyph budget.
+        if len(content) > MAX_ELEMENT_CHARS:
+            reasons.append(
+                f"{where}: the {element.role} runs to {len(content)} characters "
+                f"(cap {MAX_ELEMENT_CHARS}) — long text renders small and "
+                f"garbles: \"{content[:50]}…\""
+            )
+        for word in _long_words(content, cast):
+            reasons.append(
+                f"{where}: \"{word}\" is {len(word)} characters — long, unusual "
+                "words garble disproportionately. Rewrite the line with shorter, "
+                "commoner words."
+            )
+
+        # Rule 10 — no attribution prefixes and no label furniture. An
+        # unrecognised speaker label survives derivation intact; this is where
+        # it stops, because printing "DAVE:" on the artwork is the failure.
+        leftover = _SPEAKER_PREFIX.match(content)
+        if leftover and element.role == "caption":
+            reasons.append(
+                f"{where}: \"{content[:40]}\" still carries a speaker label. "
+                "Attribution is the bubble's tail, never a prefix — either name "
+                "a character from the cast, or write it as narration."
+            )
+
+        # Rule 11 — a tail has to point at something that is in the panel.
+        if element.role in ("dialogue", "broadcast"):
+            if not element.anchor:
+                reasons.append(
+                    f"{where}: the {element.role} \"{content[:40]}\" has no "
+                    "anchor — a bubble with nothing to point at is a floating "
+                    "label"
+                )
+            elif element.role == "dialogue" and element.anchor not in present:
+                reasons.append(
+                    f"{where}: the dialogue \"{content[:40]}\" is anchored to "
+                    f"{label(element.anchor)}, who is not in the panel"
+                )
+            elif element.role == "broadcast" and element.anchor not in panel.props_present:
+                reasons.append(
+                    f"{where}: the broadcast \"{content[:40]}\" issues from "
+                    f"{element.anchor}, which is not in the panel's props — the "
+                    "emitting object has to be visibly in frame"
+                )
+
+    if total > MAX_PANEL_CHARS:
+        reasons.append(
+            f"{where}: {total} characters of text on one panel (cap "
+            f"{MAX_PANEL_CHARS}) — cut it. Shorter copy is both the swipe lever "
+            "and the main defence against garbled glyphs."
+        )
+    return reasons
+
+
+def _long_words(text: str, cast: list[str]) -> list[str]:
+    """Words over the cap, excluding anything that is part of a cast name."""
+    from .roster import get_character
+
+    exempt = set()
+    for key in cast:
+        char = get_character(key)
+        if char:
+            exempt |= {w.lower().strip(_QUOTES) for w in char.name.split()}
+    out = []
+    for word in re.findall(r"[A-Za-z'’\-]+", text):
+        bare = word.lower().strip("-")
+        if len(bare) > MAX_WORD_CHARS and bare not in exempt:
+            out.append(word)
+    return out
 
 
 # --- what the image prompt is told ------------------------------------------
@@ -410,4 +637,73 @@ def cast_block(panel: Panel) -> str:
             "they have already left, and drawing them here spends the story "
             "before it is told."
         )
+    if panel.props_present:
+        parts.append(
+            "REQUIRED IN FRAME — "
+            + ", ".join(sorted(panel.props_present))
+            + ". A line of text issues from this object, so it must be visibly "
+            "in the panel with clear space around it for the text to sit."
+        )
     return "\n\n".join(parts)
+
+
+#: Placement wording per role, for the labels in the spec below.
+_ROLE_LABEL = {
+    "title": "SHOW MASTHEAD",
+    "caption": "NARRATION BOX",
+    "dialogue": "SPEECH BUBBLE",
+    "broadcast": "MEDIATED SOUND",
+    "prop_label": "TEXT ON A PROP",
+}
+
+
+def text_spec(panel: Panel) -> str:
+    """The panel's lettering, declared as a closed set rather than implied.
+
+    The old prompt ended with `TEXT TO PLACE ON IMAGE:` and two bare strings,
+    while the beat's narrative text sat higher up in the same prompt — so the
+    model treated the words as things that exist in the world and rendered them
+    as the caption AND as a poster AND on the wall. Three rules fix that, and
+    all three have to be stated: verbatim, closed set, one instance each.
+    """
+    if not panel.text_elements:
+        return (
+            "TEXT ON THIS PANEL: NONE. This panel carries no words at all — no "
+            "narration, no bubbles, no signage, no lettering of any kind "
+            "anywhere in the frame."
+        )
+    lines = [
+        "TEXT ON THIS PANEL — this is the COMPLETE and CLOSED list of every "
+        "word that appears anywhere in the image:",
+    ]
+    for i, element in enumerate(panel.text_elements, 1):
+        role = _ROLE_LABEL.get(element.role, element.role.upper())
+        lines.append(
+            f"{i}. {role} — {element.placement}. Set in {element.style}.\n"
+            f'   Render exactly, character for character: "{element.content}"'
+        )
+    lines.append(
+        "HOW THE TEXT IS RENDERED — three absolute rules:\n"
+        "- VERBATIM. Each string above is drawn exactly as written, spelled "
+        "exactly as given. Do not paraphrase it, do not shorten it, do not "
+        "correct it, do not add a word to it.\n"
+        "- CLOSED SET. These are the ONLY words anywhere in this panel. No "
+        "other signage, no posters, no wall art, no whiteboards, no banners, "
+        "no labels on equipment, no logos, no watermarks, no page numbers, no "
+        "background lettering, no incidental text of any kind. If a surface in "
+        "the scene would realistically carry writing, draw it blank.\n"
+        "- ONE INSTANCE EACH. Every string above appears exactly ONCE in the "
+        "panel. Never repeat a line as background decoration.\n"
+        "- NO LABELS. Never letter a speaker's name, a role, a caption tag or "
+        "a badge next to any text. A bubble's tail pointing at the speaker IS "
+        "the attribution; a narration box needs no label because its position "
+        "says what it is."
+    )
+    lines.append(
+        "GIVE EVERY TEXT ELEMENT GENEROUS CLEAR SPACE — a calm, uncluttered "
+        "area of the artwork behind it. Text over busy detail degrades badly. "
+        "Set it large, in a heavy display face, all-caps, high contrast. Every "
+        "letter sits fully inside the frame with clear breathing room; the "
+        "outer 12% on every side is margin and nothing may touch or cross it."
+    )
+    return "\n\n".join(lines)

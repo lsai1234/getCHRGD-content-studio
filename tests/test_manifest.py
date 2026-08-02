@@ -265,9 +265,8 @@ def test_rule_1_the_copy_cannot_point_at_somebody_the_episode_never_draws():
     assert any("Molly-Mae" in r and "never drawn" in r for r in reasons)
 
 
-def test_rule_1_strict_form_is_ready_for_the_text_stage():
-    """A bubble's tail is the attribution, so its anchor must be in the panel.
-    Inert until text elements are populated — this proves it isn't dead."""
+def test_rule_11_a_bubble_cannot_point_at_somebody_outside_the_panel():
+    """The tail is the attribution, so its anchor has to be in frame."""
     from chrgd.manifest import TextElement
 
     m = Manifest(cast=CAST, panels=[Panel(
@@ -275,6 +274,7 @@ def test_rule_1_strict_form_is_ready_for_the_text_stage():
         cast_forbidden=["molly_mae", "clarkson"],
         text_elements=[TextElement(
             role="dialogue", content="It's not what it looks like",
+            anchor="molly_mae",
             placement="bubble anchored to Molly-Mae's mouth")],
     )])
     reasons = validate(m)
@@ -287,5 +287,193 @@ def test_a_character_talked_about_while_absent_is_not_a_failure():
     m = build_manifest(post(
         slide("Tracy Beaker says Jeremy Clarkson will be here at six"),
         slide("Jeremy Clarkson walks in"),
+    ), CAST)
+    assert validate(m) == []
+
+
+# === STAGE 3: text declared, not implied ====================================
+#
+# The words were being concatenated into the prompt as narrative context, so
+# the model rendered them wherever it liked — as the caption, and again as a
+# poster on the wall. And the only channel the writer had for marking a speaker
+# was a name prefix inside the copy, which then got painted onto the artwork.
+
+
+def test_narration_becomes_a_box_with_no_label():
+    m = build_manifest(post(slide("THE SIGN HAS SAID BACK SOON SINCE 2019")), CAST)
+    el = m.panels[0].text_elements[0]
+    assert el.role == "caption"
+    assert el.content == "THE SIGN HAS SAID BACK SOON SINCE 2019"
+    assert "narration box" in el.placement
+    assert el.anchor == ""
+
+
+def test_a_name_prefix_becomes_a_bubble_tail_and_leaves_the_artwork():
+    """Defect 10. The prefix is the writer's machine-readable signal; it must
+    never be lettered."""
+    m = build_manifest(post(
+        slide("Tracy Beaker is caught", supporting="Orangina: it's not what it looks like"),
+    ), ["tracy_beaker", "orangina"])
+    dialogue = [e for e in m.panels[0].text_elements if e.role == "dialogue"]
+    assert len(dialogue) == 1
+    el = dialogue[0]
+    assert el.content == "it's not what it looks like"     # the label is gone
+    assert not el.content.lower().startswith("orangina")
+    assert el.anchor == "orangina"
+    assert "tail points to Orangina's mouth" in el.placement
+
+
+def test_quotes_around_the_dialogue_come_off_too():
+    m = build_manifest(post(
+        slide('Clarkson: "I have not moved since March"'),
+    ), ["clarkson"])
+    assert m.panels[0].text_elements[0].content == "I have not moved since March"
+
+
+def test_a_narration_prefix_is_stripped_without_becoming_dialogue():
+    m = build_manifest(post(slide("Narrator: nobody said anything")), CAST)
+    el = m.panels[0].text_elements[0]
+    assert el.role == "caption" and el.content == "nobody said anything"
+
+
+def test_a_device_prefix_becomes_mediated_sound_and_requires_the_object():
+    """A tannoy line with no tannoy in frame is a floating label."""
+    m = build_manifest(post(
+        slide("Tracy Beaker stops dead", supporting="Tannoy: the sauna is closed"),
+    ), ["tracy_beaker"])
+    panel = m.panels[0]
+    broadcast = [e for e in panel.text_elements if e.role == "broadcast"][0]
+    assert broadcast.content == "the sauna is closed"
+    assert broadcast.anchor == "tannoy"
+    assert "issuing from the tannoy" in broadcast.placement
+    assert "mediated sound" in broadcast.style
+    assert panel.props_present == ["tannoy"]
+    # and the prompt puts the object in the frame
+    assert "REQUIRED IN FRAME — tannoy" in cast_block(panel)
+
+
+def test_an_unrecognised_speaker_label_blocks_rather_than_being_painted():
+    """Printing 'DAVE:' on the artwork is the failure this stage exists to
+    stop, so an unattributable line has to block, not shrug."""
+    m = build_manifest(post(slide("Dave: get off my rack")), CAST)
+    assert any("still carries a speaker label" in r for r in validate(m))
+
+
+def test_the_show_masthead_is_inside_the_closed_set():
+    """Granting it in one place and forbidding it in another is how the model
+    ends up inventing more text."""
+    m = build_manifest(post(slide("Tracy Beaker denies it"), slide("x")), CAST,
+                       title_card="CHRGD MULTIVERSE", title_note="a masthead")
+    assert m.panels[0].text_elements[0].role == "title"
+    assert m.panels[0].text_elements[0].content == "CHRGD MULTIVERSE"
+    # panel 1 only — it is not furniture on every frame
+    assert all(e.role != "title" for e in m.panels[1].text_elements)
+
+
+# --- the prompt -------------------------------------------------------------
+
+
+def test_the_prompt_declares_a_closed_set_with_the_three_rules():
+    from chrgd.manifest import text_spec
+
+    m = build_manifest(post(
+        slide("TRACY BEAKER HAS GREASE ON HER HANDS",
+              supporting="Tracy Beaker: I have never fixed anything"),
+    ), CAST)
+    spec = text_spec(m.panels[0])
+    assert "COMPLETE and CLOSED list" in spec
+    assert "VERBATIM" in spec and "CLOSED SET" in spec and "ONE INSTANCE EACH" in spec
+    assert "NO LABELS" in spec
+    # the specific thing that was being duplicated
+    for banned in ("no posters", "no wall art", "no whiteboards", "no background lettering"):
+        assert banned in spec, banned
+    assert 'Render exactly, character for character: "I have never fixed anything"' in spec
+    assert "SPEECH BUBBLE" in spec and "NARRATION BOX" in spec
+
+
+def test_a_wordless_panel_says_no_text_rather_than_leaving_it_open():
+    from chrgd.manifest import text_spec
+
+    assert "TEXT ON THIS PANEL: NONE" in text_spec(Panel(index=0, total=1))
+
+
+def test_the_wall_art_instruction_is_gone_from_a_panel_prompt():
+    """`_EMBEDDED_TEXT_RULES` told the model to render the copy as gym signage
+    — 'sprayed on a wall', 'written on the whiteboard'. That IS the duplicated
+    caption. A specification that leaves it in place just gives two orders."""
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    s = Slide(headline="SHORT LINE", supporting="two words")
+    m = build_manifest(post(slide("SHORT LINE", supporting="two words")), CAST)
+
+    without = compose_design_prompt(s, load_brand(), None)
+    assert "sprayed on a wall" in without          # the old path, unchanged
+
+    with_panel = compose_design_prompt(s, load_brand(), None, panel=m.panels[0])
+    assert "sprayed on a wall" not in with_panel
+    assert "written on the whiteboard" not in with_panel
+    assert "TANGIBLE PART OF THE SCENE" not in with_panel
+    assert "TEXT TO PLACE ON IMAGE" not in with_panel
+    # whiteboards now appear only in the ban
+    assert "no whiteboards" in with_panel
+    assert "COMPLETE and CLOSED list" in with_panel
+
+
+def test_off_format_posts_keep_the_old_text_handling():
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    prompt = compose_design_prompt(
+        Slide(headline="H", supporting="S"), load_brand(), None)
+    assert "TEXT TO PLACE ON IMAGE" in prompt
+    assert "Headline text: H" in prompt
+
+
+# --- rules 3, 4 and 10 ------------------------------------------------------
+
+
+def test_rule_3_a_string_declared_twice_is_refused():
+    m = build_manifest(post(
+        slide("THE SAME LINE", supporting="the same line"),
+    ), CAST)
+    assert any("declared 2 times" in r for r in validate(m))
+
+
+def test_rule_4_over_long_copy_is_capped():
+    from chrgd.manifest import MAX_ELEMENT_CHARS
+
+    m = build_manifest(post(slide("TRACY " * 30)), CAST)
+    reasons = validate(m)
+    assert any(f"cap {MAX_ELEMENT_CHARS}" in r for r in reasons)
+
+
+def test_rule_4_the_panel_total_is_capped_too():
+    from chrgd.manifest import MAX_PANEL_CHARS
+
+    m = build_manifest(post(slide("A" * 85, supporting="B" * 85, )), CAST)
+    m.panels[0].text_elements.append(
+        type(m.panels[0].text_elements[0])(id="t9", content="C" * 60))
+    assert any(f"cap {MAX_PANEL_CHARS}" in r for r in validate(m))
+
+
+def test_rule_4_long_words_are_flagged_but_cast_names_are_exempt():
+    """'Chimpanzini Bananini' cannot be rewritten shorter and is the joke."""
+    m = build_manifest(post(slide("CHIMPANZINI BANANINI IS INCOMPREHENSIBLE")),
+                       ["chimpanzini"])
+    reasons = validate(m)
+    assert any("INCOMPREHENSIBLE" in r for r in reasons)
+    assert not any("CHIMPANZINI" in r for r in reasons)
+
+
+def test_normal_writing_survives_all_of_it():
+    """A validator that fires on good copy is one that gets switched off."""
+    m = build_manifest(post(
+        slide("THE LAT PULLDOWN WORKED ON TUESDAY"),
+        slide("Molly-Mae finds a tripod under the frame",
+              supporting="Molly-Mae: I suppose that was me"),
+        slide("Tracy Beaker says nothing"),
     ), CAST)
     assert validate(m) == []

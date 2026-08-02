@@ -793,7 +793,21 @@ def run_pipeline_for_idea(
         # so it earns the rewrite every time rather than most times.
         from .copylint import reasons as copy_reasons
 
-        failures = failures + copy_reasons(post.model_dump(mode="json"))
+        payload = post.model_dump(mode="json")
+        failures = failures + copy_reasons(payload)
+        # The panel manifest's checks are the same kind of thing: deterministic,
+        # free, and fixable by writing shorter copy. Running them HERE rather
+        # than only after the loop means over-long text or an unattributable
+        # speaker label earns the rewrite the engine already gets, instead of
+        # landing on the operator as a review hold.
+        cast_here = [str(k) for k in (creation_prefs(idea).get("cast") or [])]
+        if cast_here:
+            from .manifest import build_manifest, title_for
+            from .manifest import validate as validate_panels
+
+            failures = failures + validate_panels(
+                build_manifest(payload, cast_here, **title_for(idea))
+            )
         if not failures:
             return BuildResult(
                 idea_id=idea.idea_id,
@@ -1072,9 +1086,14 @@ def build_single_idea(
         # walked in yet. Computed for cast shows only; every other post gets no
         # `panels` key and behaves exactly as it did before.
         if cast_keys:
-            from .manifest import ROUTE_KEY as PANELS_KEY, build_manifest, validate
+            from .manifest import (
+                ROUTE_KEY as PANELS_KEY,
+                build_manifest,
+                title_for,
+                validate,
+            )
 
-            manifest = build_manifest(payload, cast_keys)
+            manifest = build_manifest(payload, cast_keys, **title_for(idea))
             extra = {**extra, PANELS_KEY: manifest.model_dump()}
             problems = validate(manifest)
             if problems:
