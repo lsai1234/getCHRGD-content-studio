@@ -1,6 +1,6 @@
 # THE MULTIVERSE — roster v2 (locked)
 
-**Thirteen characters, agreed** — seven meme regulars, six caricatured guest stars. This becomes `config/roster.toml` in Phase 3.
+**Fourteen characters** — seven meme regulars, six caricatured guest stars. This becomes `config/roster.toml` in Phase 3.
 Companion to `THEMES_PLAN.md` (Show 2, decisions D1/D3/D6).
 
 Each entry carries the four things the engine actually needs:
@@ -78,11 +78,20 @@ The Facebook AI-slop icon.
 - **Visual lock:** serene robed figure with shrimp features and shrimp limbs, glowing halo, deliberately over-rendered AI-slop sheen inside a comic frame.
 
 ### 7. Orangina · `meme_character`
-Half human, half orange — the one blowing up across AI video right now.
-- **Trait:** is *technically* a health food and has built an entire personality on it. Has never trained a day in her life, is made of vitamin C, and considers that a moral achievement.
-- **Gym role:** the wellness girl. Lives at the smoothie bar. Assesses everything anyone eats and says "but is it *clean* though" in a tone that ends friendships.
-- **Joke engine:** unearned nutritional superiority. She's the perfect antagonist for Chimpanzini Bananini (both fruit, wildly different politics) and for Gordon Ramsay (both have opinions about your food, neither will yield).
-- **Visual lock:** young woman with an orange for a head — segmented citrus skin, glossy peel texture, a small face — in gym kit, comic ink, halftone shading.
+Half woman, half orange. Married to an orange.
+- **Trait:** cannot be faithful. She is always carrying on with some other fruit, and her husband is always about to walk in.
+- **Gym role:** the soap opera of Iron Palace. Wherever she is, somebody is being lied to — usually the large sad orange waiting in reception.
+- **Catchphrase:** "It's not what it looks like."
+- **Note on register:** her comedy is FARCE, not smut. Excuses, near-misses, a husband arriving at the worst possible moment. The show's rule against anything sexual applies to her exactly as it does to everyone else — the joke is the lying, not the affair.
+- **Visual lock:** young woman with an orange for a head — segmented citrus skin, glossy peel, a small face with long lashes — in gym kit, comic ink, halftone.
+
+### 7b. Orangino · `meme_character`
+A large, sad orange. Her husband.
+- **Trait:** believes every excuse. Has never once suspected anything, and keeps buying her presents.
+- **Gym role:** waits in reception. Holds the bags. Last person in the building to know anything.
+- **Catchphrase:** "She's just training."
+- **Why he's on the roster:** Orangina's whole gag needs somebody to walk in. He also needs a locked visual or he'd be drawn differently in every panel.
+- **Visual lock:** a large round orange with stubby arms and legs and a small mournful face, in an ill-fitting tracksuit, comic ink, halftone.
 
 ---
 

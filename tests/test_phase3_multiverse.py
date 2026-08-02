@@ -67,11 +67,13 @@ def episode_post(*copy, art="a comic panel in a gym", caption="what happens next
 # --- the roster -------------------------------------------------------------
 
 
-def test_the_roster_is_the_thirteen_that_were_agreed():
+def test_the_roster_is_the_cast_that_was_agreed():
     roster = load_roster()
-    assert len(roster) == 13
+    assert len(roster) == 14
     protected = [c for c in roster.values() if c.protected]
-    assert len(protected) == 6, "six guest stars, seven meme regulars"
+    assert len(protected) == 6, "six guest stars, eight meme regulars"
+    # Orangina's husband exists because her whole gag needs somebody to walk in
+    assert "orangino" in roster and not roster["orangino"].protected
     names = {c.name for c in roster.values()}
     assert {"Orangina", "Tracy Beaker", "Erling Haaland", "Shrimp Jesus"} <= names
     # the ones explicitly cut
@@ -286,7 +288,7 @@ def test_the_show_that_the_gate_must_not_break():
     clean = episode_post(
         "Haaland has been on the leg press for forty minutes",
         "Clarkson refuses to acknowledge the queue exists",
-        "Orangina: but is it clean though",
+        "Orangina: it's not what it looks like",
         caption="who's getting the rack?",
     )
     assert lint_post(clean, cast_keys=["haaland", "clarkson", "orangina"]) == []
@@ -434,7 +436,7 @@ def test_the_roster_seeds_every_character_with_real_jokes():
         assert char.catchphrase, f"{char.key} has no catchphrase"
         assert len(char.bits) >= 3, f"{char.key} has too few signature bits"
     line = get_character("orangina").brief_line()
-    assert "But is it clean though?" in line
+    assert "It's not what it looks like." in line
     assert "Established running gags" in line
 
 
@@ -444,7 +446,7 @@ def test_landed_gags_are_added_to_the_seed_ones_in_the_brief():
     block = cast_block(resolve(["orangina"]),
                        gags={"orangina": ["appeals every ban on ingredient grounds"]})
     assert "appeals every ban" in block          # the landed one
-    assert "but is it clean" in block.lower()    # and the seed one
+    assert "not what it looks like" in block.lower()   # and the seed one
     assert "ESCALATE" in block
 
 
@@ -628,7 +630,7 @@ def test_the_accumulated_gags_reach_the_next_episodes_brief(store):
     )
     msg = build_user_message(idea(show="multiverse", cast=["orangina"]), store=store)
     assert "appeals every ban on ingredient grounds" in msg   # the landed gag
-    assert "But is it clean though?" in msg                   # the seed catchphrase
+    assert "It's not what it looks like." in msg              # the seed catchphrase
     assert "barred from the sauna" in msg                     # where she stands
     assert "the appeal" in msg                                # the open thread
     assert "THIS IS EPISODE 2" in msg
@@ -811,3 +813,48 @@ def test_the_reset_button_is_on_the_multiverse_screen(settings, store):
     assert 'id="canon-reset"' in page
     assert 'data-episodes="1"' in page      # the confirmation names the cost
     assert "Episode 2" in page
+
+
+
+def test_orangina_is_the_character_she_actually_is():
+    """She was invented wrong first time round — a 'wellness girl' who talked
+    about vitamin C. Her real bit is the affair, and the joke is the lying."""
+    orangina = get_character("orangina")
+    assert "faithful" in orangina.trait.lower()
+    assert orangina.catchphrase == "It's not what it looks like."
+    bits = " ".join(orangina.bits).lower()
+    assert "excuse" in bits and "husband" in bits
+    # and every trace of the invented version is gone
+    blob = (orangina.trait + orangina.role + orangina.catchphrase
+            + " ".join(orangina.bits)).lower()
+    for invented in ("vitamin c", "wellness", "is it clean", "ingredients list"):
+        assert invented not in blob, invented
+
+
+def test_her_husband_can_actually_be_drawn():
+    """He appears in panels, so he needs a locked visual like anyone else —
+    otherwise he's a different orange every episode."""
+    husband = get_character("orangino")
+    assert husband.visual and "orange" in husband.visual.lower()
+    assert husband.catchphrase and husband.bits
+    assert "walk" in " ".join(husband.bits).lower() or "arrives" in " ".join(husband.bits).lower()
+
+
+def test_her_register_is_farce_not_smut():
+    """The show already bans anything sexual; this makes the boundary explicit
+    for the one character whose premise sits nearest it."""
+    from chrgd.shows import get_show
+
+    voice = get_show("multiverse").voice.block
+    assert "FARCE, never smut" in voice
+    assert "the joke is the lying" in voice.lower()
+
+
+def test_the_worked_example_no_longer_teaches_the_invented_character():
+    """The example is what the engine imitates, so a wrong character in it
+    propagates into every episode."""
+    from chrgd.roster import load_example
+
+    example = load_example().lower()
+    for invented in ("vitamin c", "ingredients list", "is it clean"):
+        assert invented not in example, invented

@@ -42,12 +42,12 @@ GOOD_STORY = {
     "title": "BACK SOON",
     "logline": "Tracy Beaker wants nobody to know she fixed the lat pulldown.",
     "prose": "The sign had said BACK SOON since 2019. On Tuesday the machine "
-             "worked. Orangina found her own laminated ingredients list wedged "
-             "under the frame as a shim and accepted an ovation she had not "
-             "earned. In the corner, Tracy Beaker had grease on both hands.",
+             "worked. Molly-Mae found her own phone tripod wedged under the "
+             "frame and accepted an ovation she had not earned. In the corner, "
+             "Tracy Beaker had grease on both hands.",
     "change": "Tracy Beaker let Orangina take the credit, then broke it again.",
     "unresolved": "Tung Tung Tung Sahur saw her do it.",
-    "cast": ["tracy_beaker", "orangina"],
+    "cast": ["tracy_beaker", "molly_mae"],
 }
 
 
@@ -58,7 +58,7 @@ GOOD_PREMISE = {
     "self_inflicted": "she fixes it herself, at 3am, and leaves evidence",
     "reversal": "she has to hand the credit to someone who did nothing",
     "the_joke": "the funny is: she has to sabotage her own good deed to stay awful",
-    "cost": "she loses the repair and watches Orangina take a bow for it",
+    "cost": "she loses the repair and watches Molly-Mae take a bow for it",
 }
 
 PASS = {"is_a_story": True, "retell": "Tracy hid that she fixed it",
@@ -134,7 +134,7 @@ def test_every_leak_pattern_fires(text, rule):
     "She has machine grease on both hands and an Allen key in her back pocket.",
     "The sign has said BACK SOON since 2019.",
     "Clarkson put down his coffee for the first time since March.",
-    "But is it clean though.",
+    "It's not what it looks like.",
     "Nobody in Iron Palace has ever met Tracy Beaker's mum. Nobody says so.",
 ])
 def test_the_lint_leaves_real_writing_alone(text):
@@ -393,7 +393,7 @@ def test_the_two_stage_build_end_to_end(store, settings, monkeypatch):
         idea_id="G1",
         concept_note="Tracy Beaker fixes the lat pulldown and won't admit it",
         route_json=json.dumps({"show": "multiverse",
-                               "cast": ["tracy_beaker", "orangina"]})))
+                               "cast": ["tracy_beaker", "molly_mae"]})))
 
     client = Client()
     result = pipeline.build_single_idea(store, settings, "G1", client=client,

@@ -25,7 +25,7 @@ you go looking for the one situation that punishes them for it.
 Not their description — the thing they *cannot help doing*.
 
 - Tralalero Tralala: **has to tell you his 5k time**
-- Orangina: **cannot refuse credit**
+- Orangina: **cannot stay faithful**
 - Tracy Beaker: **cannot be seen being kind**
 - Jeremy Clarkson: **refuses to admit effort exists**
 - Bombardiro Crocodilo: **cannot use a lighter weight**
@@ -37,7 +37,7 @@ flaw?* That question is the whole job. It is where the comedy comes from, and
 almost nothing else is.
 
 - The bragger → a situation where the brag is *overheard by the wrong person*
-- The credit-taker → credit for something that turns out to be a disaster
+- The one who can't stay faithful → the one place she cannot be seen, with the one person she cannot be seen with
 - The one who can't be seen being kind → getting caught being kind
 
 ### 3. Make the character spring their own trap

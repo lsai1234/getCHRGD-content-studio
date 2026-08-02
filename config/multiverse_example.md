@@ -23,12 +23,12 @@ Two characters. One wants something small. The other is in the way.
 > Jeremy Clarkson was the first to complain. "That machine was the one thing
 > everyone in here agreed about. What are we supposed to moan about now?"
 >
-> Orangina found a laminated card wedged under the frame, holding it level. It
-> was her ingredients list. She had left it on a bench weeks ago.
+> Molly-Mae found a phone tripod wedged under the frame, holding it level. It
+> was hers. She had left it there filming a leg session in March.
 >
 > "Well," she said. "I suppose that was me."
 >
-> Nobody argued. She made a short speech about vitamin C.
+> Nobody argued. She filmed a short piece to camera about problem-solving.
 >
 > Tracy Beaker stood at the back with grease on both hands.
 >
@@ -38,14 +38,14 @@ Two characters. One wants something small. The other is in the way.
 > her back pocket. If anyone found out she'd done something nice, six years of
 > being the most difficult person in the building would be over.
 >
-> So she let Orangina have it.
+> So she let Molly-Mae have it.
 >
 > Then she went back and broke it again.
 >
 > By Wednesday there was a new sign up. Everyone recognised the handwriting.
 > Nobody said anything.
 
-**Cast:** Tracy Beaker · Orangina · Jeremy Clarkson (barely speaks)
+**Cast:** Tracy Beaker · Molly-Mae · Jeremy Clarkson (barely speaks)
 **The change:** Tracy Beaker gives up the credit and re-breaks the machine.
 **Left open:** somebody was in the gym at three in the morning and saw her.
 
@@ -55,16 +55,16 @@ Two characters. One wants something small. The other is in the way.
 
 1. **Every sentence does one thing.** "On Tuesday morning it worked." Four
    words. You cannot misread it.
-2. **Nothing is referred to that wasn't shown.** The sign, the card, the
+2. **Nothing is referred to that wasn't shown.** The sign, the tripod, the
    grease, the Allen key — each appears before it matters. There is no "vote",
    no "footage", no rule the reader has to take on trust.
-3. **No similes at all.** Not one. The card is "wedged under the frame, holding
-   it level", not "like a shim under a crown".
+3. **No similes at all.** Not one. The tripod is "wedged under the frame,
+   holding it level", not "like a shim under a crown".
 4. **Two people carry it.** Clarkson gets one line and leaves. He is texture,
    not a subplot.
 5. **One catchphrase, used where it lands** — Tracy Beaker denying it while
-   holding the evidence. Orangina doesn't say "is it clean though", because
-   this wasn't the moment for it. A character not doing their bit is fine.
+   holding the evidence. Molly-Mae never says "the same 24 hours", because this
+   wasn't the moment for it. A character not doing their bit is fine.
 6. **The joke is the situation.** She is trapped by her own reputation. That's
    funny because it's true about her, not because the sentence is decorated.
 7. **The turn costs her something** she actually cares about.
@@ -81,8 +81,8 @@ Each slide is one beat, in order, ending on the question the next one answers:
 | 1 | Tracy Beaker at the machine, grease on her hands, denying it | why is she lying? |
 | 2 | The sign has been up since 2019. Today it worked. | who fixed it? |
 | 3 | Clarkson: we've got nothing to moan about now | so the gym wants a culprit |
-| 4 | Orangina finds her own card under the frame | she thinks it was her |
-| 5 | She takes the credit. The speech about vitamin C. | somebody at the back says nothing |
+| 4 | Molly-Mae finds her own tripod under the frame | she thinks it was her |
+| 5 | She takes the credit, to camera | somebody at the back says nothing |
 | 6 | Three in the morning, alone, Allen key | why hide it? |
 | 7 | If they know she's nice, she's finished. She lets it go. | she goes back to the machine |
 | 8 | Broken again. New sign. Everyone knows the handwriting. | who else was there at 3am? |

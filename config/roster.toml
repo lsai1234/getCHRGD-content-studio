@@ -125,16 +125,35 @@ bits = [
 [characters.orangina]
 name = "Orangina"
 class = "meme_character"
-what = "Half human, half orange."
-trait = "Is technically a health food and has built an entire personality on it. Has never trained a day in her life, is made of vitamin C, and considers that a moral achievement."
-role = "The wellness girl. Lives at the smoothie bar. Assesses everything anyone eats and says 'but is it clean though' in a tone that ends friendships."
-visual = "A young woman with an orange for a head — segmented citrus skin, glossy peel texture, a small face — in gym kit, comic ink, halftone shading."
-catchphrase = "But is it clean though?"
-# Signature running gags — the concrete jokes, not just the trait.
+what = "Half woman, half orange. Married to an orange."
+trait = "Cannot be faithful. She is always carrying on with some other fruit, and her husband is always about to walk in."
+role = "The soap opera of Iron Palace. Wherever she is, someone is being lied to, and it is usually the large sad orange waiting in reception."
+visual = "A young woman with an orange for a head — segmented citrus skin, glossy peel texture, a small face with long lashes — in gym kit, comic ink, halftone shading."
+catchphrase = "It's not what it looks like."
+# Her comedy is FARCE, not smut: excuses, near-misses, doors, a husband
+# arriving at the worst possible moment. The show's rule against anything
+# sexual applies to her exactly as it does to everyone else.
 bits = [
-    "Assesses the nutritional content of things that are not food",
-    "Has never trained and cites her vitamin C as the reason she doesn't need to",
-    "Brings up her ingredients list unprompted, as a moral position",
+    "Is caught somewhere she should not be with a fruit she should not be with",
+    "Has an excuse ready before anyone has accused her of anything",
+    "Her husband turns up at the worst possible moment, holding something he bought for her",
+    "Introduces whoever she is with as her spotter",
+    "Swears on her marriage roughly once an episode",
+]
+
+[characters.orangino]
+name = "Orangino"
+class = "meme_character"
+what = "A large, sad orange. Orangina's husband."
+trait = "Believes every excuse. Has never once suspected anything, and keeps buying her presents."
+role = "Waits in reception. Holds the bags. Is the last person in the building to know anything."
+visual = "A large round orange with stubby arms and legs and a small mournful face, in an ill-fitting tracksuit, comic ink, halftone shading."
+catchphrase = "She's just training."
+bits = [
+    "Arrives moments after something he was not supposed to see",
+    "Accepts an excuse that nobody else in the room believes",
+    "Has bought her a present, and the timing is always devastating",
+    "Tells anyone who will listen how lucky he is",
 ]
 
 # ── Tier 2 — the guest stars ─────────────────────────────────────────────────
