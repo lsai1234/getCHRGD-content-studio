@@ -155,14 +155,26 @@ figures — the reach they'd bring is not the audience you want commenting.
 
 ---
 
-## How a season works
+## Seasons — off by default (D17)
 
-The roster is permanent; the **format** is the season. Six to eight episodes,
-then the world resets into a new one with the same cast.
+**There is no season, and no format.** Not a villa, not a dating show, not
+couplings or recouplings or a public vote. That was the original pitch and the
+show outgrew it: it is a persistent world where recognisable characters from
+everywhere end up in the same knackered retail-park gym and the gym does not
+care who they are. Status colliding with a queue is the whole engine.
 
-1. **Season 1 — "The Villa."** A reality dating format at Iron Palace. Couplings, recouplings, one squat rack, a public vote.
-2. **Season 2 — "The Tournament."** A Hyrox-style knockout. Bracket format, one elimination per episode — the cleanest possible engine for a serial.
-3. **Season 3 — "The Management."** A mockumentary: one of them buys Iron Palace and institutes policy. (Your Hyrox-boss idea, recast.)
+The default used to be "The Villa", and because the canon shipped with it, it
+was the **first line of every episode brief** — so the writer started every
+premise inside a dating show whether or not anything asked for one. It also
+needed rules (a vote, a ranking), and unexplained rules are exactly what made
+the early episodes unreadable.
+
+A season is now an optional arc the operator sets deliberately in the studio,
+and a fresh canon has none. If one is ever wanted, the shapes that would work:
+
+- **"The Tournament."** A Hyrox-style knockout, one elimination per episode.
+- **"The Management."** A mockumentary: one of them buys Iron Palace and
+  institutes policy.
 
 **Cast size per episode: 2–4.** More than four and a carousel can't hold them —
 this is the single most common way a comic serial goes soggy.
@@ -172,5 +184,4 @@ this is the single most common way a comic serial goes soggy.
 ## What I need from you
 
 1. **Anyone missing** who your audience would clock instantly?
-2. Season 1 = the Villa, or open on the Tournament? **→ default: the Villa.**
 

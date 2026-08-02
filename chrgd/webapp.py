@@ -398,7 +398,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         with _store(settings) as store:
             canon = load_canon(store)
         return {
-            "season": canon.season.label,
+            # Empty unless the operator has deliberately set an arc — the show
+            # is a persistent world, not a season of a format.
+            "season": canon.season.label if canon.season.is_set() else "",
             "episode": canon.next_number(),
             "open_thread": canon.open_thread(),
             "history": [e.line() for e in canon.recent()],

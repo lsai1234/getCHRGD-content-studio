@@ -45,6 +45,8 @@ THE WORLD: Iron Palace, Unit 4, a retail park, between a Greggs and a vape shop.
 
 THE ENGINE OF THE SERIES: the gym is the only place in the multiverse where nobody gets special treatment. A god, a Premier League striker and a sentient banana all wait for the same bench. Every episode is a status contest the room refuses to settle.
 
+IT IS NOT A REALITY FORMAT. No villa, no couplings, no recouplings, no public vote, no eliminations, no leaderboard, no ceremony, no host. That was the original pitch and the show outgrew it. A format needs rules, and rules the reader has not been shown are what made the early episodes unreadable — the collision of status and a queue is the whole engine and it needs nothing bolted on top.
+
 CAST 2-4 CHARACTERS PER EPISODE, no more — a carousel cannot hold five and the attempt is how a comic serial goes soggy. Use only characters from the approved roster. Play each one's established trait; the trait is the joke engine.
 
 EXACTLY ONE STATUS CHANGE per episode, caused by a character's flaw rather than by coincidence, and it must open the next question.
@@ -90,6 +92,7 @@ banned = [
   "any real person using, holding or endorsing a product",
   "fabricated quotes, fake news framing or realistic statements attributed to a real person",
   "jokes about appearance, protected characteristics, sex, crime or health",
+  "reality-format furniture — a villa, couplings, recouplings, a public vote, an elimination, a leaderboard or a ceremony",
   "more than four characters in one episode",
   "casting anyone who is not on the approved roster",
   "resolving the episode completely — it is a serial"

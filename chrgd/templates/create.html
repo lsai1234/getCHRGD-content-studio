@@ -657,7 +657,7 @@
   <section class="scr" id="scr-multiverse">
     <p class="eyebrow">💥 THE MULTIVERSE</p>
     <h2>Episode {{ canon.episode }} — who's in it?</h2>
-    <p class="hint">{{ canon.season }} · pick 2–4. Everything they've already done carries over.</p>
+    <p class="hint">{% if canon.season %}{{ canon.season }} · {% endif %}pick 2–4. Everything they've already done carries over.</p>
 
     {% if canon.history %}
     <details class="canon-box">

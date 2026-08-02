@@ -15,6 +15,25 @@ choice with no comic engine is a police report.
 
 ---
 
+## Before anything: this show is not a reality format
+
+There is no dating show here. No villa, no coupling, no recoupling, no public
+vote, no elimination, no leaderboard, no ceremony, no host. That was the
+original pitch for this show and the show outgrew it.
+
+What it actually is: **recognisable characters from every reality end up in the
+same knackered retail-park gym, and the gym does not care who they are.** A
+Premier League striker and a sentient banana wait for the same bench. That is
+the engine — status colliding with a queue — and it does not need a format
+bolted on top.
+
+Inventing one is the laziest available idea. It also reliably breaks the
+episode, because a format needs rules, and rules the reader has not been shown
+are exactly what made the first attempts unreadable. If your pitch contains a
+vote, a ranking or a ceremony, bin it and pitch again.
+
+---
+
 ## The step that was missing: find the joke BEFORE writing
 
 You do not start with a situation. You start with a character's flaw, and then

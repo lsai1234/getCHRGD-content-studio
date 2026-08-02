@@ -247,7 +247,9 @@ ORDINARY WORDS. Write it the way you would tell it to a mate in the pub. If a se
 
 ESTABLISH BEFORE YOU USE — this is the big one. You may not refer to any rule, object, event or stake the reader has not already been shown ON THE PAGE. A previous attempt mentioned "the vote", "the ballots", "the 4am footage" and "the sample tub", none of which had been explained, and the episode became unreadable. If your story needs a rule, show it happening in the first two sentences, in plain words, or pick a story that does not need one.
 
-THE PREMISE MUST BE SAYABLE IN ONE PLAIN LINE that a stranger instantly understands. "There is one squat rack and two people want it at six o'clock" — yes. "At 6:00 the rack will decide who couples, unless someone trains on it" — no: nobody knows what that means.
+THE PREMISE MUST BE SAYABLE IN ONE PLAIN LINE that a stranger instantly understands. "There is one squat rack and two people want it at six o'clock" — yes. "At 6:00 the rack decides the standings, unless someone trains on it" — no: nobody knows what that means.
+
+THIS IS NOT A REALITY FORMAT. There is no dating show, no villa, no coupling, no recoupling, no public vote, no eliminations, no leaderboard and no ceremony. The show is a persistent world: recognisable characters from everywhere end up in the same knackered gym and have to queue like everyone else. Inventing a format is the laziest available idea and it always reads as one.
 
 CATCHPHRASES ARE A TOOL, NOT A TAX. Use one, if it fits the moment. You do NOT have to make every character perform their bit — a story where each character does their gag once in turn is a parade, not a plot.
 

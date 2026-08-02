@@ -34,6 +34,7 @@ from chrgd.series import (
     record_episode,
     reset_canon,
     save_canon,
+    Season,
 )
 
 
@@ -197,12 +198,60 @@ def test_the_hard_reset_wipes_everything(store):
     worse than starting over."""
     canon = Canon(episodes=[Episode(number=1, change="x")],
                   standing={"haaland": "y"}, notes="z")
-    canon.season.label = "The Villa"
+    canon.season.label = "The Tournament"
     save_canon(store, canon)
 
     fresh = reset_canon(store)
     assert fresh.episodes == [] and fresh.standing == {} and fresh.notes == ""
+    assert not fresh.season.is_set()
     assert load_canon(store).next_number() == 1
+
+
+# --- the show is a world, not a reality format ------------------------------
+
+
+def test_a_fresh_canon_imposes_no_format_on_the_episode(store):
+    """`THE SEASON: The Villa. A reality dating format…` used to be the first
+    line of every brief, so every premise started inside a dating show."""
+    block = load_canon(store).brief_block()
+    assert "THE SEASON" not in block
+    for word in ("villa", "dating", "coupling", "recoupling", "public vote"):
+        assert word not in block.lower(), word
+    assert "THIS IS EPISODE 1." in block
+
+
+def test_the_retired_default_season_is_dropped_from_a_stored_canon(store):
+    """A studio that has been running for weeks has the old default sitting in
+    its canon. Nobody chose it, so it does not survive a read."""
+    store.set_setting("multiverse_canon", json.dumps({
+        "season": {"key": "villa", "label": "The Villa",
+                   "premise": "A reality dating format at Iron Palace."},
+        "episodes": [{"number": 1, "change": "x"}],
+    }))
+    canon = load_canon(store)
+    assert not canon.season.is_set()
+    assert "villa" not in canon.brief_block().lower()
+    assert canon.next_number() == 2, "the history itself is untouched"
+
+
+def test_a_season_the_operator_actually_chose_survives(store):
+    save_canon(store, Canon(season=Season(key="tournament",
+                                          label="The Tournament",
+                                          premise="One rack. A bracket.")))
+    block = load_canon(store).brief_block()
+    assert "THE SEASON: The Tournament. One rack. A bracket." in block
+
+
+def test_the_format_is_banned_everywhere_the_writer_reads():
+    from chrgd.roster import load_process
+    from chrgd.shows import get_show
+    from chrgd.story import STORY_SYSTEM
+
+    show = get_show("multiverse")
+    assert "IT IS NOT A REALITY FORMAT" in show.voice.block
+    assert any("recoupling" in b for b in show.voice.banned)
+    assert "THIS IS NOT A REALITY FORMAT" in STORY_SYSTEM
+    assert "not a reality format" in load_process().lower()
 
 
 def test_a_corrupt_canon_does_not_brick_the_show(store):

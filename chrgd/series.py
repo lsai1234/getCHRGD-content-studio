@@ -89,16 +89,38 @@ class CharacterCanon(BaseModel):
 
 
 class Season(BaseModel):
-    key: str = "villa"
-    label: str = "The Villa"
-    premise: str = (
-        "A reality dating format at Iron Palace. Couplings, recouplings, one "
-        "squat rack, and a public vote."
-    )
+    """An optional arc the operator can impose on the world.
+
+    It used to default to "The Villa" — a reality dating format with couplings,
+    recouplings and a public vote — because that was the original pitch for this
+    show. The show outgrew it: it is a persistent world where every reality
+    leaks into the same gym, and the format is not the joke.
+
+    Leaving that default in place was actively harmful. `THE SEASON: The Villa.
+    A reality dating format…` was the FIRST line of every episode brief, so the
+    writer started every premise inside a dating show whether or not anything
+    else asked for one — and the vote it mentioned was one of the unexplained
+    rules that made episodes unreadable. So it defaults to nothing now, and the
+    world block does the establishing. Set one deliberately, or don't have one.
+    """
+
+    key: str = ""
+    label: str = ""
+    premise: str = ""
     #: D16 downgraded the vote from structural to optional — with the canon
     #: authored in the studio the serial no longer depends on it to know what
     #: happens next.
     vote: bool = False
+
+    def is_set(self) -> bool:
+        return bool(self.label.strip() or self.premise.strip())
+
+
+#: The season that used to be the default. Any canon still carrying it is
+#: carrying it by accident, not by an operator's choice, so it is dropped on
+#: load — the alternative is that every already-deployed studio keeps writing
+#: dating-show premises forever.
+_RETIRED_SEASON_KEYS = {"villa"}
 
 
 class Canon(BaseModel):
@@ -147,10 +169,13 @@ class Canon(BaseModel):
 
     def brief_block(self, *, cast_keys: list[str] | None = None) -> str:
         """The canon, as the instruction the next episode is written from."""
-        lines = [
-            f"THE SEASON: {self.season.label}. {self.season.premise}",
-            f"THIS IS EPISODE {self.next_number()}.",
-        ]
+        lines = []
+        if self.season.is_set():
+            lines.append(
+                f"THE SEASON: {self.season.label}."
+                + (f" {self.season.premise}" if self.season.premise.strip() else "")
+            )
+        lines.append(f"THIS IS EPISODE {self.next_number()}.")
         recent = self.recent()
         if recent:
             lines.append("")
@@ -216,9 +241,15 @@ def load_canon(store: Store) -> Canon:
         return Canon()
     try:
         data = json.loads(raw) if isinstance(raw, str) else raw
-        return Canon.model_validate(data)
+        canon = Canon.model_validate(data)
     except Exception:  # noqa: BLE001 — a corrupt canon must not brick the show
         return Canon()
+    # Nobody chose the retired default; it was simply what a fresh canon came
+    # with. Drop it on read so a studio that has been running for weeks stops
+    # opening every brief with a format the show doesn't use.
+    if canon.season.key in _RETIRED_SEASON_KEYS:
+        canon.season = Season()
+    return canon
 
 
 def save_canon(store: Store, canon: Canon) -> None:
