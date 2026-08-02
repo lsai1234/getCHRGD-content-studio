@@ -246,6 +246,13 @@ def visual_block(cast: list[Character]) -> str:
     """The locked designs, prepended to every slide's image prompt."""
     if not cast:
         return ""
-    lines = ["CHARACTER DESIGNS (locked — hold these identical on every slide):"]
+    # "every panel they appear in", not "every slide" — presence is now decided
+    # per panel by the manifest. The description itself must stay byte-identical
+    # wherever it appears, which is what `visual_lock()` being a pure function of
+    # the character guarantees.
+    lines = [
+        "IN THIS PANEL — character designs (locked, and they outrank any scene "
+        "detail; hold them identical in every panel these characters appear in):"
+    ]
     lines += [c.visual_lock() for c in cast]
     return "\n".join(lines)

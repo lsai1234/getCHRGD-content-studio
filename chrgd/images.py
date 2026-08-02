@@ -610,13 +610,30 @@ def _charge_for(idea: Idea, slide_index: int, slide_count: int) -> int | None:
     return arc[slide_index]
 
 
-def _cast_lock_for(idea: Idea) -> str:
-    """The locked character designs for a Multiverse episode, or ''."""
+def _cast_lock_for(idea: Idea, slide_index: int | None = None) -> str:
+    """The locked character designs for THIS panel of a Multiverse episode.
+
+    It used to return the whole episode's cast for every slide, each one flagged
+    as outranking the scene — so a beat about one character arrived at the image
+    model with three locked designs attached and drew all three. The panel
+    manifest decides who is in this frame; everyone else is refused by name,
+    because an allowlist alone loses to the story context the model already has.
+
+    Falls back to the old whole-cast block when there is no manifest (a post
+    built before this existed), so nothing already in the queue changes shape.
+    """
     keys = _route_of(idea).get("cast")
     if not isinstance(keys, list) or not keys:
         return ""
     from .roster import resolve, visual_block
 
+    if slide_index is not None:
+        from .manifest import cast_block, manifest_for
+
+        manifest = manifest_for(idea)
+        panel = manifest.panel(slide_index) if manifest is not None else None
+        if panel is not None:
+            return cast_block(panel)
     return visual_block(resolve([str(k) for k in keys]))
 
 
@@ -1050,7 +1067,7 @@ def render_slide(
                     has_character=has_character,
                     charge=_charge_for(idea, slide_index, len(slides)),
                     amp_state=_amp_state_for(idea),
-                    cast_lock=_cast_lock_for(idea),
+                    cast_lock=_cast_lock_for(idea, slide_index),
                     show=show,
                 )
             else:

@@ -1064,6 +1064,25 @@ def build_single_idea(
             result.status = Status.review
             result.qa_failures = result.qa_failures + likeness.reasons()
 
+        # THE PANEL MANIFEST: resolve the whole set into per-panel continuity
+        # state now, while it is still free to be wrong. Every image is
+        # generated blind to its siblings, so without this each panel is
+        # composed against the WHOLE episode's cast — which is why every
+        # character appeared in every panel regardless of whether they had
+        # walked in yet. Computed for cast shows only; every other post gets no
+        # `panels` key and behaves exactly as it did before.
+        if cast_keys:
+            from .manifest import ROUTE_KEY as PANELS_KEY, build_manifest, validate
+
+            manifest = build_manifest(payload, cast_keys)
+            extra = {**extra, PANELS_KEY: manifest.model_dump()}
+            problems = validate(manifest)
+            if problems:
+                _prog(90, f"the panel manifest has {len(problems)} problem(s) "
+                          "— holding before any image is paid for")
+                result.status = Status.review
+                result.qa_failures = result.qa_failures + problems
+
         fields = build_fields_from_post(result.post, extra)
         if result.status is Status.done:
             store.save_build(idea_id, fields)
