@@ -186,12 +186,13 @@ def load_example() -> str:
         return ""
     body = EXAMPLE_FILE.read_text(encoding="utf-8").strip()
     return (
-        "THE STANDARD TO WRITE TO — a worked episode of this show. Match its "
-        "STRUCTURE and its craft, never its plot: study how each slide is a "
-        "chapter with an event in it, how every slide hands off to the next on "
-        "an open question, how the clue is planted before the reveal pays it "
-        "off, and how clearly you always know who is speaking. Your episode "
-        "must be a completely different story.\n\n" + body
+        "THE STANDARD TO WRITE TO — a worked episode of this show. Match how "
+        "PLAIN it is, never its plot. Study the sentence length, the total "
+        "absence of similes, the fact that nothing is mentioned before it has "
+        "been shown, and that two characters carry it while the third gets one "
+        "line. Easy to follow is the standard; clever writing that costs "
+        "comprehension is the way this show fails. Your episode must be a "
+        "completely different story.\n\n" + body
     )
 
 

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from pydantic import BaseModel, Field
 
@@ -104,75 +105,173 @@ class Story(BaseModel):
         return "\n".join(lines)
 
 
-STORY_SYSTEM = """You are the writer on a comic serial published as a TikTok photo carousel by a UK gym brand. You write ONE episode, as PROSE. No slides, no image direction, no formatting — just the story.
+STORY_SYSTEM = """You are the writer on a comic serial published as a TikTok photo carousel. You write ONE episode as PROSE. No slides, no image direction — just the story.
 
-This is the only job. Get the story right and the rest of the pipeline works; get it wrong and no amount of art saves it.
+THE ONE THING THAT MATTERS MOST IS THAT IT IS EASY TO FOLLOW. A reader gets one pass, on a phone, at speed, with no context. If they have to re-read a sentence, you have lost them. Clear and funny beats clever every single time — and "clever" writing that costs comprehension is the most common way this show fails.
 
-WHAT AN EPISODE IS. Somebody WANTS something. Something gets in the way — and the obstacle comes from who they are, not from bad luck. They make a CHOICE that costs them. Something changes. One question is left hanging.
+TWO CHARACTERS. Three at the absolute most, and the third barely speaks. Four characters in a short episode gives everyone one line each and nobody a story. One of them WANTS something; the other is in the way. That is the whole engine.
 
-If you cannot say "X wants Y but Z" about your episode, you have written a premise, not a story, and it will fail. A premise is a situation ("the squat rack has a guest list"). A story is a person in trouble ("Tracy Beaker fixed the machine at 3am and now has to watch someone else take the credit, because being caught being kind would end her").
+ONE THING PER SENTENCE. Short, plain, declarative. "She taped bunting to the rack. She was holding a clipboard." — not "she pirouetted, taping bunting to the uprights, a clipboard like a crown". Stacking three actions into one sentence reads as machine-written, because that is what machines do.
 
-HARD RULES:
-- ONE character drives it. Others react. An ensemble with no lead is a scene, not an episode.
-- The want must be SPECIFIC and small. Not "respect" — the last squat rack, a spot on the sign-in sheet, one uninterrupted set.
-- The obstacle must come from a character's established trait. Coincidence is not plot.
-- The choice must COST them something they care about. That cost is the episode.
-- End on an image and an open question, not a moral.
+NO SIMILES AND NO METAPHORS. None. These are all real failures from a previous attempt and every one of them is banned: "a clipboard like a crown", "bent like a soft apology", "form like a threat to art", "ballots lifted like migrating birds". They sound like writing and they mean nothing. Say what actually happened instead.
 
-MAKE IT FUNNY THE WAY THIS SHOW IS FUNNY: specificity is the joke. "Put down his coffee for the first time since March" is funny; "was annoyed" is not. Punch at status and ego, never at appearance. Play each character's established bits — a running gag that escalates beats a new joke.
+ORDINARY WORDS. Write it the way you would tell it to a mate in the pub. If a sentence contains a word you would not say out loud, replace it.
 
-WRITE IN SCENES. Actual dialogue, actual objects, actual actions. Around 150-200 words. Every sentence should either move the plot or land a joke; if it does neither, cut it.
+ESTABLISH BEFORE YOU USE — this is the big one. You may not refer to any rule, object, event or stake the reader has not already been shown ON THE PAGE. A previous attempt mentioned "the vote", "the ballots", "the 4am footage" and "the sample tub", none of which had been explained, and the episode became unreadable. If your story needs a rule, show it happening in the first two sentences, in plain words, or pick a story that does not need one.
+
+THE PREMISE MUST BE SAYABLE IN ONE PLAIN LINE that a stranger instantly understands. "There is one squat rack and two people want it at six o'clock" — yes. "At 6:00 the rack will decide who couples, unless someone trains on it" — no: nobody knows what that means.
+
+CATCHPHRASES ARE A TOOL, NOT A TAX. Use one, if it fits the moment. You do NOT have to make every character perform their bit — a story where each character does their gag once in turn is a parade, not a plot.
+
+NEVER WRITE A STRUCTURAL LABEL. A previous attempt literally wrote "Choice time." in the prose. Do not name the beats; just write them.
+
+THE SHAPE:
+- Somebody wants something small and specific. The last rack. A spot on the sign-in sheet. To not be caught doing something.
+- Something gets in the way, and it comes from who a character IS, not from coincidence.
+- They make a choice that costs them.
+- It ends on an image, and one open question.
+
+WHERE THE COMEDY COMES FROM: the situation and the characters, not the sentences. A person behaving exactly like themselves in a situation that punishes them for it is funny. A decorated sentence is not. Punch at ego and status, never at appearance.
+
+LENGTH: 150-200 words. Around 12-18 short sentences.
+
+BEFORE YOU RETURN IT, read it once as a stranger and ask: could I retell this to someone in one sentence, and did I have to guess at anything? If you had to guess, rewrite it simpler.
 
 Return a SINGLE JSON object, no markdown:
 {
-  "title": "a short episode title",
-  "logline": "X wants Y but Z — one line",
-  "prose": "the episode, 150-200 words, in scenes, with dialogue",
+  "title": "a short episode title in plain words",
+  "logline": "X wants Y but Z — one plain line a stranger would understand",
+  "prose": "the episode, 150-200 words, short plain sentences, no similes",
   "change": "the one thing that is different at the end, one line",
-  "unresolved": "the question the ending deliberately leaves hanging, one line",
-  "cast": ["roster keys of the characters actually in it"]
+  "unresolved": "the question the ending leaves hanging, one line",
+  "cast": ["roster keys of the two or three characters actually in it"]
 }"""
 
 
-GATE_SYSTEM = """You are a reader who has been handed one episode of a comic serial and knows nothing else about it. Read it once, at speed, the way somebody scrolling would.
+GATE_SYSTEM = """You have been handed one episode of a comic serial. You know nothing else — no cast list, no world, no previous episodes. Read it ONCE, at the speed someone scrolling a phone reads.
 
-Then answer honestly. You are not being asked whether it is good — you are being asked whether it is a STORY:
+Your job is a COMPREHENSION test, not a taste test. Do not be generous, and do not fill in gaps using your own knowledge — if something was not explained on the page, it was not explained.
 
-1. WHAT HAPPENED? Say it in one sentence, as events. If the honest answer is a description of a situation rather than a sequence of events, that is a FAIL.
-2. WHO WANTED WHAT, and what stopped them? If you cannot name a person and a want, that is a FAIL.
-3. WHAT WOULD MAKE YOU READ ON after the opening? Name the actual question. "It seems interesting" is a FAIL.
-4. WHAT DID IT COST the person who made the choice? If nothing was at stake, that is a FAIL.
+1. RETELL IT in one plain sentence, as if to a friend. If you cannot, it fails.
+2. LIST EVERYTHING YOU HAD TO GUESS AT — any rule, object, event or stake that was referred to but never established on the page. A previous failure mentioned "the vote", "the ballots" and "the 4am footage" with no explanation. If this list is not empty, it FAILS.
+3. WHO WANTED WHAT, and what stopped them? Name a person and a want, or it fails.
+4. WHAT DID IT COST them? If nothing was at stake, it fails.
+5. HOW MANY CHARACTERS spoke or acted? More than three is a fail — it means nobody got a story.
+6. DID ANY SENTENCE MAKE YOU STOP AND RE-READ IT? Quote it. Confusing writing fails even when the plot is sound.
 
-Be strict and be honest. A confident pass on a premise wastes eight paid images and puts a bad post on a real account. Saying "this is a situation, not a story" is the single most useful thing you can do here.
+Be strict. A confident pass on something unreadable puts a bad post on a real account and wastes eight paid images. "I had to guess what the vote was" is the single most useful thing you can report.
 
 Return a SINGLE JSON object, no markdown:
 {
   "is_a_story": true or false,
-  "what_happened": "one sentence, as events",
+  "retell": "one plain sentence — what happened",
+  "had_to_guess": ["things referred to but never explained; empty list if none"],
   "who_wanted_what": "one sentence",
-  "why_read_on": "the actual question it plants",
   "what_it_cost": "one sentence",
-  "verdict": "one line: what specifically needs fixing, or why it works"
+  "character_count": 0,
+  "confusing_lines": ["any sentence you had to re-read; empty list if none"],
+  "verdict": "one line: what specifically to fix, or why it works"
 }"""
 
 
 class StoryVerdict(BaseModel):
     is_a_story: bool = True
-    what_happened: str = ""
+    retell: str = ""
+    had_to_guess: list[str] = Field(default_factory=list)
     who_wanted_what: str = ""
-    why_read_on: str = ""
     what_it_cost: str = ""
+    character_count: int = 0
+    confusing_lines: list[str] = Field(default_factory=list)
     verdict: str = ""
 
-    def failure_note(self) -> str:
+    def passed(self) -> bool:
+        """A pass needs comprehension, not just a story shape.
+
+        The judge can pattern-match "this is a story" onto something nobody
+        could actually follow — that is exactly what happened to the episode
+        that shipped with an unexplained vote in it. So the objective answers
+        override the subjective one.
+        """
         return (
-            "A cold reader could not follow this as a story. Their read: "
-            f"what happened = '{self.what_happened or 'nothing they could name'}'; "
-            f"who wanted what = '{self.who_wanted_what or 'nobody'}'; "
-            f"why read on = '{self.why_read_on or 'no reason given'}'; "
-            f"what it cost = '{self.what_it_cost or 'nothing'}'. "
-            f"Fix: {self.verdict or 'give one character a specific want, an obstacle from their own character, and a choice that costs them.'}"
+            self.is_a_story
+            and not self.had_to_guess
+            and not self.confusing_lines
+            and self.character_count <= 3
         )
+
+    def failure_note(self) -> str:
+        bits = [f"A cold reader's honest read: \"{self.retell or 'they could not say what happened'}\"."]
+        if self.had_to_guess:
+            bits.append(
+                "They had to GUESS at things you never explained on the page: "
+                + "; ".join(self.had_to_guess)
+                + ". Either show these plainly in the first two sentences, or "
+                "write a story that does not need them."
+            )
+        if self.confusing_lines:
+            bits.append(
+                "They had to re-read these lines: "
+                + "; ".join(f'"{line}"' for line in self.confusing_lines)
+                + ". Rewrite them as short, plain, one-thing-per-sentence."
+            )
+        if self.character_count > 3:
+            bits.append(
+                f"{self.character_count} characters acted. Cut it to TWO. "
+                "Everyone getting one line is why nobody got a story."
+            )
+        if not self.who_wanted_what.strip():
+            bits.append("Nobody wanted anything. Give one character one small, specific want.")
+        if self.verdict:
+            bits.append(f"Their note: {self.verdict}")
+        return " ".join(bits)
+
+
+# --- the deterministic half: things a judge shouldn't have to notice --------
+
+_SIMILE = re.compile(r"\b(?:like|as if|as though)\s+(?:a|an|the|it|he|she|they)\b", re.I)
+_STRUCTURAL = re.compile(
+    r"\b(?:choice time|the turn|the reveal|the payoff|beat \d|slide \d"
+    r"|cold open|the stakes|act (?:one|two|three))\b", re.I,
+)
+#: A sentence this long on a phone is one nobody finishes.
+_MAX_WORDS_PER_SENTENCE = 28
+
+
+def lint_prose(prose: str) -> list[str]:
+    """Texture failures, caught without spending a judge call.
+
+    Every pattern here comes from a real generated episode. A judge *might*
+    notice a simile; a regex always does, and these are the tells that make
+    writing read as machine-made no matter how sound the plot is.
+    """
+    text = (prose or "").strip()
+    if not text:
+        return []
+    notes: list[str] = []
+
+    similes = _SIMILE.findall(text)
+    if similes:
+        notes.append(
+            f"{len(similes)} simile(s) — cut every one. 'A clipboard like a "
+            "crown' sounds like writing and means nothing. Say what happened."
+        )
+    label = _STRUCTURAL.search(text)
+    if label:
+        notes.append(
+            f"'{label.group(0)}' is a structural label, not prose — you named "
+            "a beat instead of writing it. Never do this."
+        )
+    long_ones = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if len(sentence.split()) > _MAX_WORDS_PER_SENTENCE
+    ]
+    if long_ones:
+        notes.append(
+            f"{len(long_ones)} sentence(s) run past {_MAX_WORDS_PER_SENTENCE} "
+            "words. Break them up: one thing per sentence, short and plain. "
+            f'First one: "{long_ones[0][:90]}…"'
+        )
+    return notes
 
 
 def _parse(text: str, model):
@@ -251,14 +350,26 @@ def write_story(
             continue
         story = candidate
 
+        # The deterministic checks run first — they're free, and there's no
+        # sense paying a judge to read prose we already know is over-decorated.
+        texture = lint_prose(story.prose)
         verdict, gate_spend = gate_story(story, settings, judge=judge)
         spend += gate_spend
-        if verdict is None or verdict.is_a_story:
+
+        if not texture and (verdict is None or verdict.passed()):
             if verdict is not None:
-                _note(f"the story holds up: {verdict.what_happened}")
+                _note(f"a cold reader followed it: {verdict.retell}")
             return story, spend
-        _note(f"cold read failed: {verdict.verdict}")
-        note = verdict.failure_note()
+
+        parts = []
+        if verdict is not None and not verdict.passed():
+            parts.append(verdict.failure_note())
+        if texture:
+            parts.append("Also, the writing itself: " + " ".join(texture))
+        note = " ".join(parts)
+        _note("the story needs another pass — "
+              + (verdict.verdict if verdict is not None and verdict.verdict
+                 else "the writing is too dense to follow"))
 
     return story, spend
 

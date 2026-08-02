@@ -188,11 +188,10 @@ def test_a_premise_fails_the_cold_read_and_is_rewritten(store, settings):
                         "exclusive. There is a velvet rope."}
     writer = FakeWriter(premise, GOOD_STORY)
     judge = FakeJudge(
-        {"is_a_story": False, "what_happened": "nothing — it describes a rack",
-         "who_wanted_what": "nobody", "why_read_on": "no question",
-         "what_it_cost": "nothing",
+        {"is_a_story": False, "retell": "nothing — it describes a rack",
+         "who_wanted_what": "nobody", "what_it_cost": "nothing",
          "verdict": "this is a situation, not a story"},
-        {"is_a_story": True, "what_happened": "Tracy Beaker hid that she fixed it"},
+        {"is_a_story": True, "retell": "Tracy Beaker hid that she fixed it"},
     )
     story, _spend = write_story(Idea(idea_id="G1", concept_note=""), settings,
                                 store, cast_keys=["tracy_beaker"],
@@ -357,7 +356,7 @@ def test_the_two_stage_build_end_to_end(store, settings, monkeypatch):
         def judge(self, system, user):
             if "is_a_story" in system:
                 return json.dumps({"is_a_story": True,
-                                   "what_happened": "Tracy hid that she fixed it"})
+                                   "retell": "Tracy hid that she fixed it"})
             return json.dumps({"safe": True, "flags": []})
 
     monkeypatch.setattr(claims_mod, "OpenAIClaimsJudge", lambda s: Judge())
@@ -442,3 +441,115 @@ def test_a_non_serial_build_skips_the_story_stage(store, settings):
                                record_run=False)
     assert calls["n"] == 1
     assert "story" not in json.loads(store.get_idea("G1").route_json)
+
+
+# --- clarity: the failures from "Six O'Clock Means War" --------------------
+
+
+REAL_FAILURE = (
+    "Ballerina Cappuccina pirouetted, taping bunting to the uprights, a "
+    "clipboard like a crown, while slapping scoops into open palms and "
+    "explaining that the vote would happen at six regardless. She climbed a "
+    "plate stack. Choice time. The clipboard bent like a soft apology."
+)
+
+
+def test_the_prose_lint_catches_the_real_failure():
+    from chrgd.story import lint_prose
+
+    notes = " ".join(lint_prose(REAL_FAILURE))
+    assert "simile" in notes
+    assert "structural label" in notes
+    assert "28 words" in notes
+
+
+def test_the_prose_lint_leaves_plain_writing_alone():
+    """The worked example must pass the lint it teaches."""
+    from chrgd.story import lint_prose
+
+    assert lint_prose(GOOD_STORY["prose"]) == []
+    assert lint_prose(
+        "On Tuesday morning it worked. Nobody argued. She made a short speech."
+    ) == []
+
+
+def test_the_story_prompt_bans_what_actually_went_wrong():
+    from chrgd.story import STORY_SYSTEM
+
+    for rule in ("EASY TO FOLLOW", "TWO CHARACTERS", "ONE THING PER SENTENCE",
+                 "NO SIMILES AND NO METAPHORS", "ESTABLISH BEFORE YOU USE",
+                 "CATCHPHRASES ARE A TOOL, NOT A TAX",
+                 "NEVER WRITE A STRUCTURAL LABEL"):
+        assert rule in STORY_SYSTEM, rule
+    # it cites the actual failed lines, not abstract prohibitions
+    assert "a clipboard like a crown" in STORY_SYSTEM
+    assert "Choice time" in STORY_SYSTEM
+    assert "the 4am footage" in STORY_SYSTEM
+
+
+def test_the_gate_is_a_comprehension_test_not_a_shape_test():
+    from chrgd.story import GATE_SYSTEM
+
+    assert "COMPREHENSION test" in GATE_SYSTEM
+    assert "RETELL IT" in GATE_SYSTEM
+    assert "LIST EVERYTHING YOU HAD TO GUESS AT" in GATE_SYSTEM
+    assert "re-read" in GATE_SYSTEM
+
+
+def test_unexplained_references_fail_even_when_it_looks_like_a_story():
+    """The exact hole: the old gate passed an episode nobody could follow,
+    because 'is this a story' can be pattern-matched onto anything."""
+    v = StoryVerdict(is_a_story=True, retell="they argued about a rack",
+                     had_to_guess=["the vote", "the 4am footage"])
+    assert not v.passed()
+    assert "the vote" in v.failure_note()
+    assert "never explained on the page" in v.failure_note()
+
+
+def test_too_many_characters_fails():
+    v = StoryVerdict(is_a_story=True, retell="four people did things",
+                     character_count=4)
+    assert not v.passed()
+    assert "Cut it to TWO" in v.failure_note()
+
+
+def test_a_line_that_needed_re_reading_fails():
+    v = StoryVerdict(is_a_story=True, retell="ok",
+                     confusing_lines=["the rack will decide who couples"])
+    assert not v.passed()
+    assert "re-read" in v.failure_note()
+
+
+def test_a_clean_verdict_passes():
+    assert StoryVerdict(is_a_story=True, retell="Tracy hid that she fixed it",
+                        who_wanted_what="Tracy wanted nobody to know",
+                        character_count=2).passed()
+
+
+def test_dense_prose_is_rewritten_even_when_the_judge_is_happy(store, settings):
+    """The lint is deterministic, so over-decorated writing earns the rewrite
+    every time rather than whenever a judge happens to mention it."""
+    dense = {**GOOD_STORY, "prose": REAL_FAILURE}
+    writer = FakeWriter(dense, GOOD_STORY)
+    judge = FakeJudge({"is_a_story": True, "retell": "fine", "character_count": 2},
+                      {"is_a_story": True, "retell": "fine", "character_count": 2})
+
+    story, _ = write_story(Idea(idea_id="G1", concept_note=""), settings, store,
+                           cast_keys=["tracy_beaker"], client=writer, judge=judge)
+    assert len(writer.prompts) == 2                    # it was sent back
+    assert "simile" in writer.prompts[1]
+    assert story.prose == GOOD_STORY["prose"]          # and the clean one won
+
+
+def test_the_worked_example_models_the_plainness_it_teaches():
+    from chrgd.roster import load_example
+    from chrgd.story import lint_prose
+
+    example = load_example()
+    assert "Match how PLAIN it is" in example
+    assert "absence of similes" in example
+    # the example's own prose must survive the lint it exists to teach
+    body = example[example.index("> The lat pulldown"):example.index("**Cast:**")]
+    prose = "\n".join(line.lstrip("> ").strip() for line in body.splitlines()
+                       if line.strip().startswith(">"))
+    assert lint_prose(prose) == []

@@ -702,8 +702,9 @@ def test_the_worked_example_is_loaded_as_a_standard_not_a_plot():
     assert "THE STANDARD TO WRITE TO" in example
     assert "completely different story" in example   # never reuse the plot
     assert "BACK SOON" in example                    # the episode itself
-    # and it demonstrates the rules it's teaching
-    assert example.count("SLIDE") >= 8
+    # it teaches plainness first, and shows the slide cut as a table of beats
+    assert "Match how PLAIN it is" in example
+    assert example.count("|") >= 8
 
 
 def test_the_example_reaches_an_episode_brief(store):
