@@ -156,9 +156,40 @@ def resolve(keys: list[str] | None) -> list[Character]:
     return out
 
 
+#: A surname has to be this long, and unique on the roster, before it counts as
+#: naming someone. Short tokens ("Jack") collide with ordinary words and would
+#: put characters in scenes they aren't in.
+_ALIAS_MIN = 5
+
+
+@lru_cache(maxsize=1)
 def name_index() -> dict[str, Character]:
-    """Lower-cased name → character, for scanning finished copy."""
-    return {c.name.lower(): c for c in load_roster().values()}
+    """Lower-cased name → character, for scanning finished copy.
+
+    Carries the full name AND the surname, because that is how the engine
+    actually writes: the cast block says "Erling Haaland" and slide 4 says
+    "Haaland has been on the leg press for forty minutes". Matching only the
+    full name meant every scan under-counted, which mattered the moment the
+    panel-drift check started asking *who is in this picture* — a panel brief
+    reading "Clarkson at the sauna door" would have scored as an empty panel and
+    earned a rewrite it did not need.
+
+    A surname earns an entry only if it is long enough to be distinctive and
+    belongs to exactly one character; ambiguous ones are dropped rather than
+    guessed at, since a wrong attribution is worse than a missed one here.
+    """
+    chars = list(load_roster().values())
+    index = {c.name.lower(): c for c in chars}
+    counts: dict[str, int] = {}
+    for char in chars:
+        for token in {char.name.lower().split()[-1]}:
+            if len(token) >= _ALIAS_MIN:
+                counts[token] = counts.get(token, 0) + 1
+    for char in chars:
+        token = char.name.lower().split()[-1]
+        if len(token) >= _ALIAS_MIN and counts.get(token) == 1 and token not in index:
+            index[token] = char
+    return index
 
 
 def cast_block(

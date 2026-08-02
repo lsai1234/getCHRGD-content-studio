@@ -140,13 +140,23 @@ def _art_fragments(post: dict) -> list[tuple[str, str]]:
     return out
 
 
+def _keys_in(text: str, index: dict) -> set[str]:
+    """Roster keys named in a piece of text, by full name or surname."""
+    lowered = (text or "").lower()
+    return {char.key for name, char in index.items() if name in lowered}
+
+
 def named_characters(post: dict) -> list[str]:
     """Roster keys whose character is named anywhere in the post."""
     from .roster import name_index
 
     index = name_index()
-    blob = " ".join(t for _w, t in _copy_fragments(post) + _art_fragments(post)).lower()
-    return [char.key for name, char in index.items() if name in blob]
+    blob = " ".join(t for _w, t in _copy_fragments(post) + _art_fragments(post))
+    seen: list[str] = []
+    for key in _keys_in(blob, index):
+        if key not in seen:
+            seen.append(key)
+    return seen
 
 
 def lint_post(post: dict, *, cast_keys: list[str] | None = None) -> list[ClaimFlag]:
@@ -180,7 +190,7 @@ def lint_post(post: dict, *, cast_keys: list[str] | None = None) -> list[ClaimFl
 
     for where, text in _copy_fragments(post):
         lowered = text.lower()
-        here = [k for k in protected if index and get_character(k).name.lower() in lowered]
+        here = sorted(protected & _keys_in(lowered, index))
         if here:
             names = ", ".join(get_character(k).name for k in here)
             # Rule 2 — endorsement. The sharpest edge, and the easiest to avoid.
@@ -204,6 +214,41 @@ def lint_post(post: dict, *, cast_keys: list[str] | None = None) -> list[ClaimFl
                 where=where, text=text[:120], rule="off_limits",
                 why=f"“{match.group(0)}” — punch at status and situation only, "
                     "never appearance, protected characteristics, sex, crime or health",
+            ))
+
+    # DRIFT — the panel must show the beat the copy describes. The failure:
+    # an episode about Clarkson having to earn his way INTO the sauna rendered
+    # him as the bouncer of the sauna queue. A regex can't judge a scene, but it
+    # can catch the two cheapest tells: a panel with nobody in it, and a panel
+    # whose cast doesn't match the copy on the same slide.
+    for i, slide in enumerate(post.get("slides") or [], 1):
+        copy_here = " ".join(
+            str((slide or {}).get(k) or "") for k in ("headline", "supporting", "body")
+        ).lower()
+        art_here = " ".join(
+            str((slide or {}).get(k) or "") for k in ("image_prompt", "visual_intent")
+        ).lower()
+        if not art_here.strip():
+            continue
+        in_art = _keys_in(art_here, index)
+        if not in_art:
+            flags.append(ClaimFlag(
+                where=f"slide {i} artwork", text=art_here[:120], rule="empty_panel",
+                why="no cast member named in the panel — this is a character "
+                    "serial and a slide with nobody in it has no story on it",
+            ))
+            continue
+        in_copy = _keys_in(copy_here, index)
+        if in_copy and not (in_copy & in_art):
+            copy_names = ", ".join(sorted(index[n].name for n in index
+                                          if index[n].key in in_copy))
+            art_names = ", ".join(sorted(index[n].name for n in index
+                                         if index[n].key in in_art))
+            flags.append(ClaimFlag(
+                where=f"slide {i} artwork", text=art_here[:120], rule="panel_drift",
+                why=f"the copy is about {copy_names} but the panel draws "
+                    f"{art_names} — the picture must show the same moment the "
+                    "words just described",
             ))
 
     # Rule 1 — caricature, never photoreal. Checked on the artwork brief, which

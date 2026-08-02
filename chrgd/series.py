@@ -277,19 +277,38 @@ def record_episode(
     return episode
 
 
-def episode_brief(store: Store, cast_keys: list[str] | None = None) -> str:
+def episode_brief(
+    store: Store,
+    cast_keys: list[str] | None = None,
+    *,
+    example: bool = True,
+    canon: bool = True,
+) -> str:
     """The full Multiverse brief: the world, the cast (with their landed running
-    gags) and the canon."""
+    gags) and the canon.
+
+    `example` and `canon` are switchable because the brief is now read by two
+    different calls with different needs, and paying for both halves twice is
+    pure waste:
+
+    * the STORY call is writing the episode, so it needs everything — what has
+      already happened, and the worked example that teaches how to write it;
+    * the BUILD call is CUTTING a finished story into slides. It cannot
+      contradict a canon it is not allowed to change, and a standard for prose
+      it is not writing is a thousand tokens of instruction for a job that no
+      longer exists. It needs the world and the cast (for the artwork) and the
+      story itself, and nothing else.
+    """
     from .roster import cast_block, load_example, load_world, resolve
 
     cast = resolve(cast_keys)
-    canon = load_canon(store)
+    record = load_canon(store)
     keys = [c.key for c in cast]
     blocks = [
         load_world().as_block(),
-        cast_block(cast, gags=canon.gags(keys or None)),
-        canon.brief_block(cast_keys=keys or None),
-        load_example(),
+        cast_block(cast, gags=record.gags(keys or None)),
+        record.brief_block(cast_keys=keys or None) if canon else "",
+        load_example() if example else "",
     ]
     return "\n\n".join(b for b in blocks if b)
 

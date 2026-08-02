@@ -134,6 +134,16 @@ class Show(BaseModel):
     #: what the scoreboard actually ranks a show on, because "shares, then
     #: saves" can't be measured and `shares` can. Empty falls back to views.
     kpi_metric: str = ""
+    #: Skip the generic photo-carousel engine prompt on the build call.
+    #:
+    #: `content_engine_prompt.md` is ~9,300 tokens of doctrine written for
+    #: standalone photo carousels — "shoot it like a candid phone photo with
+    #: harsh direct flash", "make it look like a screenshot artefact". For a
+    #: show with its own spine, voice and look that is redundant; for the comic
+    #: serial it is actively wrong, and it was the licence the model used to
+    #: reinvent a scene the story had already decided. A show that sets this
+    #: gets brand voice + its own brief + the output contract, and nothing else.
+    lean_prompt: bool = False
     #: Whether this show is a candidate for the video pipeline (M6). Amp is
     #: the pilot (D5): flat vector animates far better than photoreal, so he's
     #: the right first test when the flag and a key are in place.

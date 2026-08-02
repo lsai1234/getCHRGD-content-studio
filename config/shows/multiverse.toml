@@ -18,6 +18,9 @@ slides_min = 6
 slides_max = 8
 front_screen = "seed"
 cast = "roster"
+# The generic carousel doctrine tells it to shoot candid phone photos, which
+# is the opposite of this show and was the licence it used to redraw scenes.
+lean_prompt = true
 gate_profile = "continuity_likeness"
 engagement_play = "comment"
 

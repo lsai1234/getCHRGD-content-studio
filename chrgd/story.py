@@ -34,6 +34,16 @@ Every stage is injectable for offline tests, and nothing here is fatal: a
 failure at any point falls through to the previous behaviour with whatever it
 has, because an episode that writes itself imperfectly beats a journey that
 dead-ends.
+
+ON COST. Splitting the job added calls, and the first version of it added more
+than it needed to. Two are gone with no loss of quality:
+
+  * the premise PICK was a second model call re-deriving an ordering the pitch
+    had already been asked to produce. It now comes back in the same response.
+  * the concept gate — four to six calls inventing rival slide-1 openers — is
+    skipped once a story exists (see `services.ensure_concept_gated`). On a
+    serial, slide 1 is decided by the plot and has already passed a cold read;
+    a tournament there competes with the story rather than improving it.
 """
 
 from __future__ import annotations
@@ -178,6 +188,8 @@ HARD RULES:
 - Never pitch a situation with no person trapped in it.
 - Five genuinely different pitches — different characters, different flaws, different traps. Two pitches that could share a joke are one pitch.
 
+THEN PICK YOUR OWN WINNER. Having pitched four, say which ONE gets written, and judge it on one thing: WHICH IS ACTUALLY FUNNIEST — not cleverest, not most original. What wins: the joke lands instantly with no setup; the character springs their OWN trap; the cost is real and public; you can picture it in a real gym. What loses: a situation with nobody trapped in it; a joke that needs a rule the reader does not have; a mild inconvenience.
+
 Return a SINGLE JSON object, no markdown:
 {
   "premises": [
@@ -190,12 +202,14 @@ Return a SINGLE JSON object, no markdown:
       "the_joke": "the funny is: ...",
       "cost": "what they lose, and who sees it"
     }
-  ]
+  ],
+  "winner": 0,
+  "why": "one line: what makes this the funniest of the four"
 }
-Exactly five, funniest first."""
+Exactly four premises. `winner` is the 0-based index of the one to write."""
 
 
-PICK_SYSTEM = """You are picking which ONE comic idea gets written into an episode of a gym comic serial. You will be shown five pitches.
+PICK_SYSTEM = """You are picking which ONE comic idea gets written into an episode of a gym comic serial. You will be shown several pitches.
 
 Judge them on one thing: WHICH IS ACTUALLY FUNNIEST — not which is cleverest, not which is most original, not which has the best premise on paper.
 
@@ -460,14 +474,33 @@ def _payload(idea, store, cast_keys: list[str], note: str = "",
     return "\n\n".join(p for p in parts if p)
 
 
+class Pitch(BaseModel):
+    """The premise stage's whole output: the ideas AND the one to write.
+
+    The pick used to be a second model call. It isn't any more — the writer that
+    just produced four pitches is the party best placed to say which is funniest,
+    and it does it in the same response for the cost of one extra line of JSON.
+    A separate judge round-tripped the pitches through a second prompt to
+    re-derive an ordering the first call had already been asked for.
+    """
+
+    premises: list[Premise] = Field(default_factory=list)
+    winner: int = 0
+    why: str = ""
+
+    def chosen(self) -> Premise | None:
+        if not self.premises:
+            return None
+        index = self.winner if 0 <= self.winner < len(self.premises) else 0
+        return self.premises[index]
+
+
 def pitch_premises(
     idea, settings: Settings, store, *, cast_keys: list[str], client=None
-) -> tuple[list[Premise], float]:
-    """Five comic ideas, before a word of the episode exists."""
+) -> tuple[Pitch, float]:
+    """Four comic ideas and the funniest one, in a single call."""
     from .pipeline import estimate_cost
-    from .roster import cast_block, resolve
-
-    from .roster import load_process
+    from .roster import cast_block, load_process, resolve
 
     parts = [load_process(), cast_block(resolve(cast_keys))]
     seed = (getattr(idea, "concept_note", "") or "").strip()
@@ -476,7 +509,7 @@ def pitch_premises(
             "THE EDITOR'S DIRECTION — every pitch must be a version of this: "
             + seed
         )
-    parts.append("Pitch five comic ideas. Return the JSON object.")
+    parts.append("Pitch four comic ideas and pick the funniest. Return the JSON object.")
 
     result = client.complete(PREMISE_SYSTEM, "\n\n".join(parts))
     spend = estimate_cost(settings.openai_model, result.prompt_tokens,
@@ -486,14 +519,30 @@ def pitch_premises(
     if start == -1 or end <= start:
         raise ValueError("no JSON object in the premise pitch")
     data = json.loads(raw[start:end + 1])
-    premises = [Premise.model_validate(p) for p in (data.get("premises") or [])]
-    return [p for p in premises if p.is_usable()], spend
+    pitch = Pitch(
+        premises=[Premise.model_validate(p) for p in (data.get("premises") or [])],
+        winner=int(data.get("winner") or 0),
+        why=str(data.get("why") or ""),
+    )
+    # Dropping unusable pitches after the pick would slide the index off the
+    # chosen one, so resolve it first and keep it at the front.
+    keep = [p for p in pitch.premises if p.is_usable()]
+    winner = pitch.chosen()
+    if winner is not None and winner.is_usable():
+        keep = [winner] + [p for p in keep if p is not winner]
+    pitch.premises, pitch.winner = keep, 0
+    return pitch, spend
 
 
 def pick_premise(
     premises: list[Premise], settings: Settings, *, judge=None
 ) -> tuple[Premise, str, float]:
-    """The funniest of the five. Falls back to the first on any failure."""
+    """The funniest of the pitches, via a separate judge.
+
+    No longer on the default path — `pitch_premises` picks its own winner in the
+    call that produced them. Kept as the second opinion for anyone who wants to
+    spend a call on one, and as the fallback when a pitch comes back unranked.
+    """
     from .pipeline import estimate_cost
 
     if len(premises) == 1 or judge is None:
@@ -553,13 +602,13 @@ def write_story(
     # nothing ever asked for one.
     premise: Premise | None = None
     try:
-        premises, pitch_spend = pitch_premises(
+        pitch, pitch_spend = pitch_premises(
             idea, settings, store, cast_keys=cast_keys, client=client)
         spend += pitch_spend
-        if premises:
-            premise, why, pick_spend = pick_premise(premises, settings, judge=judge)
-            spend += pick_spend
-            _note(f"the joke: {premise.the_joke}" + (f" — {why}" if why else ""))
+        premise = pitch.chosen()
+        if premise is not None:
+            _note(f"the joke: {premise.the_joke}"
+                  + (f" — {pitch.why}" if pitch.why else ""))
     except Exception as exc:  # noqa: BLE001 — fall through to writing unprompted
         log.warning("premise stage failed for %s: %s", idea.idea_id, exc)
 

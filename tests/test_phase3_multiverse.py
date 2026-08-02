@@ -55,10 +55,17 @@ def idea(**route) -> Idea:
                 route_json=json.dumps(route) if route else None)
 
 
-def episode_post(*copy, art="a comic panel in a gym", caption="what happens next?"):
+def episode_post(*copy, art=None, caption="what happens next?"):
+    """A finished episode.
+
+    By default each slide's panel draws the beat its own copy describes — which
+    is what a correct episode looks like, and what the drift check exists to
+    require. Pass `art` explicitly when the test is about the artwork itself.
+    """
     return {
         "slides": [{"headline": c, "supporting": "", "body": "",
-                    "image_prompt": art, "visual_intent": ""} for c in copy],
+                    "image_prompt": art or f"a comic panel in a gym: {c}",
+                    "visual_intent": ""} for c in copy],
         "caption": caption,
         "comment_trigger": "who wins?",
     }
@@ -257,7 +264,8 @@ def test_rule_1_no_photoreal_artwork_for_a_real_person():
     ))
     assert "photoreal" in {f.rule for f in flags}
     # the same brief is fine when only meme characters are in it
-    assert not lint_post(episode_post("Orangina waits", art="photorealistic 8k"))
+    assert not lint_post(episode_post("Orangina waits",
+                                      art="photorealistic 8k of Orangina waiting"))
 
 
 def test_rule_4_off_limits_territory():
@@ -299,12 +307,53 @@ def test_named_characters_reads_the_copy_and_the_artwork():
     assert "tralalero" in named_characters(post)
 
 
+# --- drift: the panel must draw the beat the copy just described ------------
+
+
+def test_a_panel_that_draws_a_different_character_is_caught():
+    """The real failure: an episode about Jeremy Clarkson needing to earn his
+    way INTO the sauna rendered him as the bouncer of the sauna queue."""
+    post = episode_post("Jeremy Clarkson is told to do ten squats to get in",
+                        art="Gordon Ramsay running the sauna queue")
+    flags = lint_post(post)
+    assert "panel_drift" in {f.rule for f in flags}
+    assert any("Jeremy Clarkson" in f.why and "Gordon Ramsay" in f.why
+               for f in flags)
+
+
+def test_a_panel_with_nobody_in_it_is_caught():
+    post = episode_post("Tracy Beaker denies everything",
+                        art="a wide shot of the empty gym floor")
+    assert "empty_panel" in {f.rule for f in lint_post(post)}
+
+
+def test_a_panel_that_draws_the_right_person_passes():
+    post = episode_post("Tracy Beaker denies everything",
+                        art="Tracy Beaker with grease on both hands, shrugging")
+    assert lint_post(post) == []
+
+
+def test_a_surname_counts_as_naming_someone():
+    """The engine writes 'Haaland has been on the leg press', not the full name
+    every time — matching only full names scored those panels as empty."""
+    from chrgd.roster import name_index
+
+    index = name_index()
+    assert index["haaland"].key == "haaland"
+    assert index["clarkson"].key == "clarkson"
+    # short or ambiguous tokens are not aliased — "Jack" would collide
+    assert "jack" not in index
+    post = episode_post("Haaland refuses to move", art="Haaland on the leg press")
+    assert lint_post(post) == [] and named_characters(post) == ["haaland"]
+
+
 def test_a_judge_failure_never_breaks_the_build(settings, store):
     class Exploding:
         def judge(self, system, user):
             raise RuntimeError("api down")
 
-    result = check_likeness(episode_post("a clean line"), idea(show="multiverse"),
+    result = check_likeness(episode_post("Orangina waits her turn"),
+                            idea(show="multiverse"),
                             settings, store=store, judge=Exploding())
     assert result.error and result.checked and result.safe
 

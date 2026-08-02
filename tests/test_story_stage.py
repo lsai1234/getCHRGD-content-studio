@@ -717,3 +717,102 @@ def test_the_joke_is_protected_when_the_story_is_cut_into_slides():
     brief = story.as_brief()
     assert "THE JOKE this episode is landing" in brief
     assert "must not be softened" in brief
+
+
+# --- cost: the same quality for fewer calls and fewer tokens ----------------
+
+
+def test_the_pitch_picks_its_own_winner_without_a_second_call(store, settings):
+    """The pick used to be a separate judge call re-deriving an ordering the
+    pitch had already been asked for. One call now does both."""
+    pitched = [{**GOOD_PREMISE, "the_joke": f"the funny is: joke {i}"}
+               for i in range(4)]
+
+    class Pitcher:
+        def __init__(self):
+            self.calls = 0
+            self.prompts: list[str] = []
+
+        def complete(self, system, user):
+            payload = GOOD_STORY
+            if "pitch the COMIC IDEAS" in system:
+                self.calls += 1
+                payload = {"premises": pitched, "winner": 2,
+                           "why": "it lands instantly"}
+            self.prompts.append(user)
+
+            class R:
+                content = json.dumps(payload)
+                prompt_tokens = completion_tokens = 10
+            return R()
+
+    class CountingJudge(FakeJudge):
+        def __init__(self):
+            super().__init__()
+            self.picks = 0
+
+        def judge(self, system, user):
+            if "picking which ONE comic idea" in system:
+                self.picks += 1
+            return super().judge(system, user)
+
+    writer, judge = Pitcher(), CountingJudge()
+    story, _ = write_story(Idea(idea_id="G1", concept_note=""), settings, store,
+                           cast_keys=["tracy_beaker"], client=writer, judge=judge)
+    assert writer.calls == 1, "the pitch ran more than once"
+    assert judge.picks == 0, "the separate pick call is still being paid for"
+    # and the winner it named is the one that was written
+    assert story.the_joke == "the funny is: joke 2"
+
+
+def test_a_pitch_with_a_bogus_winner_still_writes_an_episode(store, settings):
+    class Pitcher:
+        def complete(self, system, user):
+            payload = GOOD_STORY
+            if "pitch the COMIC IDEAS" in system:
+                payload = {"premises": [GOOD_PREMISE], "winner": 99}
+
+            class R:
+                content = json.dumps(payload)
+                prompt_tokens = completion_tokens = 10
+            return R()
+
+    story, _ = write_story(Idea(idea_id="G1", concept_note=""), settings, store,
+                           cast_keys=["tracy_beaker"], client=Pitcher(),
+                           judge=FakeJudge())
+    assert story.the_joke == GOOD_PREMISE["the_joke"]
+
+
+def test_the_pitch_prompt_asks_for_the_winner_in_the_same_response():
+    from chrgd.story import PREMISE_SYSTEM
+
+    assert "THEN PICK YOUR OWN WINNER" in PREMISE_SYSTEM
+    assert '"winner"' in PREMISE_SYSTEM
+
+
+def test_a_finished_story_drops_the_blocks_the_build_cannot_use(store):
+    """The canon and the worked example are most of the Multiverse brief. Once
+    the episode is written the build call may not change what happened and is
+    not writing prose, so paying for either is waste."""
+    from chrgd.series import record_episode
+
+    record_episode(store, change="Haaland took the last rack", idea_id="G0",
+                   unresolved="who gets it tomorrow")
+    route = {"show": "multiverse", "cast": ["tracy_beaker"]}
+    unwritten = build_user_message(
+        Idea(idea_id="G1", concept_note="", route_json=json.dumps(route)),
+        store=store)
+    written = build_user_message(
+        Idea(idea_id="G2", concept_note="",
+             route_json=json.dumps({**route, "story": GOOD_STORY})), store=store)
+
+    # before the story stage, the build is inventing the episode and needs both
+    assert "THE STANDARD TO WRITE TO" in unwritten
+    assert "took the last rack" in unwritten
+
+    # after it, neither — but the world, the cast and the story all survive
+    assert "THE STANDARD TO WRITE TO" not in written
+    assert "took the last rack" not in written
+    assert "Iron Palace" in written and "Tracy Beaker" in written
+    assert "THIS EPISODE IS ALREADY WRITTEN" in written
+    assert len(written) < len(unwritten)

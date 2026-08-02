@@ -323,6 +323,58 @@ def engine_base() -> str:
     return base
 
 
+#: The generic image brief in JSON_CONTRACT — written for standalone photo
+#: carousels, and replaced wholesale for a show with a cast (see below).
+_GENERIC_IMAGE_BRIEF = '"image_prompt": "string — a COMPLETE visual brief for this slide that a stranger scrolling the FYP would read as NATIVE TikTok content, NOT an advert. Default to the platform\'s native visual formats: a candid phone photo (harsh direct flash, slightly awkward framing, a real UK gym), a screenshot-style artefact (notes app, a group-chat thread, a poster stuck on the gym wall), a meme-shaped image, or a photo-dump frame. Reserve a designed/illustrated treatment ONLY for a slide whose concept IS the design (a tier chart, a fake receipt/document, a ranking). Write it as ONE FRAME of the shared design_system below (same palette, recurring motif and type treatment as its siblings) — but the continuity should feel like the same person\'s camera roll, not a branded template. Cover the visual concept (subject, setting, action, mood) and the composition, then say what has CHANGED from the previous frame so the swipe shows visible motion/escalation. HARD RULE: if the finished image could pass for a supplement brand\'s paid ad or for generic AI art, the brief has failed — rewrite it rawer and more native. Do NOT invent text beyond the approved slide copy."'
+
+#: What replaces it on a character show. The failure this fixes: an episode
+#: about Jeremy Clarkson having to earn his way INTO the sauna rendered him as
+#: the BOUNCER of the sauna queue. The story was right; the picture invented a
+#: different scene, because the generic brief invited it to ("write a COMPLETE
+#: visual brief… default to a candid phone photo… a meme-shaped image"). On a
+#: show the picture is not a creative opportunity. It is the beat, drawn.
+_PANEL_IMAGE_BRIEF = (
+    '      "image_prompt": "string — the PANEL for this beat. You are not '
+    'inventing a shot; you are drawing the moment the copy just described. '
+    'State it in this order and nothing else: (1) WHICH named characters are '
+    'in frame — at least one, always, by full name; (2) what they are DOING at '
+    'this exact moment of the story; (3) where they are standing in the gym. '
+    'HARD RULES: the panel must show the SAME moment as this slide\'s copy — '
+    'never a different scene, never a later or earlier moment, and never a '
+    'role the story did not give them. If the story says a character is '
+    'queueing, do not draw them running the queue. Invent no new characters, '
+    'no new locations and no new props. Do not describe the art style, the '
+    'palette, the line weight or the lettering — those are fixed for this show '
+    'and stating them again only creates a chance to contradict them. Do not '
+    'write out the slide text; it is added separately.",'
+)
+
+
+def show_system_prompt(show) -> str:
+    """A lean system prompt for a show that brings its own doctrine.
+
+    Keeps what a show can't supply itself — who the brand is, and the output
+    contract — and drops the ~9,300-token generic carousel engine plus the
+    viral playbook. Those exist to help a standalone post decide what shape to
+    be; a show has already decided.
+    """
+    parts = [
+        "You are the writer for CHRGD, a UK gym and supplement brand on "
+        "TikTok. You are working on one of its recurring shows, and that "
+        "show's brief below is your instruction set — it outranks any general "
+        "instinct you have about what a TikTok carousel should look like.",
+    ]
+    bible = load_brand_bible()
+    if bible:
+        parts.append(bible)
+    contract = JSON_CONTRACT
+    if show is not None and show.cast != "none":
+        contract = contract.replace(_GENERIC_IMAGE_BRIEF.rstrip(","),
+                                    _PANEL_IMAGE_BRIEF.strip().rstrip(","))
+    parts.append(contract)
+    return "\n\n---\n\n".join(parts)
+
+
 def load_system_prompt() -> str:
     """Content engine instructions + brand bible + the strict JSON contract."""
     return engine_base() + "\n" + JSON_CONTRACT
@@ -564,11 +616,25 @@ def _seed_context(idea: Idea, prefs: dict, store: Store | None = None) -> list[s
     if prefs.get("cast"):
         from .roster import cast_block, load_world, resolve
 
+        # When the story stage has run, the episode is ALREADY WRITTEN and this
+        # call's job changes completely: cut it into slides rather than invent
+        # one. That split is the whole fix — writing a story and formatting a
+        # story are different jobs, and collapsing them is why the story lost.
+        from .story import story_from_route
+
+        story = story_from_route(prefs)
         cast = resolve([str(k) for k in prefs["cast"]])
         if store is not None:
             from .series import episode_brief
 
-            block = episode_brief(store, [c.key for c in cast])
+            # A finished story makes two large blocks dead weight here: the
+            # canon (this call may not change what happened) and the worked
+            # example (this call is not writing prose). Together they are most
+            # of the brief, and dropping them costs the slide cut nothing.
+            block = episode_brief(
+                store, [c.key for c in cast],
+                example=story is None, canon=story is None,
+            )
         else:
             block = "\n\n".join(
                 b for b in (load_world().as_block(), cast_block(cast)) if b
@@ -577,13 +643,6 @@ def _seed_context(idea: Idea, prefs: dict, store: Store | None = None) -> list[s
             lines.append("")
             lines.append(block)
 
-        # When the story stage has run, the episode is ALREADY WRITTEN and this
-        # call's job changes completely: cut it into slides rather than invent
-        # one. That split is the whole fix — writing a story and formatting a
-        # story are different jobs, and collapsing them is why the story lost.
-        from .story import story_from_route
-
-        story = story_from_route(prefs)
         if story is not None:
             lines.append("")
             lines.append(story.as_brief())
@@ -700,7 +759,12 @@ def run_pipeline_for_idea(
     progress (attempt 1 = first write, attempt 2 = post-QA rewrite).
     `performance_notes` steers the write with the account's real results.
     """
-    system = load_system_prompt()
+    # A show that brings its own spine, voice and look doesn't need the
+    # generic engine doctrine — and for the comic serial that doctrine is what
+    # was telling it to shoot candid phone photos.
+    show = get_show(str(creation_prefs(idea).get("show") or ""))
+    system = (show_system_prompt(show) if show is not None and show.lean_prompt
+              else load_system_prompt())
     spend = 0.0
     retry_reasons: list[str] | None = None
     last_failures: list[str] = []

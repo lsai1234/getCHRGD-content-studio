@@ -14,6 +14,8 @@ this opener been checked?" and no door into the engine that skips it.
 
 from __future__ import annotations
 
+import json
+
 from .config import Settings
 from .db import Store
 from .images import RenderResult, render_carousel
@@ -41,6 +43,20 @@ def ensure_concept_gated(
     new pixels, not a fresh tournament that quietly rewrites their post. Change
     the hook and it is a new concept, and it gets checked again.
     """
+    # A serial's slide 1 is decided by the story, which has already been
+    # written and passed a cold read. The gate's job is to invent rival
+    # openers and pick the most arresting — on an episode that means four to
+    # six extra calls (one of them carrying the whole engine prompt) actively
+    # competing with the plot. Skipping it is both cheaper and better.
+    from .story import story_from_route
+
+    try:
+        route = json.loads(idea.route_json) if idea.route_json else {}
+    except (json.JSONDecodeError, TypeError):
+        route = {}
+    if story_from_route(route) is not None:
+        return idea, None
+
     if not settings.concept_gate_enabled:
         return idea, None
     from .conceptgate import gate_slide_one, needs_gate
