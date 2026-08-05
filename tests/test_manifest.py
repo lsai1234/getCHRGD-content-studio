@@ -21,8 +21,10 @@ from chrgd.manifest import (
     build_manifest,
     cast_block,
     fingerprint,
+    layout_note,
     manifest_for,
     validate,
+    word_count,
 )
 from chrgd.models import Idea
 
@@ -238,7 +240,9 @@ def test_the_fingerprint_moves_with_the_copy_and_the_brief():
 
 def test_a_clean_manifest_passes():
     assert validate(build_manifest(post(
-        slide("Tracy Beaker denies it"), slide("Molly-Mae films it")), CAST)) == []
+        slide("Tracy Beaker denies it"), slide("Molly-Mae films it"),
+        slide("Who was in here at three in the morning?", feature=False),
+    ), CAST)) == []
 
 
 @pytest.mark.parametrize("panel,fragment", [
@@ -287,6 +291,7 @@ def test_a_character_talked_about_while_absent_is_not_a_failure():
     m = build_manifest(post(
         slide("Tracy Beaker says Jeremy Clarkson will be here at six"),
         slide("Jeremy Clarkson walks in"),
+        slide("Who told him?", feature=False),
     ), CAST)
     assert validate(m) == []
 
@@ -482,7 +487,8 @@ def built(slides, cast=CAST, *, show=None):
     kw = {}
     if show is not None:
         kw = {"props": show.props, "crowd_base": show.crowd_base,
-              "title_card": show.look.title_card, "title_note": show.look.title_note}
+              "title_card": show.look.title_card, "title_note": show.look.title_note,
+              "layout_family": show.key}
     return build_manifest(post(*slides), cast, **kw)
 
 
@@ -724,6 +730,172 @@ def test_off_format_posts_get_no_staging():
         assert absent not in prompt, absent
 
 
+# === STAGE 5: the hook, the caps, the ending, one template ==================
+
+
+# --- panel 1 is a hook (defect 7) -------------------------------------------
+
+
+def test_panel_one_is_capped_harder_than_the_rest():
+    """It has half a second to earn the swipe, and a text block eating the
+    canvas is what these carousels were stalling on."""
+    from chrgd.manifest import MAX_WORDS_PANEL, MAX_WORDS_PANEL_ONE
+
+    long_line = " ".join(["word"] * 20)
+    m = built([slide(long_line), slide(long_line)])
+    reasons = validate(m)
+    assert any(f"panel 1: 20 words of copy (cap {MAX_WORDS_PANEL_ONE}" in r
+               for r in reasons)
+    assert any("half a second to earn the swipe" in r for r in reasons)
+    # 20 words is fine on any other panel
+    assert not any(f"panel 2: 20 words" in r for r in reasons)
+    assert MAX_WORDS_PANEL == 25
+
+
+def test_realistic_panel_one_copy_fits_the_cap():
+    """A cap nothing can meet is one that gets switched off."""
+    m = built([slide("TRACY BEAKER HAS GREASE ON BOTH HANDS",
+                     supporting="Tracy Beaker: I have never fixed anything")])
+    assert word_count(m.panels[0]) == 12
+    assert not any("words of copy" in r for r in validate(m))
+
+
+def test_the_masthead_is_a_corner_mark_and_not_the_biggest_thing(show):
+    m = built([slide("TRACY BEAKER DENIES IT")], show=show)
+    title = [e for e in m.panels[0].text_elements if e.role == "title"][0]
+    assert "top-left" in title.placement.lower()
+    assert "never be the largest element" in title.placement + title.style
+    # and it is outside the writer's word budget, since they cannot shorten it
+    assert word_count(m.panels[0]) == 4
+
+
+def test_the_show_brief_tells_the_writer_the_caps(show):
+    brief = show.brief_block()
+    assert "12 WORDS MAXIMUM" in brief
+    assert "25 words maximum" in brief
+    assert "SLIDE 1 IS THE HOOK, NOT THE SETUP" in brief
+    assert "Never on the location" in brief
+
+
+def test_a_show_with_no_cast_gets_no_cap_instructions():
+    from chrgd.shows import get_show
+
+    assert "12 WORDS MAXIMUM" not in get_show("session").brief_block()
+
+
+# --- the closing card (defect 8) --------------------------------------------
+
+
+def test_the_comment_trigger_becomes_the_last_panel():
+    """It lived on the post and never became a slide, so the carousel finished
+    on a beat with no engagement prompt."""
+    from chrgd.manifest import ensure_closing_card
+
+    payload = post(slide("TRACY BEAKER SAYS NOTHING"))
+    assert ensure_closing_card(payload, comment_trigger="Who was in here at 3am")
+    last = payload["slides"][-1]
+    assert last["headline"] == "Who was in here at 3am?"
+    assert last["role"] == "cta"
+    assert last["feature_character"] is False
+
+
+def test_an_unresolved_line_becomes_the_question_when_there_is_no_trigger():
+    from chrgd.manifest import ensure_closing_card
+
+    payload = post(slide("SHE WENT BACK AND BROKE IT AGAIN"))
+    assert ensure_closing_card(
+        payload, unresolved="somebody was in here at three in the morning")
+    assert payload["slides"][-1]["headline"] == \
+        "Somebody was in here at three in the morning?"
+
+
+def test_a_set_that_already_ends_on_a_question_gets_no_second_card():
+    from chrgd.manifest import ensure_closing_card
+
+    payload = post(slide("WHO ELSE WAS IN HERE AT 3AM?"))
+    assert not ensure_closing_card(payload, comment_trigger="Who was it")
+    assert len(payload["slides"]) == 1
+
+
+def test_no_card_is_invented_when_there_is_nothing_to_ask():
+    from chrgd.manifest import ensure_closing_card
+
+    payload = post(slide("SHE SAID NOTHING"))
+    assert not ensure_closing_card(payload)
+    assert len(payload["slides"]) == 1
+
+
+def test_the_slide_ceiling_is_respected():
+    from chrgd.manifest import ensure_closing_card
+
+    payload = post(*[slide(f"beat {i}") for i in range(10)])
+    assert not ensure_closing_card(payload, comment_trigger="who", max_slides=10)
+
+
+def test_the_closing_card_is_a_question_card_with_nobody_on_it(show):
+    from chrgd.manifest import ensure_closing_card, layout_note
+
+    payload = post(slide("TRACY BEAKER SAYS NOTHING"))
+    ensure_closing_card(payload, comment_trigger="Who was in here at 3am")
+    m = build_manifest(payload, CAST, props=show.props, crowd_base=show.crowd_base,
+                       layout_family=show.key)
+    last = m.panels[-1]
+    assert last.layout == "multiverse/question-card"
+    assert last.cast_present == [] and set(last.cast_forbidden) == set(CAST)
+    assert "the question is the whole frame" in layout_note(last).lower()
+
+
+def test_rule_13_an_episode_that_asks_nothing_is_refused():
+    m = built([slide("Tracy Beaker denies it"), slide("She says nothing")])
+    assert any("the last panel asks nothing" in r for r in validate(m))
+
+
+# --- one template (defect 9) ------------------------------------------------
+
+
+def test_the_variant_is_picked_deterministically_by_density(show):
+    m = built([
+        slide("SHORT LINE"),                                   # 2 words
+        slide("A LONGER NARRATION LINE THAT RUNS ON A BIT", supporting="and more"),
+        slide("SHE SPEAKS", supporting="Tracy Beaker: get off my rack"),
+        slide("Who was it?", feature=False),
+    ], show=show)
+    assert m.panels[0].layout == "multiverse/short"
+    assert m.panels[1].layout == "multiverse/medium"
+    assert m.panels[2].layout == "multiverse/with-dialogue"
+
+
+def test_rule_12_one_template_family_for_the_set():
+    m = Manifest(cast=CAST, panels=[
+        Panel(index=0, total=2, cast_present=CAST, layout="multiverse/short",
+              progress="step 1 of 2", beat_text="a?"),
+        Panel(index=1, total=2, cast_present=CAST, layout="explainer/medium",
+              progress="step 2 of 2", beat_text="b?"),
+    ])
+    assert any("more than one layout template" in r for r in validate(m))
+
+
+def test_every_panel_states_the_same_template(show):
+    m = built([slide("a"), slide("b", supporting="Tracy Beaker: hello"),
+               slide("Who?", feature=False)], show=show)
+    families = {p.layout.partition("/")[0] for p in m.panels}
+    assert families == {"multiverse"}
+    assert all("Every panel in this set uses the same template" in layout_note(p)
+               for p in m.panels)
+
+
+def test_the_layout_note_reaches_the_prompt(show):
+    from chrgd.brand import load_brand
+    from chrgd.images import compose_design_prompt
+    from chrgd.models import Slide
+
+    m = built([slide("SHORT LINE")], show=show)
+    prompt = compose_design_prompt(Slide(headline="SHORT LINE"), load_brand(),
+                                   None, panel=m.panels[0])
+    assert "LAYOUT — SHORT" in prompt
+    assert "Do not invent a different arrangement" in prompt
+
+
 def test_normal_writing_survives_all_of_it():
     """A validator that fires on good copy is one that gets switched off."""
     m = build_manifest(post(
@@ -731,5 +903,6 @@ def test_normal_writing_survives_all_of_it():
         slide("Molly-Mae finds a tripod under the frame",
               supporting="Molly-Mae: I suppose that was me"),
         slide("Tracy Beaker says nothing"),
+        slide("Who else was in here at 3am?", feature=False),
     ), CAST)
     assert validate(m) == []

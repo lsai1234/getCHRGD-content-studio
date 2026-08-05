@@ -109,7 +109,11 @@ palette = "Saturated comic primaries — hot yellow, coral red, turquoise — on
 type_style = "Comic lettering: bold, slightly irregular, all-caps in narration boxes and speech bubbles, with heavy outlines. It should read as drawn, not typeset."
 motif = "The Iron Palace itself — the same knackered retail-park gym interior, the BACK SOON sign on the lat pulldown, the single squat rack — recurring in every episode."
 title_card = "CHRGD MULTIVERSE"
-title_note = "a comic-book masthead across the top of slide 1 reading CHRGD MULTIVERSE — bold, inked, in the show's lettering, with the CHRG in the brand's electric blue and a small EPISODE number badge beside it, like the title bar of a comic issue"
+# A CORNER MARK, not a masthead. It used to run across the top of slide 1 as a
+# title bar, so panel 1 led with brand furniture and exposition — and panel 1 is
+# the only one that has to earn the swipe. It must never be the largest element
+# in the frame.
+title_note = "a small corner mark in the TOP-LEFT of slide 1 reading CHRGD MULTIVERSE, on one line, in the show's inked lettering with the CHRG in the brand's electric blue. Keep it to roughly a tenth of the frame's width and set it SMALLER than the narration text — it is a mark, not a masthead, and it must never be the largest element in the panel or compete with the artwork for attention"
 
 # The show keeps its own comic world (D3) but is now openly a CHRGD product:
 # the masthead brands it, so the wordmark stays off the frame and the branding

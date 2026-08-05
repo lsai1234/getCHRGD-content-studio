@@ -802,11 +802,21 @@ def run_pipeline_for_idea(
         # landing on the operator as a review hold.
         cast_here = [str(k) for k in (creation_prefs(idea).get("cast") or [])]
         if cast_here:
-            from .manifest import build_manifest, title_for
+            from .manifest import build_manifest, ensure_closing_card, title_for
             from .manifest import validate as validate_panels
+            from .models import MAX_SLIDES
 
+            # Validate what will actually be RENDERED, which includes the
+            # closing card the build appends afterwards — otherwise rule 13
+            # fires on every episode and burns a rewrite asking the engine for
+            # a slide the code is about to add itself.
+            preview = json.loads(json.dumps(payload))
+            ensure_closing_card(
+                preview, comment_trigger=post.comment_trigger,
+                max_slides=MAX_SLIDES,
+            )
             failures = failures + validate_panels(
-                build_manifest(payload, cast_here, **title_for(idea))
+                build_manifest(preview, cast_here, **title_for(idea))
             )
         if not failures:
             return BuildResult(
@@ -1089,9 +1099,36 @@ def build_single_idea(
             from .manifest import (
                 ROUTE_KEY as PANELS_KEY,
                 build_manifest,
+                ensure_closing_card,
                 title_for,
                 validate,
             )
+            from .models import MAX_SLIDES
+            from .story import story_from_route
+
+            # THE ENDING, given back. `unresolved` was written, gated on and
+            # stored, and then only ever reached the build as a "do not resolve
+            # it" instruction — so the carousel finished on a beat with no
+            # question, no comment prompt and no completion signal. Added to
+            # the post itself, before the manifest, so it is a real slide that
+            # renders like any other.
+            try:
+                _route = json.loads(idea.route_json) if idea.route_json else {}
+            except (TypeError, ValueError):
+                _route = {}
+            story = story_from_route(_route)
+            if ensure_closing_card(
+                payload,
+                unresolved=(story.unresolved if story is not None else ""),
+                comment_trigger=result.post.comment_trigger,
+                max_slides=MAX_SLIDES,
+            ):
+                from .models import Slide
+
+                result.post.slides = [
+                    Slide.model_validate(s) for s in payload["slides"]
+                ]
+                _prog(90, "added the closing question card")
 
             manifest = build_manifest(payload, cast_keys, **title_for(idea))
             extra = {**extra, PANELS_KEY: manifest.model_dump()}

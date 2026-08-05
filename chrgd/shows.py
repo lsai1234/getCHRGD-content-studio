@@ -255,6 +255,31 @@ class Show(BaseModel):
             lines.append(
                 f"LENGTH: aim for {self.slides_min}-{self.slides_max} slides."
             )
+        if self.cast != "none":
+            # The caps are enforced on the manifest before anything is
+            # rendered, so a writer who doesn't know them just earns a rewrite.
+            # Stated here so the first draft lands inside them.
+            from .manifest import MAX_WORDS_PANEL, MAX_WORDS_PANEL_ONE
+
+            lines.append("")
+            lines.append(
+                f"HOW MUCH COPY PER SLIDE — hard limits, checked before "
+                f"anything is drawn:\n"
+                f"- SLIDE 1: {MAX_WORDS_PANEL_ONE} WORDS MAXIMUM, across the "
+                "headline and supporting line together. It has half a second "
+                "to earn the swipe and a block of text eating the frame is what "
+                "loses it.\n"
+                f"- EVERY OTHER SLIDE: {MAX_WORDS_PANEL} words maximum, across "
+                "all of its copy together.\n"
+                "Short copy is not a style preference here. The image model "
+                "garbles lettering in proportion to how much of it there is, so "
+                "these caps are what keep the words on the artwork readable.\n"
+                "- SLIDE 1 IS THE HOOK, NOT THE SETUP. Open on the tension — "
+                "the conflict, the contradiction, the thing already going wrong. "
+                "Never on the location, never on the rules of the world, never "
+                "on a recap. If the most arresting moment in the story is not "
+                "the first thing that happens, lead with it anyway."
+            )
         return "\n".join(lines)
 
 

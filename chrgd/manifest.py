@@ -102,6 +102,10 @@ class Panel(BaseModel):
     #: moving it is the broken case, and a state that moves because the copy
     #: says so is the story working.
     state_changes: list[str] = Field(default_factory=list)
+    #: `family/variant` — one template, with density variants picked by word
+    #: count. Panels were switching treatment mid-carousel because the renderer
+    #: chose per slide on character count and whether a `body` was set.
+    layout: str = ""
 
 
 class Manifest(BaseModel):
@@ -294,9 +298,10 @@ def _text_for(slide: dict, cast: list[str], *, index: int,
         # it in another, and the model resolves that by inventing more text.
         elements.append(TextElement(
             id="t0", role="title", content=title_card.strip(),
-            placement=title_note.strip() or "a masthead across the top of the panel",
-            style="the show's own lettering, small enough not to compete with "
-                  "the panel's own words",
+            placement=title_note.strip() or "a small mark in the top-left corner",
+            style="the show's own lettering, set SMALLER than the narration "
+                  "text — it is a corner mark and it must never be the largest "
+                  "element in the panel",
         ))
     for field in ("headline", "supporting", "body"):
         raw = str(slide.get(field) or "").strip()
@@ -549,7 +554,8 @@ def _state_for(present: list[str], prop_states: dict[str, str], camera: str) -> 
 
 def build_manifest(post: dict, cast_keys: list[str], *,
                    title_card: str = "", title_note: str = "",
-                   props: dict | None = None, crowd_base: int = 0) -> Manifest:
+                   props: dict | None = None, crowd_base: int = 0,
+                   layout_family: str = "panel") -> Manifest:
     """Resolve the whole episode into per-panel state, before any generation.
 
     Presence carries forward: once a character is in the room they stay there
@@ -635,6 +641,7 @@ def build_manifest(post: dict, cast_keys: list[str], *,
             crowd = min(crowd + 3, crowd_base + 9)
 
         camera = _camera_for(present, prop_ids)
+        words = sum(len(e.content.split()) for e in elements if e.role in _BUDGETED)
         manifest.panels.append(Panel(
             index=i,
             total=total,
@@ -650,9 +657,92 @@ def build_manifest(post: dict, cast_keys: list[str], *,
                              camera),
             progress=_progress_for(i, total),
             state_changes=sorted(changed),
+            layout=_layout_for(words, elements, layout_family,
+                               role=str(slide.get("role") or "")),
         ))
         in_room -= departing
     return manifest
+
+
+#: Words a reader will actually take in at thumb size. Panel 1 is tighter
+#: because it has half a second to earn the swipe, and a text block eating the
+#: canvas is what the carousels were stalling on. The cap does double duty: it
+#: is the swipe lever AND the main control on glyph garbling, since the model
+#: garbles in proportion to how much text there is and how small it renders.
+MAX_WORDS_PANEL_ONE = 12
+MAX_WORDS_PANEL = 25
+
+#: Roles that spend the writer's word budget. The masthead and the words
+#: physically on a prop are neither the writer's to shorten nor the reason a
+#: panel reads as dense, so they are outside the count — the per-panel
+#: character cap still covers every glyph on the artwork.
+_BUDGETED = ("caption", "dialogue", "broadcast")
+
+
+def word_count(panel: Panel) -> int:
+    return sum(len(e.content.split()) for e in panel.text_elements
+               if e.role in _BUDGETED)
+
+
+def _layout_for(panel_words: int, elements: list[TextElement], family: str,
+                *, role: str = "") -> str:
+    """One template, one deterministic variant. Never improvised per panel."""
+    if role == CLOSING_ROLE:
+        variant = "question-card"
+    elif any(e.role in ("dialogue", "broadcast") for e in elements):
+        variant = "with-dialogue"
+    elif panel_words <= 8:
+        variant = "short"
+    else:
+        variant = "medium"
+    return f"{family}/{variant}"
+
+
+#: What each variant actually means on the page. Stated explicitly, because
+#: "the shared layout grid" as a free-text design-system string was being
+#: reinterpreted every frame.
+_LAYOUT_NOTE = {
+    "short": (
+        "LAYOUT — SHORT: one narration box in the top band, no more than a "
+        "quarter of the height, the artwork holding the rest of the frame."
+    ),
+    "medium": (
+        "LAYOUT — MEDIUM: a narration box in the top band, and a second in the "
+        "lower band only if a second narration string is listed below. Each is "
+        "no more than a fifth of the height, with the artwork holding the "
+        "middle of the frame."
+    ),
+    "question-card": (
+        "LAYOUT — QUESTION CARD: this is the closing panel and it is the only "
+        "one of its kind in the set. The question is the whole frame — set it "
+        "large and centred, filling the middle third, on a plain field of the "
+        "show's flattest colour with the artwork reduced to a simple graphic "
+        "backdrop. No characters, no scene, no detail competing with the words. "
+        "It reads as the card at the end of an issue asking the reader "
+        "something."
+    ),
+    "with-dialogue": (
+        "LAYOUT — WITH DIALOGUE: a narration box in the top band, no more than "
+        "a fifth of the height, and the speech or sound sitting in the middle "
+        "third beside its speaker, clear of the narration and clear of the "
+        "character's face."
+    ),
+}
+
+
+def layout_note(panel: Panel) -> str:
+    """The panel's layout instruction — the same template every frame."""
+    if not panel.layout:
+        return ""
+    _family, _, variant = panel.layout.partition("/")
+    note = _LAYOUT_NOTE.get(variant, "")
+    if not note:
+        return ""
+    return (
+        note + " Every panel in this set uses the same template, the same "
+        "margins and the same type treatment; only the density of the text "
+        "changes. Do not invent a different arrangement for this frame."
+    )
 
 
 def _progress_for(index: int, total: int) -> str:
@@ -671,6 +761,66 @@ def _progress_for(index: int, total: int) -> str:
         "as every other panel. Do not estimate it and do not round it — "
         f"{filled} filled, {empty} empty."
     )
+
+
+# --- the ending -------------------------------------------------------------
+
+#: The last slide already asks something, so a question card would be a second
+#: one. Cheap to detect and cheaper than a duplicate ending.
+_ASKS = re.compile(r"\?\s*$")
+
+#: Copy on the question card, kept deliberately plain — this panel is the
+#: comment prompt and the completion signal, not another joke.
+CLOSING_ROLE = "cta"
+
+
+def ensure_closing_card(post: dict, *, unresolved: str = "",
+                        comment_trigger: str = "", max_slides: int = 10) -> bool:
+    """Give the episode its ending back. Returns True if a card was added.
+
+    Stories that end on an open question had that ending dropped: `unresolved`
+    was written, gated on and stored, but only ever reached the build as a
+    "do not resolve it" instruction, and `comment_trigger` lived on the post
+    without ever becoming a slide. So the carousel finished on a beat with no
+    engagement prompt and no completion signal.
+
+    Deliberately conservative — it does nothing when the set already ends on a
+    question, when there is nothing to ask, or when adding one would push past
+    the platform's slide ceiling.
+    """
+    slides = post.get("slides") or []
+    if not slides or len(slides) >= max_slides:
+        return False
+    last = slides[-1]
+    tail = " ".join(str(last.get(k) or "") for k in ("headline", "supporting", "body"))
+    if _ASKS.search(tail.strip()):
+        return False
+
+    question = (comment_trigger or "").strip()
+    if not question:
+        seed = (unresolved or "").strip().rstrip(".")
+        if not seed:
+            return False
+        # The unresolved line is written as a statement ("somebody saw her");
+        # as the card it has to be the question the reader answers.
+        question = f"{seed[0].upper()}{seed[1:]}?"
+    if not question.endswith("?"):
+        question = question.rstrip(".") + "?"
+
+    slides.append({
+        "headline": question,
+        "supporting": "",
+        "body": "",
+        "image_prompt": "",
+        "visual_intent": "the question card",
+        "role": CLOSING_ROLE,
+        "swipe_trigger": "",
+        # No character: this is a card, and forcing the cast onto it would put
+        # them in a panel the story has already finished with.
+        "feature_character": False,
+    })
+    post["slides"] = slides
+    return True
 
 
 # --- storage ----------------------------------------------------------------
@@ -739,7 +889,11 @@ def title_for(idea) -> dict:
     show = show_for_idea(idea)
     if show is None:
         return {}
-    out: dict = {"props": show.props, "crowd_base": show.crowd_base}
+    out: dict = {
+        "props": show.props,
+        "crowd_base": show.crowd_base,
+        "layout_family": show.key or "panel",
+    }
     if show.look.title_card.strip():
         out["title_card"] = show.look.title_card.strip()
         out["title_note"] = show.look.title_note.strip()
@@ -855,14 +1009,39 @@ def _sequence_problems(manifest: Manifest) -> list[str]:
             last[key] = value
 
     # Rule 8 — the escalation's value increments once per panel, 1/N to N/N.
-    stated = [p for p in panels if p.progress]
-    for i, panel in enumerate(stated):
+    for panel in [p for p in panels if p.progress]:
         want = f"step {panel.index + 1} of {panel.total}"
         if want not in panel.progress:
             reasons.append(
                 f"panel {panel.index + 1}: the progress element says something "
                 f"other than '{want}' — it must be computed from the index, "
                 "never estimated"
+            )
+
+    # Rule 12 — one template for the set. Density variants are fine; a
+    # different arrangement per frame is the drift.
+    families = {p.layout.partition("/")[0] for p in panels if p.layout}
+    if len(families) > 1:
+        reasons.append(
+            "the set uses more than one layout template ("
+            + ", ".join(sorted(families))
+            + ") — one template, with density variants, or the carousel reads "
+            "as separate posters"
+        )
+
+    # Rule 13 — an episode that leaves something open has to ask it. Checked,
+    # not assumed: `ensure_closing_card` is conservative and declines when the
+    # set already ends on a question, so this confirms one of the two happened.
+    if panels:
+        tail = panels[-1]
+        asks = _ASKS.search(tail.beat_text.strip() or "") or any(
+            e.content.strip().endswith("?") for e in tail.text_elements
+        )
+        if not asks:
+            reasons.append(
+                "the last panel asks nothing — an episode that leaves a thread "
+                "open needs a closing question card, or it finishes on a beat "
+                "with no comment prompt and no completion signal"
             )
     return reasons
 
@@ -925,6 +1104,20 @@ def _text_problems(panel: Panel, cast: list[str], present: set[str],
                 f"{where}: \"{text[:40]}\" is declared {count} times — each "
                 "string may appear exactly once, or it gets drawn twice"
             )
+
+    # Rule 9 — the word budget. Panel 1 is tighter because it has half a second
+    # to earn the swipe, and a text block eating the canvas is what these
+    # carousels were stalling on.
+    words = word_count(panel)
+    cap = MAX_WORDS_PANEL_ONE if panel.index == 0 else MAX_WORDS_PANEL
+    if words > cap:
+        reasons.append(
+            f"{where}: {words} words of copy (cap {cap}"
+            + (" — slide 1 has half a second to earn the swipe" if panel.index == 0
+               else "")
+            + "). Cut it: short copy is both the swipe lever and the main "
+            "defence against garbled glyphs."
+        )
 
     total = 0
     for element in panel.text_elements:
@@ -1095,6 +1288,9 @@ def staging(panel: Panel) -> str:
         )
     if panel.progress:
         parts.append(panel.progress)
+    note = layout_note(panel)
+    if note:
+        parts.append(note)
     return "\n\n".join(parts)
 
 
