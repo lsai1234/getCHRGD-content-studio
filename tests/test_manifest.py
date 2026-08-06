@@ -85,7 +85,7 @@ def test_an_arrival_later_in_the_story_keeps_them_out_of_the_earlier_panels():
     """The reveal-killer. 'Clarkson gets here at six' on panel 1 is the story
     talking ABOUT him; drawing him there spends the surprise before it lands."""
     m = build_manifest(post(
-        slide("Tracy Beaker says Jeremy Clarkson will be here at six"),
+        slide("Tracy Beaker says Jeremy Clarkson is coming"),
         slide("Nobody believes her"),
         slide("Jeremy Clarkson walks in with a coffee"),
     ), CAST)
@@ -289,7 +289,7 @@ def test_a_character_talked_about_while_absent_is_not_a_failure():
     """Legitimate: they haven't arrived yet. Derivation already knows this, so
     the check must not fire on its own output."""
     m = build_manifest(post(
-        slide("Tracy Beaker says Jeremy Clarkson will be here at six"),
+        slide("Tracy Beaker says Jeremy Clarkson is coming"),
         slide("Jeremy Clarkson walks in"),
         slide("Who told him?", feature=False),
     ), CAST)
@@ -894,6 +894,80 @@ def test_the_layout_note_reaches_the_prompt(show):
                                    None, panel=m.panels[0])
     assert "LAYOUT — SHORT" in prompt
     assert "Do not invent a different arrangement" in prompt
+
+
+# === THE CUT-OFF TEXT ========================================================
+#
+# A real published slide: the top narration box flush against the top edge with
+# its letters clipped, and the bottom box carrying THREE lines, the third of
+# them sliced in half by the bottom of the frame. Two causes, both mine.
+
+
+def test_no_placement_sends_text_to_the_frame_edge(show):
+    """'a narration box in the top band' is an instruction to put it AT the
+    edge. That wording is what pushed the boxes off the frame."""
+    m = built([slide("A LINE", supporting="ANOTHER LINE")], show=show)
+    for element in m.panels[0].text_elements:
+        assert "top band" not in element.placement
+        assert "lower band" not in element.placement
+    assert "UPPER THIRD" in m.panels[0].text_elements[1].placement
+    assert "LOWER MIDDLE" in m.panels[0].text_elements[2].placement
+    assert "never resting on the bottom edge" in m.panels[0].text_elements[2].placement
+
+
+def test_the_safe_area_is_stated_before_the_words_not_after(show):
+    """It was one sentence at the end of the last paragraph, under 'set it
+    large' — and the model set it large and let it run off the frame."""
+    from chrgd.manifest import text_spec
+
+    spec = text_spec(built([slide("A LINE")], show=show).panels[0])
+    assert spec.startswith("THE SAFE AREA")
+    assert spec.index("THE SAFE AREA") < spec.index("Render exactly")
+
+
+def test_the_safe_area_accounts_for_tiktoks_own_furniture(show):
+    from chrgd.manifest import text_spec
+
+    spec = text_spec(built([slide("A LINE")], show=show).panels[0])
+    assert "the caption and the music row sit across the bottom" in spec
+    assert "like/share/bookmark rail" in spec
+
+
+def test_the_escape_hatch_is_to_shrink_the_type_not_crop_the_line(show):
+    from chrgd.manifest import text_spec
+
+    spec = text_spec(built([slide("A LINE")], show=show).panels[0])
+    assert "REDUCE THE TYPE SIZE" in spec
+    assert "Smaller and complete always beats large and cropped" in spec
+    assert "NO MORE THAN TWO LINES" in spec
+
+
+def test_the_line_that_actually_overflowed_is_now_refused():
+    """The published slide's bottom box, verbatim. 62 characters is three lines
+    of comic lettering, and the third ran off the image."""
+    overflowed = "A padlock, engraved: to my faithful wife. Paid extra by Greggs."
+    assert len(overflowed) > 52
+    m = built([slide("HE OPENS A SMALL BLUE BOX", supporting=overflowed),
+               slide("Who cut it?", feature=False)],
+              cast=["orangina", "orangino"])
+    assert any("cap 52" in r for r in validate(m))
+
+
+def test_the_copy_that_should_have_been_written_passes():
+    """Split into two boxes, the same joke lands inside the frame."""
+    m = built([slide("ORANGINO OPENS A SMALL BLUE BOX",
+                     art="Orangino holding open a small blue box"),
+               slide("A padlock. To my faithful wife.",
+                     art="Orangina looking at the padlock"),
+               slide("Who cut it?", feature=False)],
+              cast=["orangina", "orangino"])
+    assert validate(m) == []
+
+
+def test_the_writer_is_told_the_line_budget(show):
+    brief = show.brief_block()
+    assert "52 CHARACTERS MAXIMUM" in brief
+    assert "two lines of comic lettering" in brief
 
 
 def test_normal_writing_survives_all_of_it():

@@ -224,8 +224,23 @@ def _entrances(scans: list[tuple[set[str], set[str], set[str]]],
 #: A glyph budget, enforced before generation. The model garbles text in
 #: proportion to how much of it there is and how small it renders, and the only
 #: cheap lever is constraining the input. These are the caps, not suggestions.
-MAX_ELEMENT_CHARS = 90
-MAX_PANEL_CHARS = 180
+#: One narration box is TWO LINES of heavy all-caps across the safe width, and
+#: two lines is about 52 characters. It was 90, which is four lines — the box
+#: then grew past the bottom of the frame and the third line was sliced in half.
+#: The cap is what makes "no more than two lines" achievable rather than a
+#: request the model has to disobey.
+MAX_ELEMENT_CHARS = 52
+MAX_PANEL_CHARS = 150
+
+#: THE SAFE AREA, and it is not the same as the frame. TikTok lays its own
+#: furniture over a published photo: the account name, the caption and the music
+#: row cover the bottom of the image, and the like/share/bookmark rail covers
+#: the right-hand edge. Text drawn in those regions is not cropped so much as
+#: buried. These are the bounds every word has to live inside.
+SAFE_TOP = 8
+SAFE_BOTTOM = 22
+SAFE_SIDE = 8
+SAFE_RIGHT = 12
 #: Long, unusual words garble disproportionately. Set at 12 rather than the 10
 #: the brief suggested, because 10 fires on ordinary English — "handwriting" and
 #: "recognisable" are not the risk, and a check that refuses normal writing is
@@ -321,9 +336,18 @@ def _text_for(slide: dict, cast: list[str], *, index: int,
                      "so it reads as mediated sound rather than a voice in the "
                      "room")
         else:
-            placement = ("a narration box in the top band of the panel"
-                         if field == "headline" else
-                         "a narration box in the lower band of the panel")
+            # NOT "the top band" / "the lower band". That wording put the boxes
+            # flush against the frame edges, where the first one lost the tops
+            # of its letters and the second ran off the bottom of the image.
+            placement = (
+                "a narration box in the UPPER THIRD, inset — its top edge sits "
+                f"at least {SAFE_TOP}% of the frame height below the top of the "
+                "image, with clear empty space above it"
+                if field == "headline" else
+                "a narration box in the LOWER MIDDLE — its bottom edge sits at "
+                f"least {SAFE_BOTTOM}% of the frame height above the bottom of "
+                "the image, never resting on the bottom edge"
+            )
             style = "narration-box lettering, bold all-caps, heavy outline"
         elements.append(TextElement(
             id=f"t{len(elements) + 1}", role=role, content=content,
@@ -703,29 +727,32 @@ def _layout_for(panel_words: int, elements: list[TextElement], family: str,
 #: reinterpreted every frame.
 _LAYOUT_NOTE = {
     "short": (
-        "LAYOUT — SHORT: one narration box in the top band, no more than a "
-        "quarter of the height, the artwork holding the rest of the frame."
+        "LAYOUT — SHORT: one narration box in the UPPER THIRD, inset from the "
+        "top so there is clear empty space above it, no more than a fifth of "
+        "the height, with the artwork holding the rest of the frame."
     ),
     "medium": (
-        "LAYOUT — MEDIUM: a narration box in the top band, and a second in the "
-        "lower band only if a second narration string is listed below. Each is "
-        "no more than a fifth of the height, with the artwork holding the "
-        "middle of the frame."
+        "LAYOUT — MEDIUM: a narration box in the UPPER THIRD, inset from the "
+        "top, and a second in the LOWER MIDDLE — not at the bottom — only if a "
+        "second narration string is listed below. Each is no more than a fifth "
+        "of the height, and the lower one keeps well clear of the bottom of the "
+        "image, where TikTok's own caption will sit over the picture."
     ),
     "question-card": (
         "LAYOUT — QUESTION CARD: this is the closing panel and it is the only "
         "one of its kind in the set. The question is the whole frame — set it "
-        "large and centred, filling the middle third, on a plain field of the "
+        "large and centred, filling the middle third and nothing outside it, "
+        "on a plain field of the "
         "show's flattest colour with the artwork reduced to a simple graphic "
         "backdrop. No characters, no scene, no detail competing with the words. "
         "It reads as the card at the end of an issue asking the reader "
         "something."
     ),
     "with-dialogue": (
-        "LAYOUT — WITH DIALOGUE: a narration box in the top band, no more than "
-        "a fifth of the height, and the speech or sound sitting in the middle "
-        "third beside its speaker, clear of the narration and clear of the "
-        "character's face."
+        "LAYOUT — WITH DIALOGUE: a narration box in the UPPER THIRD, inset "
+        "from the top, no more than a fifth of the height, and the speech or "
+        "sound sitting in the middle third beside its speaker, clear of the "
+        "narration and clear of the character's face."
     ),
 }
 
@@ -1319,10 +1346,11 @@ def text_spec(panel: Panel) -> str:
             "narration, no bubbles, no signage, no lettering of any kind "
             "anywhere in the frame."
         )
-    lines = [
+    lines = [_SAFE_AREA, ""]
+    lines.append(
         "TEXT ON THIS PANEL — this is the COMPLETE and CLOSED list of every "
-        "word that appears anywhere in the image:",
-    ]
+        "word that appears anywhere in the image:"
+    )
     for i, element in enumerate(panel.text_elements, 1):
         role = _ROLE_LABEL.get(element.role, element.role.upper())
         lines.append(
@@ -1349,8 +1377,36 @@ def text_spec(panel: Panel) -> str:
     lines.append(
         "GIVE EVERY TEXT ELEMENT GENEROUS CLEAR SPACE — a calm, uncluttered "
         "area of the artwork behind it. Text over busy detail degrades badly. "
-        "Set it large, in a heavy display face, all-caps, high contrast. Every "
-        "letter sits fully inside the frame with clear breathing room; the "
-        "outer 12% on every side is margin and nothing may touch or cross it."
+        "Set it in a heavy display face, all-caps, high contrast — large, but "
+        "never larger than the safe area can hold."
     )
     return "\n\n".join(lines)
+
+
+#: Stated FIRST, before the strings themselves. It used to be one sentence at
+#: the end of the last paragraph, under "set it large", and the model resolved
+#: that ordering the way anyone would: it set the text large and let it run off
+#: the frame.
+_SAFE_AREA = (
+    "THE SAFE AREA — read this before you place a single word, because it "
+    "outranks every other instruction about size and position.\n"
+    "- The image is a vertical 2:3 phone graphic, and it is published to "
+    "TikTok, which lays ITS OWN furniture over the picture: the account name, "
+    "the caption and the music row sit across the bottom of the image, and the "
+    "like/share/bookmark rail runs down the right-hand edge. Anything drawn "
+    f"there is buried.\n"
+    f"- EVERY letter of EVERY word must sit inside a box that starts "
+    f"{SAFE_TOP}% of the height down from the top, ends {SAFE_BOTTOM}% of the "
+    f"height up from the bottom, and is inset {SAFE_SIDE}% from the left and "
+    f"{SAFE_RIGHT}% from the right. Nothing may touch or cross those bounds — "
+    "no box edge, no outline, no descender, no part of a letter.\n"
+    "- NEVER let a line bleed off any edge and NEVER slice a word. If a string "
+    "does not fit, REDUCE THE TYPE SIZE until the whole thing fits inside the "
+    "safe area. Smaller and complete always beats large and cropped: a "
+    "half-visible line is worse than no line, because the reader cannot finish "
+    "the sentence.\n"
+    "- NO MORE THAN TWO LINES per narration box or bubble. If a string will "
+    "not break into two comfortable lines at the size you have chosen, make "
+    "the type smaller — do not add a third line and do not let the box grow "
+    "past the safe area."
+)

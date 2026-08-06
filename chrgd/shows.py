@@ -259,12 +259,22 @@ class Show(BaseModel):
             # The caps are enforced on the manifest before anything is
             # rendered, so a writer who doesn't know them just earns a rewrite.
             # Stated here so the first draft lands inside them.
-            from .manifest import MAX_WORDS_PANEL, MAX_WORDS_PANEL_ONE
+            from .manifest import (
+                MAX_ELEMENT_CHARS,
+                MAX_WORDS_PANEL,
+                MAX_WORDS_PANEL_ONE,
+            )
 
             lines.append("")
             lines.append(
                 f"HOW MUCH COPY PER SLIDE — hard limits, checked before "
                 f"anything is drawn:\n"
+                f"- ANY SINGLE LINE — a headline, a supporting line, a line of "
+                f"dialogue — is {MAX_ELEMENT_CHARS} CHARACTERS MAXIMUM. That is "
+                "two lines of comic lettering on a phone. A longer string needs "
+                "a third line, the box grows past the bottom of the frame, and "
+                "the reader gets half a sentence. Split it across two slides "
+                "instead, or cut it.\n"
                 f"- SLIDE 1: {MAX_WORDS_PANEL_ONE} WORDS MAXIMUM, across the "
                 "headline and supporting line together. It has half a second "
                 "to earn the swipe and a block of text eating the frame is what "
