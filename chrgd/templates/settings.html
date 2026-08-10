@@ -174,12 +174,17 @@
       Last clear-out: {{ retention.last_sweep[:16] if retention.last_sweep else 'not yet' }}.
     </p>
     {% else %}
-    <p class="sub">Automatic clear-out is <b>off</b> (<code>CHRGD_RETENTION_DAYS=0</code>), so nothing is
-      ever deleted and the library grows forever. Set it to 30 to switch it back on.</p>
+    <p class="sub">Automatic clear-out is <b>off</b>, so nothing is ever deleted and the library keeps
+      growing — which is also what makes these screens slower over time. To switch it on, check what
+      would go first (<b>What would go?</b> below, or <code>chrgd prune --dry-run</code>), then set
+      <code>CHRGD_RETENTION_DAYS=30</code> in <code>.env</code> and restart. It's off by default
+      because the first clear-out on a studio this old can't be undone.</p>
     {% endif %}
     <div class="row" style="margin-top:12px">
       <button type="button" class="ghost" style="margin:0" onclick="retentionPreview()">What would go?</button>
+      {% if retention.days %}
       <button type="button" class="ghost" style="margin:0" onclick="retentionSweep(this)">Clear out now</button>
+      {% endif %}
       <span id="retention-out" class="muted" style="font-size:12.5px"></span>
     </div>
   </div>
@@ -191,7 +196,8 @@ async function retentionPreview(){
   out.textContent = 'checking…';
   const r = await fetch('/api/retention');
   const d = await r.json();
-  out.textContent = d.preview.dry_run ? `Would remove: ${d.preview.summary}` : d.preview.summary;
+  out.textContent = `At ${d.preview.days} days (nothing older than ${d.preview.cutoff}) `
+                  + `this would remove: ${d.preview.summary}`;
 }
 async function retentionSweep(btn){
   const out = document.getElementById('retention-out');

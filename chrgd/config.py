@@ -147,8 +147,14 @@ class Settings(BaseSettings):
     # --- Retention (auto-delete old content) ---
     # Content this many days past its last activity is deleted automatically:
     # the rendered images (which fill the disk) and the idea row (which slows
-    # every screen that reads the backlog). 0 disables the sweep entirely.
-    retention_days: int = Field(default=30, alias="CHRGD_RETENTION_DAYS")
+    # every screen that reads the backlog). 30 is the intended setting.
+    #
+    # Ships as 0 (off) DELIBERATELY. This deletes real work permanently, and a
+    # studio that has been running for months would lose most of its library to
+    # the first sweep after an upgrade — an irreversible surprise nobody asked
+    # for at the moment they pulled a new version. Arm it once you have seen
+    # what it would take: `chrgd prune --dry-run`, then set this to 30.
+    retention_days: int = Field(default=0, alias="CHRGD_RETENTION_DAYS")
     # A post with logged results keeps its (tiny) row so the learning loop still
     # has a corpus to steer builds with; its images go either way. Set false to
     # delete rated posts outright as well.

@@ -232,17 +232,26 @@ screen's "used recently" nudges) reads rows carrying whole slide sets and prose
 episodes, so a library that only ever grows makes the whole studio slower — and
 the rendered images fill the disk alongside it.
 
-`chrgd/retention.py` deletes content **30 days** past its last activity
-(`CHRGD_RETENTION_DAYS`, 0 to disable): the idea row and its `output/<id>/`
-images, plus stale `runs`/`jobs` history and orphaned asset folders. An idea's
+`chrgd/retention.py` deletes content `CHRGD_RETENTION_DAYS` past its last
+activity: the idea row and its `output/<id>/` images, plus stale `runs`/`jobs`
+history and orphaned asset folders. An idea's
 age is the newest of created / built / exported / scheduled, so a post scheduled
 for next week is never "old". Nothing with a queued or running job is touched,
 and a post you rated keeps its text row so the learning loop still has results to
 steer builds with (`CHRGD_RETENTION_KEEP_RATED=false` to delete those too).
 
-The web app sweeps once a day on the research worker; Settings → Storage shows
-the window and offers a preview or an immediate clear-out; `chrgd prune` does the
-same from the CLI.
+**It ships off (`CHRGD_RETENTION_DAYS=0`) on purpose** — the first sweep on a
+studio that has been running for months deletes most of its library, and that is
+not something an upgrade should do to you. Arm it once you have seen the number:
+
+```bash
+chrgd prune --dry-run       # exactly what the first sweep would take
+# happy? set CHRGD_RETENTION_DAYS=30 in .env and restart
+```
+
+From then on the web app sweeps once a day on the research worker; Settings →
+Storage shows the window and offers a preview or an immediate clear-out; `chrgd
+prune` does the same from the CLI.
 
 ### Where the credits go
 

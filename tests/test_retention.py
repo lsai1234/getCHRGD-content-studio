@@ -22,9 +22,11 @@ NOW = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
 
 @pytest.fixture()
 def settings(tmp_path):
+    """A studio that has ARMED retention — it ships off (see the tests below)."""
     return Settings(
         CHRGD_DB_PATH=tmp_path / "t.db",
         CHRGD_OUTPUT_DIR=tmp_path / "out",
+        CHRGD_RETENTION_DAYS=30,
     )
 
 
@@ -246,9 +248,28 @@ def test_sweep_is_skipped_entirely_when_retention_is_off(store, tmp_path):
     assert store.get_setting(LAST_SWEEP_KEY) is None
 
 
-def test_default_window_is_thirty_days(settings):
-    assert settings.retention_days == 30
-    assert settings.retention_keep_rated is True
+def test_retention_ships_switched_off(tmp_path):
+    """Upgrading must never be the thing that deletes months of someone's work.
+
+    The operator arms this deliberately, after seeing what the first sweep
+    would take (`chrgd prune --dry-run`).
+    """
+    shipped = Settings(CHRGD_DB_PATH=tmp_path / "t.db")
+    assert shipped.retention_days == 0
+    assert shipped.retention_keep_rated is True
+
+
+def test_an_unarmed_studio_never_sweeps(tmp_path):
+    shipped = Settings(
+        CHRGD_DB_PATH=tmp_path / "t.db", CHRGD_OUTPUT_DIR=tmp_path / "out"
+    )
+    shipped.ensure_dirs()
+    with Store(shipped.db_path) as store:
+        _seed(store, shipped, "G-0001", age_days=400)
+
+        assert sweep_if_due(store, shipped, now=NOW) is None
+        assert prune(store, shipped, now=NOW).total_ideas == 0
+        assert store.get_idea("G-0001") is not None
 
 
 # --- the studio's own controls -----------------------------------------------
@@ -266,6 +287,7 @@ def client(tmp_path):
         CHRGD_WEB_USERNAME="admin",
         CHRGD_WEB_PASSWORD="s3cret",
         CHRGD_SECRET_KEY="test-secret-key",
+        CHRGD_RETENTION_DAYS=30,
     )
     web.ensure_dirs()
     c = TestClient(create_app(web, run_worker=False))
@@ -320,3 +342,37 @@ def test_settings_page_explains_the_window(client):
     body = client.get("/settings").text
     assert "30 days" in body
     assert "Clear out now" in body
+
+
+def test_an_unarmed_studio_can_still_ask_what_would_go(tmp_path):
+    """The preview has to work while retention is OFF — that is when you ask."""
+    from fastapi.testclient import TestClient
+
+    from chrgd.webapp import create_app
+
+    off = Settings(
+        CHRGD_DB_PATH=tmp_path / "w.db", CHRGD_OUTPUT_DIR=tmp_path / "o",
+        CHRGD_WEB_USERNAME="admin", CHRGD_WEB_PASSWORD="pw",
+        CHRGD_SECRET_KEY="k" * 32,
+    )
+    off.ensure_dirs()
+    with Store(off.db_path) as store:
+        _seed(store, off, "G-0001", age_days=45)
+    c = TestClient(create_app(off, run_worker=False))
+    c.post("/login", data={"username": "admin", "password": "pw"},
+           follow_redirects=False)
+
+    body = c.get("/api/retention").json()
+    assert body["days"] == 0                 # still off...
+    assert body["preview"]["days"] == 30     # ...but the question is answerable
+    assert body["preview"]["ideas"] == 1
+
+    # And the clear-out refuses rather than inventing a window of its own.
+    assert c.post("/api/retention/sweep").json()["ideas"] == 0
+    with Store(off.db_path) as store:
+        assert store.get_idea("G-0001") is not None
+
+    # The page offers the preview but not the button.
+    page = c.get("/settings").text
+    assert "What would go?" in page
+    assert "Clear out now" not in page

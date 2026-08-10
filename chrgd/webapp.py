@@ -47,6 +47,10 @@ _DECAY_SHELF_DAYS = {"days": 5, "weeks": 21}
 # ship it in one response — the review wall was megabytes of HTML and the
 # calendar's tray parsed every idea in the database to find a dozen cards. These
 # are "what a person can actually use in one sitting", newest first.
+#: Window the Storage panel previews when retention is still switched off — the
+#: setting it is asking you to arm.
+_RETENTION_PREVIEW_DAYS = 30
+
 _TRAY_LIMIT = 60
 _REVIEW_LIMIT = 40
 _BACKLOG_PAGE = 100
@@ -523,12 +527,18 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         )
 
     @app.get("/api/retention")
-    def api_retention(_: str = Depends(require_user)):
-        """The retention window, and what the next sweep would take."""
+    def api_retention(days: int = 0, _: str = Depends(require_user)):
+        """The retention window, and what a sweep would take.
+
+        Previews at `days`, or the configured window, or 30 — so the question
+        "what would this cost me?" is answerable while retention is still off,
+        which is exactly when you need to ask it.
+        """
         from .retention import LAST_SWEEP_KEY, prune
 
+        window = days or settings.retention_days or _RETENTION_PREVIEW_DAYS
         with _store(settings) as store:
-            preview = prune(store, settings, dry_run=True)
+            preview = prune(store, settings, days=window, dry_run=True)
             last_sweep = store.get_setting(LAST_SWEEP_KEY) or ""
         return {
             "days": settings.retention_days,
@@ -536,6 +546,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "last_sweep": last_sweep,
             "preview": {
                 "dry_run": True,
+                "days": window,
                 "summary": preview.summary(),
                 "ideas": preview.total_ideas,
                 "mb": round(preview.bytes_freed / (1024 * 1024), 1),
@@ -548,6 +559,15 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         """Run the clear-out now instead of waiting for the daily sweep."""
         from .retention import LAST_SWEEP_KEY, prune
 
+        if settings.retention_days <= 0:
+            # Refuse rather than silently doing nothing: with retention off
+            # there is no window to sweep, and picking one here would delete
+            # content the operator never set a policy for.
+            return {
+                "summary": "Automatic clear-out is off — set CHRGD_RETENTION_DAYS "
+                           "in .env and restart before running one.",
+                "ideas": 0, "mb": 0.0, "cutoff": "",
+            }
         with _store(settings) as store:
             result = prune(store, settings)
             # Stamping the schedule here means a manual clear-out also resets
