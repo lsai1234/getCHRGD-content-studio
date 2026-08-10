@@ -41,6 +41,11 @@ RESEARCH_KINDS = frozenset({
 # that keeps slow research scans out of the fast lane).
 VIDEO_KINDS = frozenset({"video"})
 
+# How often the sweeping worker even asks whether a retention sweep is due.
+# The real once-a-day schedule lives in the DB (`retention.sweep_if_due`); this
+# only stops an idle loop asking five times a second.
+_SWEEP_CHECK_SECONDS = 900.0
+
 
 class Worker:
     def __init__(
@@ -52,6 +57,7 @@ class Worker:
         exclude: "frozenset[str] | None" = None,
         name: str = "chrgd-worker",
         recover_on_start: bool = True,
+        sweeps: bool = False,
     ):
         self.settings = settings
         self.poll_interval = poll_interval
@@ -66,6 +72,9 @@ class Worker:
         # "interrupted". The multi-worker lifespan does it explicitly and passes
         # recover_on_start=False here.
         self._recover_on_start = recover_on_start
+        # Exactly one worker owns the retention sweep, so the lanes don't race.
+        self._sweeps = sweeps
+        self._last_sweep_check = 0.0
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._store: Store | None = None
@@ -101,7 +110,32 @@ class Worker:
             except Exception:  # noqa: BLE001 - a bad job must not kill the loop
                 did = None
             if did is None:
+                self.maybe_sweep()
                 self._stop.wait(self.poll_interval)
+
+    # --- retention ----------------------------------------------------------
+
+    def maybe_sweep(self) -> None:
+        """Delete aged-out content, at most once a day, and only when idle.
+
+        Only the worker asked to sweep does this, so the three lanes don't race
+        each other, and it runs between jobs so a VACUUM can never sit in front
+        of a build the editor is waiting on. `sweep_if_due` persists the last
+        sweep time, so the check below is just a cheap guard on how often we
+        bother asking.
+        """
+        if not self._sweeps:
+            return
+        now = time.monotonic()
+        if now - self._last_sweep_check < _SWEEP_CHECK_SECONDS:
+            return
+        self._last_sweep_check = now
+        try:
+            from .retention import sweep_if_due
+
+            sweep_if_due(self.store(), self.settings)
+        except Exception:  # noqa: BLE001 - housekeeping must not kill the loop
+            pass
 
     # --- processing ---------------------------------------------------------
 

@@ -324,11 +324,15 @@ def invent_rivals(
     profile=None,
 ) -> tuple[list[ConceptCandidate], float]:
     """Stage A — several genuinely different openers for the same post."""
-    from .pipeline import OpenAIChatClient, engine_base, estimate_cost
+    from .pipeline import OpenAIChatClient, estimate_cost, voice_base
 
     if client is None:
         client = OpenAIChatClient(settings)
-    system = engine_base() + "\n" + RIVALS_CONTRACT
+    # `voice_base`, not `engine_base`: the contract below already says exactly
+    # what this call must produce, and the post it opens is already written, so
+    # the ~9,000 tokens of routing/architecture/QA doctrine were being bought
+    # once per attempt and used for nothing.
+    system = voice_base() + "\n" + RIVALS_CONTRACT
     if profile is not None:
         system = _with_focus(system, profile.rival_focus)
     result = client.complete(system, _rivals_payload(idea, slides, count))
@@ -712,13 +716,15 @@ def refine_slide_one(
     """One creative pass that sharpens slide 1 against the judge's weakness."""
     from .pipeline import (
         OpenAIChatClient,
-        engine_base,
         estimate_cost,
+        voice_base,
     )
 
     if client is None:
         client = OpenAIChatClient(settings)
-    system = engine_base() + "\n" + REFINE_CONTRACT
+    # Rewriting one headline against a named weakness — same reasoning as
+    # `invent_rivals`: it needs the voice, not the whole carousel engine.
+    system = voice_base() + "\n" + REFINE_CONTRACT
 
     lines = [
         "Sharpen slide 1 of this carousel to a 10/10 scroll-stopper.",
@@ -762,6 +768,17 @@ def _apply_rewrite(idea: Idea, slides: list, rewrite: SlideOneRewrite) -> None:
         slide0["image_prompt"] = rewrite.image_prompt.strip()
     if rewrite.visual_intent.strip():
         slide0["visual_intent"] = rewrite.visual_intent.strip()
+
+
+def _snapshot(idea: Idea, slides: list) -> tuple[dict, str]:
+    """Slide 1 and the hook as they stand, so a worse rewrite can be undone."""
+    return dict(slides[0]), idea.hook
+
+
+def _restore(idea: Idea, slides: list, snap: tuple[dict, str]) -> None:
+    slide0, hook = snap
+    slides[0] = dict(slide0)
+    idea.hook = hook
 
 
 def _apply_candidate(idea: Idea, slides: list, cand: ConceptCandidate) -> None:
@@ -984,7 +1001,17 @@ def gate_slide_one(
             stage("tournament", "off", "")
 
         # Stage C — the winner has to clear the bar on its own.
+        #
+        # The loop keeps the BEST version it has seen rather than the last one.
+        # That is both cheaper and better: sharpening a headline is not
+        # monotonic, and the old loop would spend a creative call on a rewrite,
+        # a judge call scoring it lower than what it replaced, and then render
+        # the worse one. Now a round that fails to improve ends the loop and the
+        # best concept is put back.
         verdict: ConceptVerdict | None = None
+        best_score = -1
+        best_verdict: ConceptVerdict | None = None
+        best_snapshot = _snapshot(idea, slides)
         for rnd in range(1, max_rounds + 1):
             result.rounds = rnd
             stage(
@@ -997,10 +1024,25 @@ def gate_slide_one(
                 judge.judge(_with_focus(JUDGE_SYSTEM, profile.judge_focus),
                             _concept_payload(idea, slides[0]))
             )
-            result.verdict = verdict
-            result.score = verdict.score
+            improved = verdict.score > best_score
+            if improved:
+                best_score, best_verdict = verdict.score, verdict
+                best_snapshot = _snapshot(idea, slides)
+            result.verdict = best_verdict
+            result.score = best_score
             if verdict.score >= min_score:
                 result.passed = True
+                break
+            if not improved:
+                # The rewrite made it worse (or no different). Another one is
+                # not going to find it — put the better concept back and stop.
+                _restore(idea, slides, best_snapshot)
+                stage(
+                    "score", "running",
+                    f"the rewrite scored {verdict.score}, below the "
+                    f"{best_score} it replaced — keeping the stronger opener",
+                    round=rnd, of=max_rounds,
+                )
                 break
             if rnd < max_rounds:
                 stage(

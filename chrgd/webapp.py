@@ -25,7 +25,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .character import charges_for_route
 from .config import Settings, get_settings
-from .db import Store
+from .db import Store, shared_store
 from .models import MAX_SLIDES, MIN_SLIDES, Idea, PostType, Status
 from .webauth import auth_configured, verify_credentials
 from .worker import (
@@ -43,12 +43,39 @@ from .worker import (
 # Days a topical idea stays fresh before the calendar flags it as going stale.
 _DECAY_SHELF_DAYS = {"days": 5, "weeks": 21}
 
+# Ceilings on the list screens. Each of these used to read the WHOLE backlog and
+# ship it in one response — the review wall was megabytes of HTML and the
+# calendar's tray parsed every idea in the database to find a dozen cards. These
+# are "what a person can actually use in one sitting", newest first.
+_TRAY_LIMIT = 60
+_REVIEW_LIMIT = 40
+_BACKLOG_PAGE = 100
+_API_BACKLOG_LIMIT = 200
+
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
 
 def _store(settings: Settings) -> Store:
-    settings.ensure_dirs()
-    return Store(settings.db_path)
+    """This thread's connection to the studio DB.
+
+    Shared rather than per-request: a page like /create reads the store five or
+    six times, and opening (and re-preparing) a connection each time was pure
+    latency. `shared_store` hands back the same object and ignores `close()`,
+    so every `with _store(settings) as store:` below still reads correctly.
+    """
+    _ensure_dirs(settings)
+    return shared_store(settings.db_path)
+
+
+_DIRS_READY: set[str] = set()
+
+
+def _ensure_dirs(settings: Settings) -> None:
+    """`mkdir -p` the studio's directories once per process, not per request."""
+    key = f"{settings.db_path}|{settings.output_dir}"
+    if key not in _DIRS_READY:
+        settings.ensure_dirs()
+        _DIRS_READY.add(key)
 
 
 def _safe_output_path(settings: Settings, *parts: str) -> Path:
@@ -139,9 +166,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 settings, poll_interval=0.2, exclude=RESEARCH_KINDS | VIDEO_KINDS,
                 name="chrgd-fast", recover_on_start=False,
             )
+            # The research lane also owns the daily retention sweep: it is idle
+            # most of the day, and putting housekeeping anywhere near the fast
+            # lane would make a build wait behind a VACUUM.
             research = Worker(
                 settings, kinds=RESEARCH_KINDS,
-                name="chrgd-research", recover_on_start=False,
+                name="chrgd-research", recover_on_start=False, sweeps=True,
             )
             video = Worker(
                 settings, kinds=VIDEO_KINDS,
@@ -337,16 +367,24 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 ).fetchall()
             ]
             runs = [dict(r) for r in store.list_runs(20)]
+            # Where the credits went, by stage — a single total tells you the
+            # bill, not which part of the engine is writing it.
+            since = datetime.now(timezone.utc) - timedelta(days=30)
+            by_stage = store.spend_by_command(since)
+            spend_30d = sum(s["spend"] for s in by_stage)
         return render_page(
             request, "home.html", "dashboard",
             counts=counts, spend=spend, scheduled=scheduled, runs=runs,
+            by_stage=by_stage, spend_30d=spend_30d,
         )
 
-    def _amp_situations(settings) -> list[dict]:
+    # The create screen's five show panels each read the store. They take an
+    # open store rather than opening their own, so the page makes one trip
+    # instead of five.
+    def _amp_situations(store) -> list[dict]:
         from .character import load_situations, used_situations
 
-        with _store(settings) as store:
-            used = used_situations(store)
+        used = used_situations(store)
         return [
             {"key": s.key, "label": s.label, "setup": s.setup,
              "state": s.default_state(), "tips": s.tips,
@@ -354,31 +392,28 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             for s in load_situations().values()
         ]
 
-    def _ingredient_list(settings) -> list[dict]:
+    def _ingredient_list(store) -> list[dict]:
         from .ingredients import covered, load_ingredients
 
-        with _store(settings) as store:
-            done = covered(store)
+        done = covered(store)
         return [
             {"key": i.key, "label": i.label, "question": i.question,
              "covered": i.key in done}
             for i in load_ingredients().values()
         ]
 
-    def _session_nudge(settings) -> str:
+    def _session_nudge(store) -> str:
         from .sessions import suggestion
 
-        with _store(settings) as store:
-            return suggestion(store)
+        return suggestion(store)
 
-    def _roster_with_canon(settings) -> list[dict]:
+    def _roster_with_canon(store) -> list[dict]:
         """The roster, plus what the show has actually established for each —
         so the cast picker shows who's carrying a storyline, not just a trait."""
         from .roster import load_roster
         from .series import load_canon
 
-        with _store(settings) as store:
-            canon = load_canon(store)
+        canon = load_canon(store)
         out = []
         for c in load_roster().values():
             rec = canon.for_character(c.key)
@@ -392,11 +427,10 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             })
         return out
 
-    def _canon_summary(settings) -> dict:
+    def _canon_summary(store) -> dict:
         from .series import load_canon
 
-        with _store(settings) as store:
-            canon = load_canon(store)
+        canon = load_canon(store)
         return {
             # Empty unless the operator has deliberately set an arc — the show
             # is a persistent world, not a season of a format.
@@ -413,7 +447,6 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     ):
         from .character import AMP_STATES, STATE_ORDER
         from .mechanics import load_mechanics
-        from .roster import load_roster
         from .sessions import load_axes
         from .shows import ordered_shows
         from .territories import in_season
@@ -422,6 +455,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         # per post, so the journey goes source → door directly.
         # The five recurring shows are server-rendered so the picker paints on
         # first load rather than after a round-trip.
+        with _store(settings) as store:
+            amp = _amp_situations(store)
+            ingredients = _ingredient_list(store)
+            nudge = _session_nudge(store)
+            roster = _roster_with_canon(store)
+            canon = _canon_summary(store)
         return render_page(
             request, "create.html", "create",
             mechanics=[m.model_dump() for m in load_mechanics().values()],
@@ -434,7 +473,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             ],
             # AMP's own screen: the situation bank with what's been used
             # recently marked (a nudge, never a rule — D12) and his states.
-            amp_situations=_amp_situations(settings),
+            amp_situations=amp,
             amp_states=[
                 {"key": k, "label": AMP_STATES[k]["label"],
                  "mood": AMP_STATES[k]["mood"]}
@@ -442,17 +481,17 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             ],
             # STRAIGHT UP's own screen: the ingredient library, with what's
             # already been covered marked.
-            ingredients=_ingredient_list(settings),
+            ingredients=ingredients,
             # THE SESSION's own screen: the variant matrix + the staleness nudge.
             session_axes=[
                 {"key": a.key, "label": a.label, "required": a.required,
                  "options": [{"key": k, "label": v} for k, v in a.options.items()]}
                 for a in load_axes().values()
             ],
-            session_nudge=_session_nudge(settings),
+            session_nudge=nudge,
             # THE MULTIVERSE's own screen: the roster and where the canon is.
-            roster=_roster_with_canon(settings),
-            canon=_canon_summary(settings),
+            roster=roster,
+            canon=canon,
             # LIVE WIRE's own screen: the in-season interest territories.
             territories=[
                 {"key": t.key, "label": t.label, "weight": t.weight}
@@ -469,12 +508,59 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     @app.get("/settings", response_class=HTMLResponse)
     def settings_page(request: Request, _: str = Depends(require_user_page)):
         from .profile import load_profile
+        from .retention import LAST_SWEEP_KEY
 
         with _store(settings) as store:
             profile = load_profile(store)
+            last_sweep = store.get_setting(LAST_SWEEP_KEY) or ""
         return render_page(
-            request, "settings.html", "settings", profile=profile.model_dump()
+            request, "settings.html", "settings", profile=profile.model_dump(),
+            retention={
+                "days": settings.retention_days,
+                "keep_rated": settings.retention_keep_rated,
+                "last_sweep": last_sweep,
+            },
         )
+
+    @app.get("/api/retention")
+    def api_retention(_: str = Depends(require_user)):
+        """The retention window, and what the next sweep would take."""
+        from .retention import LAST_SWEEP_KEY, prune
+
+        with _store(settings) as store:
+            preview = prune(store, settings, dry_run=True)
+            last_sweep = store.get_setting(LAST_SWEEP_KEY) or ""
+        return {
+            "days": settings.retention_days,
+            "keep_rated": settings.retention_keep_rated,
+            "last_sweep": last_sweep,
+            "preview": {
+                "dry_run": True,
+                "summary": preview.summary(),
+                "ideas": preview.total_ideas,
+                "mb": round(preview.bytes_freed / (1024 * 1024), 1),
+                "cutoff": preview.cutoff.date().isoformat(),
+            },
+        }
+
+    @app.post("/api/retention/sweep")
+    def api_retention_sweep(_: str = Depends(require_user)):
+        """Run the clear-out now instead of waiting for the daily sweep."""
+        from .retention import LAST_SWEEP_KEY, prune
+
+        with _store(settings) as store:
+            result = prune(store, settings)
+            # Stamping the schedule here means a manual clear-out also resets
+            # the daily timer, rather than the sweep running again minutes later.
+            store.set_setting(
+                LAST_SWEEP_KEY, datetime.now(timezone.utc).isoformat()
+            )
+        return {
+            "summary": result.summary(),
+            "ideas": result.total_ideas,
+            "mb": round(result.bytes_freed / (1024 * 1024), 1),
+            "cutoff": result.cutoff.date().isoformat(),
+        }
 
     @app.post("/settings")
     async def settings_save(
@@ -562,14 +648,27 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
     @app.get("/backlog", response_class=HTMLResponse)
     def backlog_page(
-        request: Request, status: str | None = None, _: str = Depends(require_user_page)
+        request: Request, status: str | None = None, page: int = 1,
+        _: str = Depends(require_user_page),
     ):
+        # Paged and newest-first. Unpaged, this table grew a row (and a set of
+        # buttons) for every idea ever captured, so the page it rendered got
+        # slower every single day the studio ran.
         st = Status(status) if status else None
+        page = max(1, page)
+        where, params = ("status = ?", (st.value,)) if st else ("", ())
         with _store(settings) as store:
-            ideas = store.list_ideas(status=st)
+            total = store.count_where(where, params)
+            ideas = store.list_summaries(
+                status=st, limit=_BACKLOG_PAGE,
+                offset=(page - 1) * _BACKLOG_PAGE, newest_first=True,
+            )
         return render_page(
             request, "backlog.html", "backlog",
-            ideas=ideas, statuses=[s.value for s in Status], current_status=status or "",
+            ideas=ideas, statuses=[s.value for s in Status],
+            current_status=status or "",
+            page=page, page_size=_BACKLOG_PAGE, total=total,
+            has_prev=page > 1, has_next=page * _BACKLOG_PAGE < total,
         )
 
     @app.get("/build", response_class=HTMLResponse)
@@ -579,12 +678,34 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         return render_page(request, "build.html", "build", counts=counts)
 
     @app.get("/review", response_class=HTMLResponse)
-    def review_page(request: Request, _: str = Depends(require_user_page)):
+    def review_page(
+        request: Request, page: int = 1, _: str = Depends(require_user_page)
+    ):
+        """Everything flagged at QA, then the most recent approved posts.
+
+        The approved half is paged: it used to render every post ever built —
+        every slide, every field, every image tag — into a single page, which is
+        what made this screen take seconds and megabytes to open.
+        """
+        page = max(1, page)
         with _store(settings) as store:
             review = store.list_ideas(status=Status.review)
-            done = [i for i in store.list_ideas(status=Status.done) if i.slides_json]
-        posts = [_post_view(i) for i in review] + [_post_view(i) for i in done]
-        return render_page(request, "review.html", "review", posts=posts)
+            done_total = store.count_where(
+                "status = 'done' AND slides_json IS NOT NULL AND slides_json != ''"
+            )
+            done = store.list_ideas(
+                status=Status.done, limit=_REVIEW_LIMIT,
+                offset=(page - 1) * _REVIEW_LIMIT, newest_first=True,
+            )
+        posts = [_post_view(i) for i in review] + [
+            _post_view(i) for i in done if i.slides_json
+        ]
+        return render_page(
+            request, "review.html", "review", posts=posts,
+            page=page, has_prev=page > 1,
+            has_next=page * _REVIEW_LIMIT < done_total,
+            done_total=done_total,
+        )
 
     @app.get("/trends", response_class=HTMLResponse)
     def trends_page(request: Request, _: str = Depends(require_user_page)):
@@ -649,10 +770,27 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     # --- JSON API -----------------------------------------------------------
 
     @app.get("/api/backlog")
-    def api_backlog(request: Request, status: str | None = None, _: str = Depends(require_user)):
+    def api_backlog(
+        request: Request, status: str | None = None,
+        limit: int = _API_BACKLOG_LIMIT, offset: int = 0, full: bool = False,
+        _: str = Depends(require_user),
+    ):
+        """Backlog rows, newest first.
+
+        Summary rows by default (no slides/route/caption payloads — those made
+        this endpoint tens of megabytes on a studio that had been running a
+        while). `full=1` returns complete ideas for the page you ask for.
+        """
         st = Status(status) if status else None
+        limit = max(1, min(limit, 1000))
         with _store(settings) as store:
-            return [i.model_dump(mode="json") for i in store.list_ideas(status=st)]
+            rows = store.list_summaries(
+                status=st, limit=limit, offset=max(0, offset), newest_first=True
+            )
+            if not full:
+                return rows
+            hydrated = (store.get_idea(r["idea_id"]) for r in rows)
+            return [i.model_dump(mode="json") for i in hydrated if i is not None]
 
     @app.post("/api/capture")
     def api_capture(
@@ -2035,23 +2173,39 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "scheduled_for": parsed.isoformat() if parsed else None,
         }
 
-    def _card(idea: Idea) -> dict:
-        """Compact calendar-card payload for one idea."""
-        paths = json.loads(idea.asset_paths_json) if idea.asset_paths_json else []
+    def _aware(value: str | None) -> datetime | None:
+        """Parse a stored ISO timestamp into an aware UTC datetime."""
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value)
+        except (TypeError, ValueError):
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+    def _card(row: dict) -> dict:
+        """Compact calendar-card payload for one summary row.
+
+        Takes a `Store.list_summaries` dict rather than a full `Idea`: a card
+        shows a label, a thumbnail and a few flags, and hydrating whole ideas
+        (slides, route, the prose episode) to render them was most of what the
+        calendar spent its time on.
+        """
+        paths = json.loads(row["assets"]) if row.get("assets") else []
         thumb = Path(paths[0]).name if paths else None
+        now = datetime.now(timezone.utc)
+        decay = row.get("decay_speed")
         stale = False
-        if idea.decay_speed and not idea.exported_at:
-            shelf = _DECAY_SHELF_DAYS.get(idea.decay_speed.value)
-            if shelf is not None:
-                created = idea.created_at
-                if created.tzinfo is None:
-                    created = created.replace(tzinfo=timezone.utc)
-                stale = datetime.now(timezone.utc) - created > timedelta(days=shelf)
+        if decay and not row.get("exported_at"):
+            shelf = _DECAY_SHELF_DAYS.get(decay)
+            created = _aware(row.get("created_at"))
+            if shelf is not None and created is not None:
+                stale = now - created > timedelta(days=shelf)
         views = None
         rating = None
-        if idea.metrics_json:
+        if row.get("metrics_json"):
             try:
-                m = json.loads(idea.metrics_json)
+                m = json.loads(row["metrics_json"])
                 views = int(m.get("views") or 0) or None
                 rating = m.get("rating")
             except (json.JSONDecodeError, TypeError, ValueError):
@@ -2060,29 +2214,23 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         # (exported, or its scheduled slot has passed) and is rendered but not
         # yet rated wants a one-tap outcome. Without this the loop silently
         # starves at small-account scale.
-        sched = idea.scheduled_for
-        if sched is not None and sched.tzinfo is None:
-            sched = sched.replace(tzinfo=timezone.utc)
-        posted_ish = bool(idea.exported_at) or (
-            sched is not None and sched < datetime.now(timezone.utc)
-        )
+        sched = _aware(row.get("scheduled_for"))
+        posted_ish = bool(row.get("exported_at")) or (sched is not None and sched < now)
         needs_rating = bool(paths) and rating is None and posted_ish
         return {
-            "idea_id": idea.idea_id,
-            "label": idea.hook or idea.concept_note,
-            "status": idea.status.value,
-            "built": bool(idea.slides_json),
+            "idea_id": row["idea_id"],
+            "label": row.get("hook") or row.get("concept_note"),
+            "status": row["status"],
+            "built": bool(row.get("built")),
             "rendered": bool(paths),
-            "exported": bool(idea.exported_at),
+            "exported": bool(row.get("exported_at")),
             "thumb": thumb,
             "stale": stale,
-            "decay": idea.decay_speed.value if idea.decay_speed else None,
+            "decay": decay,
             "views": views,
             "rating": rating,
             "needs_rating": needs_rating,
-            "scheduled_for": (
-                idea.scheduled_for.isoformat() if idea.scheduled_for else None
-            ),
+            "scheduled_for": sched.isoformat() if sched else None,
         }
 
     @app.get("/api/calendar")
@@ -2110,15 +2258,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         days: dict[str, list[dict]] = {}
         tray: list[dict] = []
         with _store(settings) as store:
-            for idea in store.ideas_scheduled_between(start, end):
-                key = idea.scheduled_for.date().isoformat()
-                days.setdefault(key, []).append(_card(idea))
-            # Tray: built posts with no date yet — visible ammunition.
-            for idea in store.list_ideas():
-                if idea.scheduled_for or idea.exported_at:
-                    continue
-                if idea.status in (Status.done, Status.review) and idea.slides_json:
-                    tray.append(_card(idea))
+            for row in store.summaries_scheduled_between(start, end):
+                card = _card(row)
+                key = (card["scheduled_for"] or "")[:10]
+                days.setdefault(key, []).append(card)
+            # Tray: built posts with no date yet — visible ammunition. Found by
+            # SQL rather than by walking the whole backlog in Python.
+            tray = [_card(r) for r in store.unscheduled_summaries(limit=_TRAY_LIMIT)]
         return {
             "from": start.date().isoformat(),
             "to": end.date().isoformat(),

@@ -27,6 +27,8 @@ class RunSummary:
     exported: list[str] = field(default_factory=list)
     spend_usd: float = 0.0
     stopped: str | None = None
+    #: What the daily retention sweep cleared out, when one was due this run.
+    pruned: str | None = None
 
 
 def run_chain(
@@ -93,6 +95,16 @@ def run_chain(
             log.info("run.export exported=%d", len(summary.exported))
 
         summary.spend_usd = round(total, 4)
+
+        # Housekeeping, after the paid work and inside the try so it can never
+        # cost the run its summary. A studio driven entirely by the nightly
+        # `chrgd run` timer never starts the web app, so this is the only place
+        # its retention sweep would otherwise happen.
+        from .retention import sweep_if_due
+
+        swept = sweep_if_due(store, settings)
+        if swept is not None:
+            summary.pruned = swept.summary()
     finally:
         store.finish_run(
             run_id,

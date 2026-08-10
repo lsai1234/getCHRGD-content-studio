@@ -92,11 +92,7 @@ def covered(store) -> set[str]:
     """Ingredient keys already used by a post — a nudge, not an exclusion."""
     import json
 
-    rows = store.conn.execute(
-        "SELECT route_json FROM ideas WHERE route_json LIKE ? "
-        "ORDER BY idea_id DESC LIMIT 60",
-        (f'%"{ROUTE_KEY}"%',),
-    ).fetchall()
+    rows = store.recent_routes(f'"{ROUTE_KEY}"')
     out: set[str] = set()
     for row in rows:
         try:

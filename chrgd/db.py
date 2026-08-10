@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -75,6 +76,12 @@ CREATE TABLE IF NOT EXISTS ideas (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ideas_status ON ideas(status);
+-- The calendar reads a date window, the retention sweep and the backlog read by
+-- age, and the export screen reads what has shipped. Without these every one of
+-- those is a full scan of a table whose rows carry the slide + story JSON.
+CREATE INDEX IF NOT EXISTS idx_ideas_scheduled ON ideas(scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_ideas_created ON ideas(created_at);
+CREATE INDEX IF NOT EXISTS idx_ideas_exported ON ideas(exported_at);
 
 CREATE TABLE IF NOT EXISTS runs (
     run_id      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,6 +141,14 @@ def _to_db(value):
     return value
 
 
+# Schema creation is idempotent but not free: ~10 CREATE statements plus two
+# PRAGMA table_info reads. The web app opens a Store per request (several per
+# page), so paying that on every open showed up as real latency. Track which
+# files this process has already prepared and skip it the second time.
+_PREPARED: set[Path] = set()
+_PREPARE_LOCK = threading.Lock()
+
+
 class Store:
     """Thin, explicit wrapper over a SQLite connection."""
 
@@ -147,9 +162,25 @@ class Store:
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.execute("PRAGMA journal_mode = WAL")
         self.conn.execute("PRAGMA busy_timeout = 5000")
-        self.conn.executescript(_SCHEMA)
-        self._migrate()
-        self.conn.commit()
+        self._shared = False
+        resolved = self.db_path.resolve()
+        with _PREPARE_LOCK:
+            seen = resolved in _PREPARED
+            _PREPARED.add(resolved)
+        # `seen` is a hint, not a promise — the file can be deleted and recreated
+        # under us (tests do exactly that). Confirm with one sqlite_master lookup
+        # before trusting it, which is still orders of magnitude cheaper than
+        # re-running the whole schema script.
+        if not seen or not self._has_schema():
+            self.conn.executescript(_SCHEMA)
+            self._migrate()
+            self.conn.commit()
+
+    def _has_schema(self) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ideas' LIMIT 1"
+        ).fetchone()
+        return row is not None
 
     def _migrate(self) -> None:
         """Add columns introduced after a DB was first created (idempotent)."""
@@ -175,6 +206,11 @@ class Store:
             self.conn.execute("ALTER TABLE ideas ADD COLUMN metrics_json TEXT")
 
     def close(self) -> None:
+        # A shared store outlives the `with` block that borrowed it — closing it
+        # there would pull the connection out from under the next request on
+        # this thread. `shared_store` owns the lifetime instead.
+        if self._shared:
+            return
         self.conn.close()
 
     def __enter__(self) -> "Store":
@@ -399,17 +435,121 @@ class Store:
         ).fetchall()
         return [self._row_to_idea(r) for r in rows]
 
-    def list_ideas(self, status: Status | None = None) -> list[Idea]:
-        if status is None:
-            rows = self.conn.execute(
-                "SELECT * FROM ideas ORDER BY created_at ASC"
-            ).fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT * FROM ideas WHERE status = ? ORDER BY created_at ASC",
-                (status.value,),
-            ).fetchall()
-        return [self._row_to_idea(r) for r in rows]
+    #: What a list screen actually shows. The heavy columns an `Idea` carries —
+    #: slides_json, route_json (which holds the whole prose episode), caption —
+    #: are kilobytes each and are never read by a table row or a calendar card,
+    #: so the list queries below select these and derive the rest as booleans.
+    SUMMARY_COLUMNS = (
+        "idea_id", "status", "priority", "content_category", "concept_note",
+        "hook", "decay_speed", "created_at", "scheduled_for", "processed_at",
+        "exported_at", "metrics_json",
+        "slides_json IS NOT NULL AND slides_json != '' AS built",
+        "asset_paths_json AS assets",
+    )
+
+    def _summaries(self, where: str = "", params: tuple = (), order: str = "created_at ASC",
+                   limit: int | None = None, offset: int = 0) -> list[dict]:
+        sql = f"SELECT {', '.join(self.SUMMARY_COLUMNS)} FROM ideas"
+        args: list = list(params)
+        if where:
+            sql += f" WHERE {where}"
+        sql += f" ORDER BY {order}"
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            args += [limit, offset]
+        return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
+
+    def list_summaries(
+        self,
+        status: Status | None = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        newest_first: bool = False,
+    ) -> list[dict]:
+        """Light rows for a list screen — no slide, route or caption payloads."""
+        where, params = ("status = ?", (status.value,)) if status else ("", ())
+        order = "created_at DESC, idea_id DESC" if newest_first else "created_at ASC"
+        return self._summaries(where, params, order=order, limit=limit, offset=offset)
+
+    def unscheduled_summaries(self, limit: int = 200) -> list[dict]:
+        """Built-but-undated posts — the calendar's tray, newest first.
+
+        Filtered in SQL rather than by walking every idea in Python: the tray is
+        a handful of cards, but the old scan read (and JSON-parsed) the entire
+        backlog to find them.
+        """
+        return self._summaries(
+            "scheduled_for IS NULL AND exported_at IS NULL "
+            "AND status IN ('done','review') "
+            "AND slides_json IS NOT NULL AND slides_json != ''",
+            (),
+            order="created_at DESC",
+            limit=limit,
+        )
+
+    def summaries_scheduled_between(self, start: datetime, end: datetime) -> list[dict]:
+        """Light rows for the calendar's date window, soonest first."""
+        return self._summaries(
+            "scheduled_for IS NOT NULL AND scheduled_for >= ? AND scheduled_for < ? "
+            "AND status != 'void'",
+            (start.isoformat(), end.isoformat()),
+            order="scheduled_for ASC",
+        )
+
+    def recent_routes(
+        self, needle: str, *, scan: int = 400, limit: int = 60
+    ) -> list[dict]:
+        """Recent ideas whose `route_json` mentions `needle`, newest first.
+
+        The create screen's "you've used this recently" nudges all ask this
+        question. A bare `route_json LIKE '%needle%'` cannot use an index, so
+        when the answer is "none" — the normal case for a show the studio isn't
+        running — SQLite reads the route JSON (slides, design system, the whole
+        prose episode) of every idea ever captured before it can say so. The
+        inner query bounds that to the newest `scan` ideas, which is all a
+        recency nudge could honestly look at anyway.
+        """
+        rows = self.conn.execute(
+            "SELECT idea_id, route_json, created_at FROM ("
+            "  SELECT idea_id, route_json, created_at FROM ideas"
+            "  WHERE route_json IS NOT NULL ORDER BY idea_id DESC LIMIT ?"
+            ") WHERE route_json LIKE ? LIMIT ?",
+            (max(1, scan), f"%{needle}%", max(1, limit)),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_where(self, where: str = "", params: tuple = ()) -> int:
+        sql = "SELECT COUNT(*) AS c FROM ideas"
+        if where:
+            sql += f" WHERE {where}"
+        return int(self.conn.execute(sql, params).fetchone()["c"])
+
+    def list_ideas(
+        self,
+        status: Status | None = None,
+        *,
+        limit: int | None = None,
+        offset: int = 0,
+        newest_first: bool = False,
+    ) -> list[Idea]:
+        """Full ideas. Prefer `list_summaries` unless you need the payloads —
+        every row here carries the slides, the route and the prose episode."""
+        sql = "SELECT * FROM ideas"
+        args: list = []
+        if status is not None:
+            sql += " WHERE status = ?"
+            args.append(status.value)
+        # idea_id breaks ties, so paging can't drop or repeat a row when several
+        # ideas share a created_at (a capture writes a whole dump at once).
+        sql += (
+            " ORDER BY created_at DESC, idea_id DESC" if newest_first
+            else " ORDER BY created_at ASC"
+        )
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            args += [limit, offset]
+        return [self._row_to_idea(r) for r in self.conn.execute(sql, args).fetchall()]
 
     def count(self, status: Status | None = None) -> int:
         if status is None:
@@ -434,6 +574,25 @@ class Store:
         return self.conn.execute(
             "SELECT * FROM runs ORDER BY run_id DESC LIMIT ?", (limit,)
         ).fetchall()
+
+    def spend_by_command(self, since: datetime | None = None) -> list[dict]:
+        """Spend grouped by stage, dearest first — where the credits actually go.
+
+        A single total answers "am I spending too much" but never "on what",
+        which is the only question you can act on. The stages are the `command`
+        values the engine records: build, render, concept, takes, angles,
+        revise, meta_scan, run.
+        """
+        sql = (
+            "SELECT command, COUNT(*) AS runs, COALESCE(SUM(spend_usd), 0) AS spend "
+            "FROM runs"
+        )
+        args: list = []
+        if since is not None:
+            sql += " WHERE started_at >= ?"
+            args.append(since.isoformat())
+        sql += " GROUP BY command HAVING spend > 0 ORDER BY spend DESC"
+        return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
 
     def finish_run(
         self,
@@ -602,3 +761,40 @@ class Store:
     @staticmethod
     def _row_to_idea(row: sqlite3.Row) -> Idea:
         return Idea.model_validate(dict(row))
+
+
+# --- shared connections -------------------------------------------------------
+
+_LOCAL = threading.local()
+
+
+def shared_store(db_path: str | Path) -> Store:
+    """A per-thread Store that is opened once and reused.
+
+    SQLite connections are cheap but not free, and the web app was opening one
+    per request — six on the create screen alone, each paying connect + PRAGMA.
+    Connections are per-thread by convention here, so the cache is thread-local:
+    the request threads, the three workers and the CLI each keep their own.
+
+    The returned store ignores `close()`, so existing `with _store(...) as s:`
+    call sites keep reading naturally without severing the shared connection.
+    """
+    cache: dict[Path, Store] = getattr(_LOCAL, "stores", None)
+    if cache is None:
+        cache = _LOCAL.stores = {}
+    key = Path(db_path).resolve()
+    store = cache.get(key)
+    if store is None:
+        store = Store(db_path)
+        store._shared = True
+        cache[key] = store
+    return store
+
+
+def close_shared_stores() -> None:
+    """Drop this thread's cached connections (test teardown / shutdown)."""
+    cache: dict[Path, Store] = getattr(_LOCAL, "stores", None) or {}
+    for store in cache.values():
+        store._shared = False
+        store.close()
+    cache.clear()

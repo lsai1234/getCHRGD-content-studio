@@ -113,7 +113,11 @@ class Settings(BaseSettings):
     # raise to 10 to be stricter (it'll simply use all the rounds more often).
     concept_gate_min_score: int = Field(default=9, alias="CHRGD_CONCEPT_GATE_MIN")
     # Max judge rounds (each failing round sharpens slide 1 and re-judges).
-    concept_gate_max_rounds: int = Field(default=3, alias="CHRGD_CONCEPT_GATE_ROUNDS")
+    # Two, not three: the tournament above has already explored the space, so a
+    # third pass is the same sharpener trying the same trick a third time — and
+    # the loop now stops early anyway when a rewrite doesn't beat what it
+    # replaced. Raise it if you want the extra rounds back.
+    concept_gate_max_rounds: int = Field(default=2, alias="CHRGD_CONCEPT_GATE_ROUNDS")
     # The opener TOURNAMENT (stages A+B). Sharpening one hook only ever makes
     # the same idea louder — it never leaves the neighbourhood of whatever the
     # build happened to write first. So before scoring, the engine invents
@@ -126,8 +130,10 @@ class Settings(BaseSettings):
         default=True, alias="CHRGD_CONCEPT_TOURNAMENT"
     )
     # How many rivals to invent (they compete against the built opener, so the
-    # field is this + 1). Below 4 the model tends to hedge toward the safe one.
-    concept_candidates: int = Field(default=4, alias="CHRGD_CONCEPT_CANDIDATES")
+    # field is this + 1). Three keeps a real field — four distinct openers to
+    # choose between — for one shorter completion; the rivals arrive in a single
+    # call, so this is output tokens rather than extra calls.
+    concept_candidates: int = Field(default=3, alias="CHRGD_CONCEPT_CANDIDATES")
     # The GLANCE test (stage D). The judge is shown only what a stranger
     # perceives in the half-second before the thumb decides — the headline and
     # the shape of the image, with none of the reasoning — and has to say what it
@@ -137,6 +143,18 @@ class Settings(BaseSettings):
 
     # --- Cost guard ---
     max_spend_per_run: float = Field(default=5.0, alias="CHRGD_MAX_SPEND_PER_RUN")
+
+    # --- Retention (auto-delete old content) ---
+    # Content this many days past its last activity is deleted automatically:
+    # the rendered images (which fill the disk) and the idea row (which slows
+    # every screen that reads the backlog). 0 disables the sweep entirely.
+    retention_days: int = Field(default=30, alias="CHRGD_RETENTION_DAYS")
+    # A post with logged results keeps its (tiny) row so the learning loop still
+    # has a corpus to steer builds with; its images go either way. Set false to
+    # delete rated posts outright as well.
+    retention_keep_rated: bool = Field(
+        default=True, alias="CHRGD_RETENTION_KEEP_RATED"
+    )
 
     # --- Logging ---
     log_level: str = Field(default="INFO", alias="CHRGD_LOG_LEVEL")

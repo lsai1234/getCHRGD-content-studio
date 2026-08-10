@@ -160,6 +160,10 @@ chrgd render G-0001 --dry-run     # branded placeholder backgrounds, no spend
 # Export the week's rendered posts to a Metricool bulk-import CSV:
 chrgd export --sample             # sample CSV to diff against Metricool's template
 chrgd export --week               # CSV + ready/ folder; marks rows exported
+
+# Clear out content past the retention window (the studio also does this daily):
+chrgd prune --dry-run             # what the next sweep would take
+chrgd prune                       # sweep now
 ```
 
 `render` generates a background per slide, then overlays the approved headline
@@ -195,6 +199,7 @@ chrgd/
   models.py    # Idea / Post / Slide models, status enums, QA gate
   capture.py   # dump → seed rows (LLM-free)
   pipeline.py  # OpenAI runner: seed row → validated post JSON + QA gate
+  retention.py # the daily clear-out: content past its window, rows + images
   brand.py     # brand.toml loader — canvas, safe zones, colours, fonts
   images.py    # carousel builder: background gen + Pillow text overlay
   publisher.py # Metricool CSV export + ready/ folder (Publisher backends)
@@ -219,6 +224,40 @@ One `ideas` table, two logical record types:
 
 Every write is idempotent — a re-run must not duplicate rows or re-bill. A `runs`
 table records what each pipeline run built, spent, and exported (used from M2+).
+
+### Retention — the library clears itself out
+
+Every screen that reads the library (the calendar, the review wall, the create
+screen's "used recently" nudges) reads rows carrying whole slide sets and prose
+episodes, so a library that only ever grows makes the whole studio slower — and
+the rendered images fill the disk alongside it.
+
+`chrgd/retention.py` deletes content **30 days** past its last activity
+(`CHRGD_RETENTION_DAYS`, 0 to disable): the idea row and its `output/<id>/`
+images, plus stale `runs`/`jobs` history and orphaned asset folders. An idea's
+age is the newest of created / built / exported / scheduled, so a post scheduled
+for next week is never "old". Nothing with a queued or running job is touched,
+and a post you rated keeps its text row so the learning loop still has results to
+steer builds with (`CHRGD_RETENTION_KEEP_RATED=false` to delete those too).
+
+The web app sweeps once a day on the research worker; Settings → Storage shows
+the window and offers a preview or an immediate clear-out; `chrgd prune` does the
+same from the CLI.
+
+### Where the credits go
+
+The dashboard's **Where the credits go** table breaks the last 30 days of spend
+down by stage (build, render, concept, takes, angles, revise, meta_scan) with a
+per-run average, so an expensive stage is visible rather than buried in one
+total.
+
+Two things keep that bill down by construction. Calls that *write a post* get the
+full engine prompt (`engine_base()`); calls that only sharpen or re-angle one
+already-written headline get `voice_base()` — the brand voice and the UK spine,
+about a sixth of the size. And the concept gate's sharpening loop keeps the
+**best-scoring** version rather than the last one, stopping as soon as a rewrite
+fails to beat what it replaced, so a round that isn't working costs one judge
+call instead of a creative call plus a worse opener.
 
 ## Configuration
 

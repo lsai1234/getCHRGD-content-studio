@@ -355,11 +355,7 @@ def used_situations(store, *, limit: int = 8) -> set[str]:
     Feeds the create screen's "recently used" marks. A NUDGE, never a rule
     (D12): the editor can pick a used situation and nothing stops them.
     """
-    rows = store.conn.execute(
-        "SELECT route_json FROM ideas WHERE route_json LIKE '%\"amp_situation\"%' "
-        "ORDER BY idea_id DESC LIMIT ?",
-        (max(1, limit),),
-    ).fetchall()
+    rows = store.recent_routes('"amp_situation"', limit=limit)
     out: set[str] = set()
     for row in rows:
         try:

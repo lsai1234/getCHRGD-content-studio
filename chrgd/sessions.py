@@ -131,11 +131,7 @@ def brief_block(variant: dict) -> str:
 
 def recent_variants(store, *, days: int = 60) -> list[tuple[dict, datetime]]:
     """Variants used by recent SESSION posts, newest first."""
-    rows = store.conn.execute(
-        "SELECT route_json, created_at FROM ideas "
-        "WHERE route_json LIKE ? ORDER BY idea_id DESC LIMIT 60",
-        (f'%"{ROUTE_KEY}"%',),
-    ).fetchall()
+    rows = store.recent_routes(f'"{ROUTE_KEY}"')
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     out: list[tuple[dict, datetime]] = []
     for row in rows:

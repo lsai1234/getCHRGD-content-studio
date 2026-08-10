@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Protocol
 
@@ -281,6 +282,7 @@ class OpenAIChatClient:
         )
 
 
+@lru_cache(maxsize=1)
 def load_brand_bible() -> str:
     """The persona + gold-standard examples, if the file exists ('' otherwise)."""
     if BRAND_BIBLE_FILE.exists():
@@ -288,6 +290,7 @@ def load_brand_bible() -> str:
     return ""
 
 
+@lru_cache(maxsize=1)
 def load_playbook() -> str:
     """The proven-shapes library, if the file exists ('' otherwise)."""
     if PLAYBOOK_FILE.exists():
@@ -295,10 +298,17 @@ def load_playbook() -> str:
     return ""
 
 
+@lru_cache(maxsize=1)
 def engine_base() -> str:
     """The engine instructions + brand bible + viral playbook — shared by every
     reasoning call (build, takes, angles, concept development) so the voice AND
-    the evidence base are consistent everywhere."""
+    the evidence base are consistent everywhere.
+
+    Cached: this is ~37 KB assembled from four files, and it was being re-read
+    and re-concatenated on every single LLM call in the app. Editing the prompt
+    files takes effect on restart (or via `reload_prompts()`), which is how they
+    are deployed anyway.
+    """
     base = PROMPT_FILE.read_text(encoding="utf-8")
     bible = load_brand_bible()
     if bible:
@@ -321,6 +331,44 @@ def engine_base() -> str:
     if spine:
         base += "\n---\n\n# " + spine
     return base
+
+
+@lru_cache(maxsize=1)
+def voice_base() -> str:
+    """The brand's voice and the UK spine — and nothing else.
+
+    `engine_base()` is ~9,000 tokens of carousel doctrine: how to route an idea,
+    how to build a swipe arc, which visual engine to reach for, the six-stage
+    process, the QA rubric. A call that WRITES A POST needs all of it. A call
+    that rewrites one headline, or invents four rival openers for a post that is
+    already written, needs none of it — it needs to know who this brand sounds
+    like, and it is being charged for the rest on every attempt.
+
+    This is the same trade `show_system_prompt` already makes for the shows.
+    """
+    parts = [
+        "You are the writer for CHRGD, a UK gym and supplement brand on TikTok. "
+        "You write in this brand's voice, for this brand's audience, and every "
+        "line you write is UK-native."
+    ]
+    bible = load_brand_bible()
+    if bible:
+        parts.append(
+            "# BRAND BIBLE — voice + gold-standard examples (match this level; "
+            "imitate the voice and structure, not the topics)\n\n" + bible
+        )
+    from .uk import uk_context_block
+
+    spine = uk_context_block()
+    if spine:
+        parts.append("# " + spine)
+    return "\n\n---\n\n".join(parts)
+
+
+def reload_prompts() -> None:
+    """Forget the cached prompt files (after editing them without a restart)."""
+    for fn in (engine_base, voice_base, load_brand_bible, load_playbook):
+        fn.cache_clear()
 
 
 #: The generic image brief in JSON_CONTRACT — written for standalone photo

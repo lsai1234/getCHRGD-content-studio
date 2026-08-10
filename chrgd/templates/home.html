@@ -19,7 +19,23 @@
   <a href="/export"><button class="ghost">Export week</button></a>
 </div>
 
-<h1 style="font-size:18px;">Scheduled posts</h1>
+<h1 style="font-size:18px;">Where the credits go <span class="muted" style="font-size:13px">— last 30 days, ${{ '%.2f'|format(spend_30d) }}</span></h1>
+<table>
+  <tr><th>Stage</th><th>Runs</th><th>Spend</th><th>Per run</th><th>Share</th></tr>
+  {% for s in by_stage %}
+  <tr>
+    <td>{{ s.command }}</td>
+    <td>{{ s.runs }}</td>
+    <td>${{ '%.2f'|format(s.spend) }}</td>
+    <td class="muted">${{ '%.4f'|format(s.spend / s.runs) }}</td>
+    <td class="muted">{{ '%.0f'|format(100 * s.spend / spend_30d) if spend_30d else 0 }}%</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5" class="muted">No spend recorded in the last 30 days.</td></tr>
+  {% endfor %}
+</table>
+
+<h1 style="font-size:18px; margin-top:26px;">Scheduled posts</h1>
 <table>
   <tr><th>When</th><th>ID</th><th>Post</th><th>Exported</th></tr>
   {% for i in scheduled %}

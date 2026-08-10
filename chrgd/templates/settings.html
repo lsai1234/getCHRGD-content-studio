@@ -159,5 +159,48 @@
       <span class="muted" style="font-size:12.5px">Applies to your next build &amp; render.</span>
     </div>
   </form>
+
+  <div class="set-card">
+    <h2>Storage <span class="k" style="font-weight:400;font-size:12px;color:var(--muted)">— automatic clear-out</span></h2>
+    {% if retention.days %}
+    <p class="sub">Posts and their images are deleted automatically <b>{{ retention.days }} days</b>
+      after their last activity (captured, built, exported or scheduled — whichever is latest).
+      Anything still queued, running, or scheduled ahead is never touched.
+      {% if retention.keep_rated %}Posts you rated keep their text so the engine keeps learning from
+      them; their images go with everything else.{% endif %}
+      This is what keeps the dashboard fast — every screen that reads the library gets slower with
+      every post you keep. Change the window with <code>CHRGD_RETENTION_DAYS</code>.</p>
+    <p class="muted" style="font-size:12.5px">
+      Last clear-out: {{ retention.last_sweep[:16] if retention.last_sweep else 'not yet' }}.
+    </p>
+    {% else %}
+    <p class="sub">Automatic clear-out is <b>off</b> (<code>CHRGD_RETENTION_DAYS=0</code>), so nothing is
+      ever deleted and the library grows forever. Set it to 30 to switch it back on.</p>
+    {% endif %}
+    <div class="row" style="margin-top:12px">
+      <button type="button" class="ghost" style="margin:0" onclick="retentionPreview()">What would go?</button>
+      <button type="button" class="ghost" style="margin:0" onclick="retentionSweep(this)">Clear out now</button>
+      <span id="retention-out" class="muted" style="font-size:12.5px"></span>
+    </div>
+  </div>
 </div>
+
+<script>
+async function retentionPreview(){
+  const out = document.getElementById('retention-out');
+  out.textContent = 'checking…';
+  const r = await fetch('/api/retention');
+  const d = await r.json();
+  out.textContent = d.preview.dry_run ? `Would remove: ${d.preview.summary}` : d.preview.summary;
+}
+async function retentionSweep(btn){
+  const out = document.getElementById('retention-out');
+  if (!confirm('Delete everything past the retention window? This cannot be undone.')) return;
+  btn.disabled = true; out.textContent = 'clearing…';
+  const r = await fetch('/api/retention/sweep', {method:'POST', headers:{accept:'application/json'}});
+  const d = await r.json();
+  out.textContent = d.summary;
+  btn.disabled = false;
+}
+</script>
 {% endblock %}

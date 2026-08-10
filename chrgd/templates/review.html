@@ -4,7 +4,8 @@
 <h1>Review &amp; approve</h1>
 {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
 <p class="muted">Preview slides, tweak the copy, re-render, and approve. Approved
-(done) posts are eligible for export.</p>
+(done) posts are eligible for export — the {{ done_total }} approved are shown
+newest first, {{ posts | length }} on this page.</p>
 
 {% for p in posts %}
 <div class="post" id="{{ p.idea_id }}">
@@ -15,7 +16,10 @@
 
   {% if p.assets %}
   <div class="grid" style="margin:14px 0">
-    {% for a in p.assets %}<img class="thumb" src="/media/{{ p.idea_id }}/{{ a }}" alt="slide">{% endfor %}
+    {# lazy: a page of posts is a page of full-size slide images, and the browser
+       will otherwise fetch every one of them before the page settles. #}
+    {% for a in p.assets %}<img class="thumb" loading="lazy" decoding="async"
+        src="/media/{{ p.idea_id }}/{{ a }}" alt="slide">{% endfor %}
   </div>
   {% else %}
   <p class="muted" style="margin:12px 0">Not rendered yet.</p>
@@ -54,6 +58,18 @@
 {% else %}
 <p class="muted">Nothing built yet. Head to <a href="/build">Build</a>.</p>
 {% endfor %}
+
+{% if has_prev or has_next %}
+<div class="row" style="margin-top:16px;align-items:center">
+  {% if has_prev %}
+  <a href="/review?page={{ page - 1 }}"><button class="ghost" style="margin:0">← Newer</button></a>
+  {% endif %}
+  <span class="muted">page {{ page }}</span>
+  {% if has_next %}
+  <a href="/review?page={{ page + 1 }}"><button class="ghost" style="margin:0">Older →</button></a>
+  {% endif %}
+</div>
+{% endif %}
 
 <script>
 async function reRender(id, btn){

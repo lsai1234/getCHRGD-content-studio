@@ -31,7 +31,7 @@
 </form>
 
 <div class="row" style="margin-bottom:12px;">
-  <strong style="margin-right:auto">All ideas</strong>
+  <strong style="margin-right:auto">All ideas <span class="muted">({{ total }})</span></strong>
   <form method="get" action="/backlog">
     <select name="status" onchange="this.form.submit()">
       <option value="">all statuses</option>
@@ -47,20 +47,20 @@
   {% for i in ideas %}
   <tr>
     <td>{{ i.idea_id }}</td>
-    <td><span class="pill">{{ i.status.value }}</span></td>
+    <td><span class="pill">{{ i.status }}</span></td>
     <td>{{ i.priority }}</td>
     <td class="muted">{{ i.content_category }}</td>
     <td>{{ i.concept_note }}</td>
     <td class="row">
-      {% if i.status.value != 'void' %}
+      {% if i.status != 'void' %}
       <a href="/create?idea={{ i.idea_id }}" style="text-decoration:none">
         <button class="ghost" style="margin:0;padding:4px 10px">Open</button></a>
       {% endif %}
-      {% if i.slides_json %}
+      {% if i.built %}
       <button class="ghost" style="margin:0;padding:4px 10px"
               onclick="renderIdea('{{ i.idea_id }}')">Render</button>
       {% endif %}
-      {% if i.status.value != 'void' %}
+      {% if i.status != 'void' %}
       <form method="post" action="/api/ideas/{{ i.idea_id }}/void" style="display:inline">
         <button class="ghost" style="margin:0;padding:4px 10px">Void</button>
       </form>
@@ -71,6 +71,21 @@
   <tr><td colspan="6" class="muted">No ideas — capture something above.</td></tr>
   {% endfor %}
 </table>
+
+{% if has_prev or has_next %}
+{% set qs = '&status=' ~ current_status if current_status else '' %}
+<div class="row" style="margin-top:12px;align-items:center">
+  {% if has_prev %}
+  <a href="/backlog?page={{ page - 1 }}{{ qs }}"><button class="ghost" style="margin:0">← Newer</button></a>
+  {% endif %}
+  <span class="muted">
+    {{ (page - 1) * page_size + 1 }}–{{ [page * page_size, total] | min }} of {{ total }}
+  </span>
+  {% if has_next %}
+  <a href="/backlog?page={{ page + 1 }}{{ qs }}"><button class="ghost" style="margin:0">Older →</button></a>
+  {% endif %}
+</div>
+{% endif %}
 
 <script>
 async function renderIdea(id){

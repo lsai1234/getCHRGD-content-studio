@@ -367,6 +367,8 @@ def run(
     )
     if summary.scouted:
         typer.echo(f"scouted + seeded {summary.scouted} trend row(s)")
+    if summary.pruned:
+        typer.echo(f"cleared out: {summary.pruned}")
     if summary.stopped:
         typer.secho(f"stopped: {summary.stopped}", fg=typer.colors.YELLOW)
 
@@ -434,6 +436,53 @@ def review(
     typer.secho(
         "\nInspect one with:  chrgd review --show <idea_id>", fg=typer.colors.BLUE
     )
+
+
+@app.command()
+def prune(
+    days: int = typer.Option(
+        None, "--days", help="Override CHRGD_RETENTION_DAYS for this sweep."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Report what would go without deleting anything."
+    ),
+    keep_rated: bool = typer.Option(
+        None, "--keep-rated/--no-keep-rated",
+        help="Keep the text row of posts you rated (default: from settings).",
+    ),
+) -> None:
+    """Delete content past the retention window (default 30 days).
+
+    The studio does this automatically once a day; run it here to sweep now or
+    to see what the next sweep will take (`--dry-run`).
+    """
+    from .retention import prune as run_prune
+
+    settings = get_settings()
+    window = settings.retention_days if days is None else days
+    if window <= 0:
+        reason = (
+            "You passed --days 0" if days is not None
+            else "Retention is off (CHRGD_RETENTION_DAYS=0)"
+        )
+        typer.secho(
+            f"{reason} — nothing is deleted. Pass --days N to sweep a window.",
+            fg=typer.colors.YELLOW,
+        )
+        return
+    with _store() as store:
+        result = run_prune(
+            store, settings, days=days, keep_rated=keep_rated, dry_run=dry_run
+        )
+    head = "Would delete" if dry_run else "Deleted"
+    typer.secho(
+        f"{head} everything untouched since {result.cutoff.date().isoformat()} "
+        f"({window} days).",
+        fg=typer.colors.BLUE,
+    )
+    typer.echo(f"  {result.summary()}")
+    if dry_run and result.total_ideas:
+        typer.secho("Run without --dry-run to apply.", fg=typer.colors.YELLOW)
 
 
 if __name__ == "__main__":

@@ -428,7 +428,7 @@ function agendaCardEl(c){
   const el = document.createElement('div');
   el.className = 'ag-card' + (c.exported ? ' exported' : '') + (c.status==='review' ? ' st-review' : '');
   const ph = c.thumb
-    ? `<img class="ph" src="/media/${c.idea_id}/${c.thumb}">`
+    ? `<img class="ph" loading="lazy" decoding="async" src="/media/${c.idea_id}/${c.thumb}">`
     : `<div class="ph">${c.rendered ? '🖼' : '✎'}</div>`;
   const bits = [];
   if (c.scheduled_for) bits.push(c.scheduled_for.slice(11,16));
