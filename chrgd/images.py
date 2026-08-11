@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
@@ -27,6 +28,7 @@ from PIL import Image, ImageDraw, ImageFont
 from .brand import Brand, load_brand
 from .config import Settings
 from .models import MAX_SLIDES, Idea, Slide
+from .parallel import parallel_map, workers_for
 from .shows import brand_for_show, show_for_idea
 
 # Rough USD cost per generated image, by gpt-image-1 quality. Estimate only,
@@ -135,13 +137,16 @@ def _generate_background(
             f"image provider '{settings.image_provider}' not supported yet; "
             "use openai or run with --dry-run"
         )
+    # Explicit base_url: see Settings.get_openai_base_url. The client is shared
+    # per credential (chrgd/llm.py) rather than built per image — this path used
+    # to open a fresh connection pool for every single slide, and it is also the
+    # one place that now issues several generations at once.
+    from .llm import image_client
+
     try:
-        from openai import OpenAI
+        client = image_client(settings)
     except ImportError as exc:  # pragma: no cover
         raise ImageError("openai not installed. Run: pip install -e '.[llm]'") from exc
-
-    # Explicit base_url: see Settings.get_openai_base_url.
-    client = OpenAI(api_key=key, base_url=settings.get_openai_base_url())
     try:
         if references:
             files = []
@@ -1249,6 +1254,19 @@ def list_variants(idea: Idea, settings: Settings, *, brand: Brand | None = None)
     return found
 
 
+def _reserved_cost(brand: Brand, slide_index: int) -> float:
+    """What slide `slide_index` will cost to generate, before we generate it.
+
+    The parallel render needs this: with several images in flight there is no
+    honest "spent so far" to hand each one, so each slide is given the budget
+    already committed to the slides ahead of it in the queue instead. Same
+    arithmetic `render_slide` does, one step earlier.
+    """
+    quality = brand.generation.quality_for(slide_index)
+    n = max(1, min(brand.generation.variants_for(slide_index), len(_VARIANT_KEYS)))
+    return _IMAGE_COST.get(quality, 0.042) * n
+
+
 def render_carousel(
     idea: Idea,
     settings: Settings,
@@ -1268,54 +1286,146 @@ def render_carousel(
     image received) for the queue page. `swipe_style` shapes the experience:
     'cohesive' (same world, distinct scenes) or 'pan' (one seamless shot the
     viewer glides through, each slide continuing the previous one's edge).
+
+    Slide 1 is always rendered first and alone, because it is the anchor every
+    other slide is generated against. After that the remaining slides are
+    generated CONCURRENTLY (see `CHRGD_RENDER_CONCURRENCY`): they depend on
+    slide 1 and on nothing else, so making them queue behind each other was
+    costing 20-60 seconds per slide for no reason. A pan set is the exception
+    and stays sequential — there each slide continues the previous one's edge,
+    which is a real dependency.
     """
     brand = brand or load_brand()
     slides = _slides_from_idea(idea)
     result = RenderResult(idea_id=idea.idea_id, dry_run=dry_run)
+    if not slides:
+        return result
 
     # Slide 1 is rendered first and becomes the ANCHOR: every later slide is
     # generated from it as a visual reference so the whole set shares one
     # character/palette/look as real pixels, not just matching words. In pan
     # mode each slide is also handed the previous one for a seamless join.
-    anchor: Image.Image | None = None
-    prev: Image.Image | None = None
     use_ref = brand.generation.reference_continuity and not dry_run and len(slides) > 1
+    # A pan set is a chain (slide N needs slide N-1's pixels); a dry run paints
+    # placeholders in microseconds and has nothing to overlap. Both stay serial.
+    sequential = dry_run or (swipe_style == "pan" and use_ref)
+    workers = 1 if sequential else workers_for(
+        settings.render_concurrency, len(slides) - 1
+    )
 
-    for i in range(len(slides)):
+    # `notify` and `on_slide` are called from worker threads below, and both
+    # end up writing to the job row in SQLite. One lock in front of them keeps
+    # those writes one-at-a-time, and keeps a slide's progress line from being
+    # spliced into another's.
+    io_lock = threading.Lock()
+    done_count = 0
+
+    def _notify(msg: str) -> None:
+        if notify:
+            with io_lock:
+                notify(msg)
+
+    def _slide_done() -> None:
+        nonlocal done_count
+        if on_slide:
+            with io_lock:
+                done_count += 1
+                on_slide(done_count, len(slides))
+
+    def _collect(index: int, slide_result: SlideRenderResult) -> None:
+        result.spend_usd += slide_result.spend_usd
+        result.generated += slide_result.generated
+        result.paths[index] = slide_result.path
+        if slide_result.variant_paths:
+            result.variants[index] = slide_result.variant_paths
+
+    # Fixed-length so a parallel fan-out writes each slide into its own slot and
+    # the finished list is still in slide order.
+    result.paths = [None] * len(slides)  # type: ignore[list-item]
+
+    first = render_slide(
+        idea, 0, settings, brand=brand, dry_run=dry_run, spent_so_far=0.0,
+        notify=_notify if notify else None, house_style=house_style,
+        swipe_style=swipe_style, character_ref_path=character_ref_path,
+    )
+    _collect(0, first)
+    _slide_done()
+
+    anchor: Image.Image | None = None
+    if use_ref and first.path:
+        try:
+            img = Image.open(first.path)
+            img.load()
+            anchor = img
+        except OSError:
+            anchor = None
+
+    if len(slides) == 1:
+        return result
+
+    if sequential:
+        prev = anchor
+        for i in range(1, len(slides)):
+            slide_result = render_slide(
+                idea, i, settings, brand=brand, dry_run=dry_run,
+                spent_so_far=result.spend_usd, notify=_notify if notify else None,
+                house_style=house_style, anchor=anchor, prev=prev,
+                swipe_style=swipe_style,
+                # Every slide gets the portrait; render_slide attaches it only
+                # where the slide actually features the person, so the mascot
+                # appears on the beats that need them rather than every frame.
+                character_ref_path=character_ref_path,
+            )
+            _collect(i, slide_result)
+            if use_ref and slide_result.path:
+                try:
+                    img = Image.open(slide_result.path)
+                    img.load()
+                    prev = img
+                except OSError:
+                    prev = None
+            _slide_done()
+        return result
+
+    if workers > 1:
+        _notify(
+            f"slides 2-{len(slides)}: generating {workers} at a time, all "
+            "anchored to slide 1"
+        )
+
+    # The spend cap, with several images in flight. Each slide is handed the
+    # budget already committed to the slides queued ahead of it, so the guard in
+    # `render_slide` fires on exactly the slide that would take the run over —
+    # deterministically, rather than depending on which thread finished first.
+    reserved: dict[int, float] = {}
+    committed = result.spend_usd
+    for i in range(1, len(slides)):
+        reserved[i] = committed
+        committed += _reserved_cost(brand, i)
+
+    def _run(i: int) -> SlideRenderResult:
         slide_result = render_slide(
-            idea,
-            i,
-            settings,
-            brand=brand,
-            dry_run=dry_run,
-            spent_so_far=result.spend_usd,
-            notify=notify,
+            idea, i, settings, brand=brand, dry_run=dry_run,
+            spent_so_far=reserved[i], notify=_notify if notify else None,
+            # Each thread gets its OWN copy of the anchor. Pillow images are
+            # not documented as safe to read from several threads at once, and
+            # a race there would show up as a subtly corrupted reference image
+            # rather than an error — the worst kind of bug to chase.
             house_style=house_style,
-            anchor=anchor if i > 0 else None,
-            prev=prev if i > 0 else None,
+            anchor=anchor.copy() if anchor is not None else None, prev=None,
             swipe_style=swipe_style,
             # Every slide gets the portrait; render_slide attaches it only where
             # the slide actually features the person, so the mascot appears on
             # the beats that need them rather than in every frame.
             character_ref_path=character_ref_path,
         )
-        result.spend_usd += slide_result.spend_usd
-        result.generated += slide_result.generated
-        result.paths.append(slide_result.path)
-        if slide_result.variant_paths:
-            result.variants[i] = slide_result.variant_paths
-        # Capture this slide's finished image: slide 1 becomes the anchor, and
-        # every slide becomes the `prev` for the next one (pan continuity).
-        if use_ref and slide_result.path:
-            try:
-                img = Image.open(slide_result.path)
-                img.load()
-                if i == 0:
-                    anchor = img
-                prev = img
-            except OSError:
-                prev = None
-        if on_slide:
-            on_slide(i + 1, len(slides))
+        _slide_done()
+        return slide_result
+
+    rest = parallel_map(
+        _run, range(1, len(slides)), workers=workers, name="chrgd-render"
+    )
+    for i, slide_result in zip(range(1, len(slides)), rest):
+        _collect(i, slide_result)
 
     return result

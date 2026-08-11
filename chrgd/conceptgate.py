@@ -577,16 +577,17 @@ class OpenAIConceptJudge:
     def __init__(self, settings: Settings):
         if not settings.openai_api_key:
             raise ConceptGateError("OPENAI_API_KEY is not set — add it to your .env")
+        # Shared client per credential (chrgd/llm.py): the gate makes four or
+        # five of these calls in a row, and each used to open its own
+        # connection before it could ask its question.
+        from .llm import text_client
+
         try:
-            from openai import OpenAI
+            self._client = text_client(settings)
         except ImportError as exc:  # pragma: no cover
             raise ConceptGateError(
                 "openai not installed. Run: pip install -e '.[llm]'"
             ) from exc
-        self._client = OpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.get_openai_base_url(),
-        )
         # The same cheap rubric model the scroll test uses — a judge should be
         # steady, not creative, and this is not shipped copy.
         self._model = settings.judge_model

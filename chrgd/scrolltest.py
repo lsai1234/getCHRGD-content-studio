@@ -96,17 +96,16 @@ class OpenAIScrollJudge:
     def __init__(self, settings: Settings):
         if not settings.openai_api_key:
             raise ScrollTestError("OPENAI_API_KEY is not set — add it to your .env")
+        # Explicit base_url — see Settings.get_openai_base_url. Shared client
+        # per credential (chrgd/llm.py) so the connection is already open.
+        from .llm import text_client
+
         try:
-            from openai import OpenAI
+            self._client = text_client(settings)
         except ImportError as exc:  # pragma: no cover
             raise ScrollTestError(
                 "openai not installed. Run: pip install -e '.[llm]'"
             ) from exc
-        # Explicit base_url — see Settings.get_openai_base_url.
-        self._client = OpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.get_openai_base_url(),
-        )
         # A rubric-based vision verdict — the cheap judge model, not the
         # creative model (both must support image input).
         self._model = settings.judge_model

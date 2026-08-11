@@ -253,6 +253,46 @@ From then on the web app sweeps once a day on the research worker; Settings →
 Storage shows the window and offers a preview or an immediate clear-out; `chrgd
 prune` does the same from the CLI.
 
+### Waiting — what runs at the same time
+
+Nearly all the time the studio spends is spent waiting on somebody else's
+server: 20-60s for an image, 30-90s for a write, a few seconds for each judge.
+Most of those waits have nothing to do with each other, and the engine used to
+take them strictly one after another anyway.
+
+* **The carousel render.** Slide 1 is generated first and alone, because it is
+  the anchor every other slide is generated against — that reference is what
+  keeps one character, one palette and one look across the set. Every slide
+  after it depends on slide 1 and on *nothing else*, so they now go together
+  (`CHRGD_RENDER_CONCURRENCY`, default 4). At 25s an image a 6-slide carousel
+  drops from ~3 minutes to ~1.5, and a 10-slide one from ~5 to ~2. Identical
+  prompts, identical anchoring, identical spend. A **pan** swipe style is the
+  exception and stays sequential: there each slide continues the previous one's
+  edge, which is a real dependency, not an accident of the loop.
+* **The fast job lane** runs two workers (`CHRGD_FAST_WORKERS`), so kicking a
+  build no longer parks a render behind it for the whole write. Claiming a job
+  is a guarded `UPDATE` built for exactly this, so the lane's workers share the
+  queue without ever double-processing.
+* **A batch build** writes `CHRGD_BUILD_CONCURRENCY` posts at once — each is an
+  independent engine call. Persistence stays on the calling thread, in queue
+  order; the spend cap is checked between waves.
+* **The checks on a finished post** — claims, and likeness/continuity — read the
+  same post, write nothing, and know nothing about each other, so they run
+  together (`CHRGD_PARALLEL_GATES`).
+* **One HTTP client per credential.** Six places built their own OpenAI client
+  and the image path built a fresh one *per image*, so every call paid a DNS
+  lookup and a TLS handshake before it could send a byte. They now share a
+  warm connection pool (`chrgd/llm.py`).
+
+The concept gate's four stages are deliberately *not* overlapped: each one
+judges what the last one produced, and speculating on the glance test only pays
+off when the score passes first time while spending a wasted judge call every
+time it doesn't.
+
+The learning loop reads a bounded corpus (the newest 500 rated posts, light
+columns) rather than every rated post ever — that block is injected into every
+build and every fan-out, and a rated post is kept forever by design.
+
 ### Where the credits go
 
 The dashboard's **Where the credits go** table breaks the last 30 days of spend

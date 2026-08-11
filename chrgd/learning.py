@@ -120,17 +120,26 @@ def _traits(idea: Idea) -> dict:
     }
 
 
-def insights(store: Store, top_n: int = 5) -> dict:
+def corpus(store: Store, given: "list[Idea] | None" = None) -> list[Idea]:
+    """The rated posts the maths runs over — read once and passed around.
+
+    Every function in this module used to call `ideas_with_metrics()` for
+    itself, so one dashboard load read the same rows four times over (the
+    digest, the trait skew, the scroll calibration, the show scoreboard). They
+    now share one read; `given` is how a caller hands it down.
+    """
+    return store.ideas_with_metrics() if given is None else given
+
+
+def insights(store: Store, top_n: int = 5, *, rated: "list[Idea] | None" = None) -> dict:
     """The digest shown to the human: baseline, top posts, winning traits."""
-    logged = [
-        (idea, _metrics(idea))
-        for idea in store.ideas_with_metrics()
-    ]
+    rated = corpus(store, rated)
+    logged = [(idea, _metrics(idea)) for idea in rated]
     logged = [(i, m) for i, m in logged if m.get("views", 0) > 0]
     if not logged:
         return {"posts_logged": 0, "baseline_views": 0, "top": [], "traits": [],
-                "scroll_calibration": scroll_calibration(store),
-                **rating_summary(store)}
+                "scroll_calibration": scroll_calibration(store, rated=rated),
+                **rating_summary(store, rated=rated)}
 
     views = [m["views"] for _, m in logged]
     baseline = int(median(views))
@@ -181,8 +190,8 @@ def insights(store: Store, top_n: int = 5) -> dict:
         "baseline_views": baseline,
         "top": top,
         "traits": traits,
-        "scroll_calibration": scroll_calibration(store),
-        **rating_summary(store),
+        "scroll_calibration": scroll_calibration(store, rated=rated),
+        **rating_summary(store, rated=rated),
     }
 
 
@@ -191,7 +200,7 @@ def insights(store: Store, top_n: int = 5) -> dict:
 MIN_POSTS_FOR_VERDICT = 4
 
 
-def show_scoreboard(store: Store) -> dict:
+def show_scoreboard(store: Store, *, rated: "list[Idea] | None" = None) -> dict:
     """How each show is actually doing, judged on its OWN KPI.
 
     The reason this exists: without it the five-show plan is a guess that never
@@ -207,7 +216,7 @@ def show_scoreboard(store: Store) -> dict:
     """
     from .shows import load_shows
 
-    logged = [(i, _metrics(i)) for i in store.ideas_with_metrics()]
+    logged = [(i, _metrics(i)) for i in corpus(store, rated)]
     logged = [(i, m) for i, m in logged if m.get("views", 0) > 0]
     baseline = int(median([m["views"] for _, m in logged])) if logged else 0
 
@@ -296,11 +305,11 @@ def _show_verdict(row: dict, baseline: int) -> str:
     return " · ".join(parts)
 
 
-def rating_summary(store: Store) -> dict:
+def rating_summary(store: Store, *, rated: "list[Idea] | None" = None) -> dict:
     """The honest, low-friction signal: 🔥/😐/💀 counts + which traits skew
     toward hits vs flops. Coarser than view maths, but far more reliable at
     small-account scale and it's what actually gets logged."""
-    rated = [(i, _rating(i)) for i in store.ideas_with_metrics()]
+    rated = [(i, _rating(i)) for i in corpus(store, rated)]
     rated = [(i, r) for i, r in rated if r]
     counts = {"hit": 0, "meh": 0, "flop": 0}
     for _, r in rated:
@@ -343,7 +352,7 @@ def rating_summary(store: Store) -> dict:
     }
 
 
-def scroll_calibration(store: Store) -> dict:
+def scroll_calibration(store: Store, *, rated: "list[Idea] | None" = None) -> dict:
     """How well the pre-render scroll test predicted real outcomes.
 
     Among posts that carry BOTH a cold-scroll-test verdict and a hit/flop
@@ -352,7 +361,7 @@ def scroll_calibration(store: Store) -> dict:
     the studio's own judge is worth trusting yet, without any ML.
     """
     n = agreed = 0
-    for idea in store.ideas_with_metrics():
+    for idea in corpus(store, rated):
         rating = _rating(idea)
         verdict = (_route(idea).get("scroll_verdict") or {}).get("verdict")
         if rating in ("hit", "flop") and verdict in ("stop", "scroll"):

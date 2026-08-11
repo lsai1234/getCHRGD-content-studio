@@ -53,16 +53,14 @@ class OpenAIPickSelector:
     def __init__(self, settings: Settings):
         if not settings.openai_api_key:
             raise TodaysPickError("OPENAI_API_KEY is not set — add it to your .env")
+        from .llm import text_client
+
         try:
-            from openai import OpenAI
+            self._client = text_client(settings)
         except ImportError as exc:  # pragma: no cover
             raise TodaysPickError(
                 "openai not installed. Run: pip install -e '.[llm]'"
             ) from exc
-        self._client = OpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.get_openai_base_url(),
-        )
         self._model = settings.scout_model
 
     def select(self, system: str, user: str) -> str:

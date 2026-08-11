@@ -166,10 +166,21 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             # dead time before every interactive job (concepts, takes, builds)
             # even started. Claiming a job is one guarded UPDATE on a local
             # SQLite file, so 5 ticks/sec costs nothing and the UI feels instant.
-            fast = Worker(
-                settings, poll_interval=0.2, exclude=RESEARCH_KINDS | VIDEO_KINDS,
-                name="chrgd-fast", recover_on_start=False,
-            )
+            # …and the fast lane itself runs more than one worker, because ONE
+            # of them meant strictly one job at a time: kick a build and then
+            # hit render on a post you finished earlier, and the render sat in
+            # the queue for the whole 30-90s write before it even started. The
+            # claim step is a guarded UPDATE built for exactly this (see
+            # `claim_next_job`), so the lane's workers share the table without
+            # ever double-processing a job.
+            fast = [
+                Worker(
+                    settings, poll_interval=0.2,
+                    exclude=RESEARCH_KINDS | VIDEO_KINDS,
+                    name=f"chrgd-fast-{i + 1}", recover_on_start=False,
+                )
+                for i in range(max(1, min(settings.fast_workers, 4)))
+            ]
             # The research lane also owns the daily retention sweep: it is idle
             # most of the day, and putting housekeeping anywhere near the fast
             # lane would make a build wait behind a VACUUM.
@@ -181,10 +192,9 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 settings, kinds=VIDEO_KINDS,
                 name="chrgd-video", recover_on_start=False,
             )
-            fast.start()
-            research.start()
-            video.start()
-            workers = [fast, research, video]
+            workers = [*fast, research, video]
+            for w in workers:
+                w.start()
             app.state.workers = workers
         try:
             yield

@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field, ValidationError
 from .config import Settings
 from .db import Store
 from .models import Idea, Post, Status
+from .parallel import parallel_map, workers_for
 from .shows import get_show
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "content_engine_prompt.md"
@@ -246,19 +247,18 @@ class OpenAIChatClient:
     ):
         if not settings.openai_api_key:
             raise LLMError("OPENAI_API_KEY is not set — add it to your .env")
+        # base_url is ALWAYS passed explicitly so a stray empty
+        # OPENAI_BASE_URL env var can never reach the SDK. The client itself is
+        # shared per credential (chrgd/llm.py) so the connection stays warm
+        # between calls instead of re-handshaking on every one.
+        from .llm import text_client
+
         try:
-            from openai import OpenAI
+            self._client = text_client(settings)
         except ImportError as exc:  # pragma: no cover - install-time guard
             raise LLMError(
                 "openai package not installed. Run: pip install -e '.[llm]'"
             ) from exc
-
-        # base_url is ALWAYS passed explicitly so a stray empty
-        # OPENAI_BASE_URL env var can never reach the SDK.
-        self._client = OpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.get_openai_base_url(),
-        )
         # Defaults to the creative model; callers that only need speed (the
         # concept sketch) pass the cheap scout model instead.
         self._model = model or settings.openai_model
@@ -949,12 +949,39 @@ def build_ideas(
         x for x in (_brand_notes(store), _perf_notes(store), _meta_notes(store)) if x
     )
 
+    # Each idea is an independent engine call — one post knows nothing about
+    # the next — so a batch of five was five 30-90s waits laid end to end for
+    # no reason other than the shape of the loop. They now go out in waves of
+    # `CHRGD_BUILD_CONCURRENCY`.
+    #
+    # Everything that touches the DB stays on THIS thread: the wave runs the
+    # calls, and the results are persisted here, in queue order. The spend cap
+    # is checked between waves rather than between ideas, so a cap can be
+    # overshot by at most one wave's writing — set the concurrency to 1 for the
+    # old idea-by-idea guarantee.
+    wave_size = workers_for(settings.build_concurrency, len(ideas))
+
+    def _write_one(idea: Idea) -> BuildResult:
+        """One engine call. No DB writes — this runs on a worker thread."""
+        try:
+            return run_pipeline_for_idea(
+                idea, client, settings.openai_model, performance_notes=notes
+            )
+        except LLMError as exc:
+            return BuildResult(
+                idea_id=idea.idea_id, status=Status.queued, error=str(exc)
+            )
+
     try:
-        for idea in ideas:
+        stopped = False
+        for start in range(0, len(ideas), wave_size):
+            if stopped:
+                break
+            wave = ideas[start:start + wave_size]
             if total_spend >= settings.max_spend_per_run:
                 results.append(
                     BuildResult(
-                        idea_id=idea.idea_id,
+                        idea_id=wave[0].idea_id,
                         status=Status.queued,
                         error=(
                             f"spend cap £{settings.max_spend_per_run:g} reached — "
@@ -964,30 +991,34 @@ def build_ideas(
                 )
                 break
 
-            store.mark_processing(idea.idea_id)
-            try:
-                result = run_pipeline_for_idea(
-                    idea, client, settings.openai_model, performance_notes=notes
-                )
-            except LLMError as exc:
-                store.set_status(idea.idea_id, Status.queued)  # release for retry
-                results.append(
-                    BuildResult(
-                        idea_id=idea.idea_id, status=Status.queued, error=str(exc)
-                    )
-                )
-                break  # a hard LLM error (auth/network) will hit every idea
+            for idea in wave:
+                store.mark_processing(idea.idea_id)
+            wave_results = parallel_map(
+                _write_one, wave, workers=wave_size, name="chrgd-build"
+            )
 
-            total_spend += result.spend_usd
-            if result.post is not None:
-                fields = build_fields_from_post(result.post, _build_extra_route(store, idea))
-                if result.status is Status.done:
-                    store.save_build(idea.idea_id, fields)
+            for idea, result in zip(wave, wave_results):
+                if result.error and result.status is Status.queued:
+                    store.set_status(idea.idea_id, Status.queued)  # release for retry
+                    results.append(result)
+                    # A hard LLM error (auth/network) will hit every idea, so
+                    # stop after this wave rather than burning the rest of the
+                    # batch on the same failure.
+                    stopped = True
+                    continue
+
+                total_spend += result.spend_usd
+                if result.post is not None:
+                    fields = build_fields_from_post(
+                        result.post, _build_extra_route(store, idea)
+                    )
+                    if result.status is Status.done:
+                        store.save_build(idea.idea_id, fields)
+                    else:
+                        store.mark_review(idea.idea_id, fields)
                 else:
-                    store.mark_review(idea.idea_id, fields)
-            else:
-                store.mark_review(idea.idea_id, {})
-            results.append(result)
+                    store.mark_review(idea.idea_id, {})
+                results.append(result)
     finally:
         built = sum(1 for r in results if r.status is Status.done)
         if run_id is not None:
@@ -1107,15 +1138,35 @@ def build_single_idea(
 
     if result.post is not None:
         extra = _build_extra_route(store, idea)
-        # The claims gate: a separate pass over the finished post, because a
-        # self-scored `claim_safety` inside the write is the model marking its
-        # own homework on the one topic carrying real outside risk. The lint
-        # runs on every post; the judge and the hold-for-review only apply to a
-        # claims-gated show (STRAIGHT UP), so nothing else changes behaviour.
+        # The two gates over the finished post:
+        #
+        #   CLAIMS — a separate pass, because a self-scored `claim_safety`
+        #   inside the write is the model marking its own homework on the one
+        #   topic carrying real outside risk.
+        #   LIKENESS + CONTINUITY — THE MULTIVERSE's rules about real people,
+        #   enforced against the finished episode rather than trusted to a
+        #   prompt. A fake quote from a real footballer costs rather more than
+        #   a reroll.
+        #
+        # In both cases the lint runs on every post and the judge only on a
+        # gated show. They read the same finished post, write nothing, and know
+        # nothing about each other — so on a show that runs both (an episode
+        # with a cast and a claim to check) they ran back to back for no reason.
+        # They now go together and the post waits for one verdict, not two.
         from .claims import check_claims
+        from .likeness import check_likeness
+        from .parallel import run_all
 
         payload = result.post.model_dump(mode="json")
-        claims = check_claims(payload, idea, settings)
+        gates = [
+            lambda: check_claims(payload, idea, settings),
+            lambda: check_likeness(payload, idea, settings, store=store),
+        ]
+        if settings.parallel_gates:
+            claims, likeness = run_all(gates, workers=2, name="chrgd-gate")
+        else:
+            claims, likeness = [g() for g in gates]
+
         extra = {**extra, "claims": claims.as_payload()}
         result.spend_usd += claims.spend_usd
         if claims.blocking and not claims.safe:
@@ -1123,13 +1174,6 @@ def build_single_idea(
             result.status = Status.review
             result.qa_failures = result.qa_failures + claims.reasons()
 
-        # The likeness + continuity gate: THE MULTIVERSE's rules about real
-        # people, enforced against the finished episode rather than trusted to
-        # a prompt. Same asymmetry as claims — a failure holds the post, because
-        # a fake quote from a real footballer costs rather more than a reroll.
-        from .likeness import check_likeness
-
-        likeness = check_likeness(payload, idea, settings, store=store)
         extra = {**extra, "likeness": likeness.as_payload()}
         if likeness.blocking and not likeness.safe:
             _prog(90, f"likeness gate flagged {len(likeness.flags)} thing(s) — holding for review")

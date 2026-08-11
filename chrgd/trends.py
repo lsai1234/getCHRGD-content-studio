@@ -110,15 +110,15 @@ class OpenAITrendClient:
     def __init__(self, settings: Settings, model: str | None = None):
         if not settings.openai_api_key:
             raise TrendError("OPENAI_API_KEY is not set — add it to your .env")
+        # Explicit base_url: see Settings.get_openai_base_url. Shared client per
+        # credential (chrgd/llm.py) — a research lane makes several calls and
+        # each used to open its own connection.
+        from .llm import text_client
+
         try:
-            from openai import OpenAI
+            self._client = text_client(settings)
         except ImportError as exc:  # pragma: no cover
             raise TrendError("openai not installed. Run: pip install -e '.[llm]'") from exc
-        # Explicit base_url: see Settings.get_openai_base_url.
-        self._client = OpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.get_openai_base_url(),
-        )
         # Research/summarise work uses the cheap scout model by default; lanes
         # whose OUTPUT is shipped creative (ragebait claims, trending angles)
         # pass the creative model in explicitly.

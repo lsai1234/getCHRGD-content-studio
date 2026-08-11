@@ -54,6 +54,44 @@ class Settings(BaseSettings):
     def get_openai_base_url(self) -> str:
         return self.openai_base_url or self.OPENAI_DEFAULT_BASE_URL
 
+    # How long to wait on a single text call before giving up. A full write
+    # takes 30-90s and a deep 10-slide one can take longer, so this is set well
+    # clear of honest work — its job is to turn a socket that has silently died
+    # into a fast, visible failure instead of a spinner the editor watches for
+    # ten minutes (the SDK's own default). Set 0 to fall back to that default.
+    openai_timeout: float = Field(default=300.0, alias="CHRGD_LLM_TIMEOUT")
+    # The same guard for an image generation, which is genuinely minutes of
+    # server-side work — hence the looser ceiling.
+    image_timeout: float = Field(default=600.0, alias="CHRGD_IMAGE_TIMEOUT")
+
+    # --- Parallelism (the engine's slow calls are all network waits) ---
+    # How many slide images generate at once. The set is rendered slide 1
+    # first — it is the anchor every other slide is generated from — and the
+    # rest then go together, so a 6-slide carousel costs roughly two image
+    # waits instead of six. Identical spend, identical prompts, identical
+    # anchoring; only the waiting is shared. Set 1 for the old one-at-a-time
+    # render. A 'pan' swipe style ignores this: there each slide continues the
+    # previous one's edge, so it genuinely cannot start before its predecessor
+    # finishes.
+    render_concurrency: int = Field(default=4, alias="CHRGD_RENDER_CONCURRENCY")
+    # How many posts a BATCH build (`chrgd build`, the build screen, the
+    # nightly run) writes at once. Each is an independent engine call. The
+    # spend cap is still checked between waves, so a cap can be overshot by at
+    # most one wave's worth of writing — set 1 if you want the cap enforced
+    # post by post exactly as before.
+    build_concurrency: int = Field(default=3, alias="CHRGD_BUILD_CONCURRENCY")
+    # How many workers drain the FAST job lane (builds, renders, takes,
+    # concepts). One meant a render queued behind a build for its whole 30-90s
+    # write even though the two have nothing to do with each other. Two lets an
+    # editor keep a post moving while another one writes. The research and
+    # video lanes are unaffected — they already have their own workers.
+    fast_workers: int = Field(default=2, alias="CHRGD_FAST_WORKERS")
+    # Run the independent checks on a finished post (claims, likeness) at the
+    # same time rather than one after the other, and start the concept gate's
+    # glance test alongside its score. Same calls, same verdicts — they simply
+    # stop queueing behind each other.
+    parallel_gates: bool = Field(default=True, alias="CHRGD_PARALLEL_GATES")
+
     # --- Image generation (milestone 3+) ---
     # Defaults to OpenAI images so one key covers text + images.
     image_provider: str = Field(default="openai", alias="CHRGD_IMAGE_PROVIDER")

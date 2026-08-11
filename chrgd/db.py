@@ -381,13 +381,40 @@ class Store:
         )
         self.conn.commit()
 
-    def ideas_with_metrics(self) -> list[Idea]:
-        """Posts with logged results, newest first — the learning corpus."""
-        rows = self.conn.execute(
-            "SELECT * FROM ideas WHERE metrics_json IS NOT NULL "
-            "ORDER BY created_at DESC"
-        ).fetchall()
-        return [self._row_to_idea(r) for r in rows]
+    #: What the learning loop actually reads off a rated post. Deliberately not
+    #: `SELECT *`: the maths needs the metrics, the traits and the slide count,
+    #: and never looks at the caption, the hashtags, the asset paths or the
+    #: platform URLs — which are bytes carried into memory and thrown away on
+    #: every build, every fan-out and every dashboard load.
+    CORPUS_COLUMNS = (
+        "idea_id", "content_category", "concept_note", "hook",
+        "created_at", "slides_json", "route_json", "metrics_json",
+    )
+
+    #: How far back the learning loop looks. A rated post is kept forever (that
+    #: is the point of `retention_keep_rated`), so an unbounded corpus is the
+    #: same "slower with every post" shape the list screens had: the notes
+    #: injected into EVERY build and every fan-out were derived from a table
+    #: scan that only ever grew. The newest few hundred rated posts is both a
+    #: bound and the more honest sample — an account's results from two years
+    #: ago are not evidence about what works on it now.
+    CORPUS_LIMIT = 500
+
+    def ideas_with_metrics(self, limit: int | None = CORPUS_LIMIT) -> list[Idea]:
+        """Posts with logged results, newest first — the learning corpus.
+
+        Light rows (see `CORPUS_COLUMNS`) and bounded to `limit`. Pass
+        `limit=None` for the whole history.
+        """
+        sql = (
+            f"SELECT {', '.join(self.CORPUS_COLUMNS)} FROM ideas "
+            "WHERE metrics_json IS NOT NULL ORDER BY created_at DESC, idea_id DESC"
+        )
+        args: list = []
+        if limit is not None:
+            sql += " LIMIT ?"
+            args.append(int(limit))
+        return [self._row_to_idea(r) for r in self.conn.execute(sql, args).fetchall()]
 
     def set_schedule(self, idea_id: str, when: datetime | None) -> None:
         """Set or clear the user-chosen posting datetime. Idempotent."""
