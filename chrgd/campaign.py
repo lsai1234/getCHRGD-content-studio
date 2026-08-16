@@ -329,6 +329,21 @@ class LaunchPost(BaseModel):
     pain_point: str = ""
     core_tension: str = ""
 
+    def title(self) -> str:
+        """The one-line name for a screen or a listing.
+
+        The topical posts carry no hook on purpose — they're scouted on the
+        day — so falling back to the raw key put `prime_livewire` on a card a
+        human is meant to read. The note's first sentence is what that post is
+        actually about, which is the honest label for it.
+        """
+        if self.hook.strip():
+            return self.hook.strip()
+        first = self.note.strip().split(".")[0].strip()
+        if not first:
+            return self.key.replace("_", " ")
+        return first if len(first) <= 90 else first[:87].rstrip() + "…"
+
     def concept_note(self) -> str:
         """The seed text the engine builds from — the hook, then the brief.
 

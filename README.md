@@ -55,6 +55,12 @@ than "link in bio". 29 posts are written and ready in
 `config/launch_backlog.toml`, carried by a new show (**THE STACK**) and six
 cold-open mechanics.
 
+Two create-journey doors drive it: **⚡ The launch** (pick the phase, then one
+of the written posts for it — or write your own under that phase's brief) and
+**🧪 THE STACK** (the sorting show's own screen). The phase is stamped on the
+row rather than read from the clock, so launch week can be written during the
+pre-launch fortnight and still builds under the launch brief.
+
 ```bash
 chrgd campaign status                 # the phase, and this week's ask
 chrgd campaign seed --all --dry-run   # the whole calendar, nothing written

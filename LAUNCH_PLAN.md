@@ -141,7 +141,25 @@ being small.
 
 ---
 
-## Running it
+## Running it — in the studio
+
+Two journeys in **/create**:
+
+- **⚡ The launch** — sits under the show grid. Opens on the phase you're
+  actually in (chips let you move off it to batch next week), shows that
+  phase's goal and its permitted ask, then lists the written posts for it —
+  tap one and it builds as the right show and format, already stamped. Ones
+  you've started are marked. A free-text box under them writes anything else
+  for that phase, under the same brief.
+- **🧪 THE STACK** — the show's own screen. Asks the sort first (which one are
+  you / keep or bin / what you're paying for / stop buying / the demo / the
+  objection), subject optional.
+
+Because the phase is stamped on the row rather than read from the clock, a post
+written through the launch door on a Tuesday in `prime` still builds under the
+launch-week brief. That's how you get launch week made in advance.
+
+## Running it — from the CLI
 
 ```bash
 chrgd campaign status                    # where we are, and this week's ask

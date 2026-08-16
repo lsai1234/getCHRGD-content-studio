@@ -177,7 +177,7 @@ def campaign_seed(
             day = f"D{post.day:+d}"
             typer.echo(
                 f"{day:>4}  {post.phase:<7} {post.show or '—':<12} "
-                f"{post.mechanic or post.ingredient or '—':<16} {post.hook or post.key}"
+                f"{post.mechanic or post.ingredient or '—':<16} {post.title()}"
             )
         typer.secho(f"\n{len(posts)} posts would be queued.", fg=typer.colors.BLUE)
         return
