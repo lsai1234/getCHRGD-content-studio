@@ -62,6 +62,15 @@ class Phase(BaseModel):
     cta_style: str = ""
     ctas: list[str] = Field(default_factory=list)
     banned: list[str] = Field(default_factory=list)
+    #: Whether the calendar can resolve to this phase on its own.
+    #:
+    #: False makes a phase PIN-ONLY: reachable by `pin_phase` or an explicit
+    #: editor choice, invisible to date arithmetic. That's what lets a phase
+    #: overlap another one's window without making the calendar ambiguous —
+    #: `buildup` sits inside `prime` because it is the same content with one
+    #: extra line at the end, and which of the two you want is a decision, not
+    #: a date.
+    on_calendar: bool = True
 
     def contains(self, offset: int) -> bool:
         return self.starts <= offset <= self.ends
@@ -93,6 +102,41 @@ class Compliance(BaseModel):
     block: str = ""
 
 
+class Tech(BaseModel):
+    """How the product's own machinery may be described.
+
+    Its own block because the risk here is different from the health-claim
+    risk: it is a claim about US rather than about a body, and the failure
+    mode is a false statement about our own product plus an unsubstantiated
+    superiority claim — both of which sound like marketing rather than like
+    something to be careful with, which is exactly why they need a rule.
+    """
+
+    uses_ai: bool = False
+    how_it_works: str = ""
+    block: str = ""
+
+    def as_block(self) -> str:
+        lines = []
+        if self.block.strip():
+            lines.append(self.block.strip())
+        if self.how_it_works.strip():
+            lines.append(
+                "HOW IT ACTUALLY WORKS — the description to reach for when a "
+                f"post talks about the mechanism: {self.how_it_works.strip()}"
+            )
+        lines.append(
+            "THIS PRODUCT USES AI: "
+            + ("yes — you may say so, but say what it does rather than that "
+               "it exists. 'AI-powered' on its own is a boast, not a benefit."
+               if self.uses_ai else
+               "NO. The words AI, machine learning, neural, and "
+               "algorithm-that-learns are BANNED — using them would be a false "
+               "claim about our own product.")
+        )
+        return "\n\n".join(lines)
+
+
 class Campaign(BaseModel):
     armed: bool = False
     key: str = ""
@@ -104,6 +148,7 @@ class Campaign(BaseModel):
     strategy: Strategy = Field(default_factory=Strategy)
     facts: Facts = Field(default_factory=Facts)
     compliance: Compliance = Field(default_factory=Compliance)
+    tech: Tech = Field(default_factory=Tech)
     phases: list[Phase] = Field(default_factory=list)
     #: Shows this campaign doesn't use — dimmed on the create screen, never
     #: disabled. A statement about what the fortnight is for, not a lock.
@@ -160,9 +205,13 @@ class Campaign(BaseModel):
         if offset is None:
             return None
         for phase in self.phases:
-            if phase.contains(offset):
+            if phase.on_calendar and phase.contains(offset):
                 return phase
         return None
+
+    def calendar_phases(self) -> list[Phase]:
+        """The phases date arithmetic can reach — what must stay contiguous."""
+        return [p for p in self.phases if p.on_calendar]
 
     def get_phase(self, key: str) -> Phase | None:
         """A phase by key, ignoring the calendar — what `--phase` seeds from."""
@@ -244,6 +293,11 @@ class Campaign(BaseModel):
                 + "; ".join(self.facts.never_say)
                 + "."
             )
+
+        tech = self.tech.as_block()
+        if tech.strip():
+            lines.append("")
+            lines.append(tech)
 
         if self.compliance.block.strip():
             lines.append("")

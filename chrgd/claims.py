@@ -111,6 +111,23 @@ PATTERNS: tuple[Pattern, ...] = (
             "implies biological personalisation — it is personalised to your ANSWERS"),
     Pattern("prescribe", r"\bprescri(?:be|bes|bed|bing|ption)\b",
             "prescribing is a regulated act — this is a recommendation"),
+    # --- Claims about our own machinery (config/campaign.toml [campaign.tech])
+    # A different risk from the health claims above: these are claims about US.
+    # Superiority and technology-leadership claims have to be substantiated on
+    # demand under UK advertising rules, and they read as ordinary marketing
+    # rather than as something to be careful with — which is exactly why an
+    # editor waves them through and a pattern has to catch them.
+    Pattern("state_of_the_art",
+            r"\b(?:state[- ]of[- ]the[- ]art|cutting[- ]edge|next[- ]gen(?:eration)?|"
+            r"revolutionary|world[- ]class|industry[- ]leading)\b",
+            "an unsubstantiated superiority claim — describe what it does instead"),
+    Pattern("first_of_its_kind",
+            r"\b(?:first|only)\s+(?:of\s+its\s+kind|(?:one|brand)\s+to)\b",
+            "a 'first/only' claim needs evidence we can produce on request"),
+    Pattern("ai_knows_you",
+            r"\b(?:ai|algorithm|technology)\b[^.?!]{0,40}\b(?:knows|works\s+out|"
+            r"understands|figures\s+out)\b[^.?!]{0,20}\byou(?:r\s+body)?\b",
+            "implies the system knows something about you it wasn't told"),
 )
 
 _COMPILED = tuple((p, re.compile(p.regex, re.I)) for p in PATTERNS)

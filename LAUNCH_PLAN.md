@@ -55,7 +55,7 @@ something. This is also why the quiz post that converts best is the one saying
 ## The four phases
 
 **There is no launch date yet, and nothing invents one.** The studio runs
-*pinned*: `pin_phase = "prime"` in `config/campaign.toml` names the phase
+*pinned*: `pin_phase = "buildup"` in `config/campaign.toml` names the phase
 everything is written for, and it stays there indefinitely — which is exactly
 right, because `prime` is pure reach with no selling and no mention of a launch.
 
@@ -67,7 +67,8 @@ silently writing pre-launch copy through launch week.
 
 | Phase | Days | Sells? | The ask | What it's for |
 |---|---|---|---|---|
-| **prime** | −14 → −4 | No | comment / follow | Pure reach. Plants the confusion. |
+| **buildup** | *pinned* | No | **follow** | Reach, plus one line at the end teasing what's being built. **Where the studio is now.** |
+| **prime** | −14 → −4 | No | comment | Pure reach, no tease at all. |
 | **tease** | −3 → −1 | Barely | follow | Earns the swipe, then says the thing exists. |
 | **launch** | 0 → +7 | Yes | the quiz, domain in plain text | Same reach content, one ask bolted on. |
 | **sell** | +8 → | Yes | quiz by default, plan occasionally | The steady state. |
@@ -220,11 +221,51 @@ day.
 
 ## Where to put your attention
 
-1. **Leave the date alone until you have one.** Pinned to `prime` is the
+1. **Set `uses_ai` honestly** in `config/campaign.toml [campaign.tech]`. It is
+   `false` by default. If the quiz is a rules-based recommendation flow, calling
+   it AI is a false claim about your own product — the easiest kind for a
+   sceptic to disprove and the most expensive to walk back.
+2. **Leave the date alone until you have one.** Pinned to `buildup` is the
    correct state, and the content it makes is worth posting regardless of when
    you launch.
-2. **Paste 3–6 of your best-performing real posts into `brand_bible.md`.** It's
+3. **Paste 3–6 of your best-performing real posts into `brand_bible.md`.** It's
    loaded into every build and it is still the highest-leverage lever in the
    repo — the placeholders are costing you quality on all 29 of these.
-3. **Check the D+0 and D+9 posts by hand before they go out.** Everything else
+4. **Check the D+0 and D+9 posts by hand before they go out.** Everything else
    can run on the gate.
+
+---
+
+## Teasing what's coming, without the exposure
+
+The `buildup` phase is how the account talks about the launch before there is
+one. Three rules make it work rather than backfire:
+
+**The post still has to work for a stranger.** Four or five slides of something
+genuinely useful, funny or annoying — the kind of post worth making even if we
+sold nothing. The tease is the *last slide only*.
+
+**Tease the thinking, not the launch.** "Something amazing is coming" gives a
+stranger nothing; they have no relationship with us and no reason to care that
+we're excited. What lands is the argument — *nobody can honestly answer "what
+should I take" in a comment, so we got annoyed enough to build something that
+does*. That earns a follow because the reader already agrees with the post they
+just finished.
+
+**Concrete beats excited.** "It asks about six questions and tells you what to
+skip" is a better tease than "state of the art", because it's specific enough to
+picture and it promises something useful rather than something exciting.
+
+### What's banned, and why it's enforced rather than trusted
+
+- **"State of the art", "cutting-edge", "next-generation", "first of its kind"**
+  — objective superiority claims that have to be substantiated on demand under
+  UK advertising rules. Three lint patterns catch them.
+- **AI / machine learning**, unless `[campaign.tech] uses_ai = true`. Describing
+  a rules-based recommendation flow as AI is a false claim about our own
+  product.
+- **"It works out what your body needs"** — a diagnostic claim. A
+  clever-sounding system makes this *worse*, not better, because it sounds like
+  it might really know.
+- **Any date or countdown.** A date said out loud is a promise; a missed one is
+  the worst first impression a new brand can make.

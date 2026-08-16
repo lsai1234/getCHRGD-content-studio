@@ -209,7 +209,10 @@ def check_campaign() -> None:
         return
 
     # A gap between phases is a day the campaign silently stops running.
-    for earlier, later in zip(campaign.phases, campaign.phases[1:]):
+    # Pin-only phases are exempt: they overlap on purpose and the calendar
+    # can never reach them.
+    calendar = campaign.calendar_phases()
+    for earlier, later in zip(calendar, calendar[1:]):
         if later.starts != earlier.ends + 1:
             fail(f"config/campaign.toml: gap or overlap between phase "
                  f"'{earlier.key}' (ends {earlier.ends:+d}) and '{later.key}' "
