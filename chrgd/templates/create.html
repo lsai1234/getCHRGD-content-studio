@@ -115,6 +115,13 @@
   .sit:hover{border-color:var(--accent)}
   .sit.sel{border-color:var(--accent); background:rgba(79,195,247,.08)}
   .sit.used{opacity:.62}
+  /* `display:flex` above beats the UA's [hidden] rule, so the launch screen's
+     phase filter needs this or every phase's posts stay on screen at once. */
+  .sit[hidden]{display:none}
+  /* the launch door on the source screen */
+  .launch-door .t{display:flex; align-items:center; gap:8px}
+  .launch-when{font-weight:400; font-size:11px; color:var(--accent);
+               border:1px solid var(--accent); border-radius:999px; padding:1px 7px}
   .sit-t{font-weight:600; font-size:13.5px}
   .sit-s{font-size:12px; color:var(--muted); line-height:1.35}
   .sit-used{font-weight:400; font-size:11px; color:var(--faint)}
@@ -439,6 +446,27 @@
     <button type="button" id="show-go" class="cta-wide" hidden
             onclick="openShowScreen()"></button>
 
+    {% if campaign.armed %}
+    <!-- THE LAUNCH — the campaign door. Not a show: a moment. It cuts across
+         all six shows, which is why it sits beside the grid rather than in it.
+         The 29 posts behind it are already written, so the fastest route to a
+         launch post is two taps from here. -->
+    <p class="tier-label">The launch</p>
+    <button type="button" class="opt launch-door" onclick="openLaunch()">
+      <span class="ic">⚡</span>
+      <span class="tx">
+        <span class="t">{{ campaign.label }} <span class="launch-when">{{ campaign.when }}</span></span>
+        <span class="s">
+          {%- if campaign.phase_label -%}
+            Now: {{ campaign.phase_label }} — {{ planned_posts|selectattr('phase', 'equalto', campaign.phase)|rejectattr('started')|list|length }} written and waiting
+          {%- else -%}
+            Pick a phase and write for it
+          {%- endif -%}
+        </span></span>
+      <span class="chev">›</span>
+    </button>
+    {% endif %}
+
     <p class="tier-label" id="offformat-line">
       <a href="#" onclick="toggleOffFormat(); return false">Something off-format? →</a>
     </p>
@@ -624,6 +652,90 @@
     <div class="cta-row">
       <button type="button" onclick="startStraightUp(true)">🎯 Show me the takes</button>
       <button type="button" class="ghost" onclick="startStraightUp(false)">⚡ Just build it</button>
+    </div>
+  </section>
+
+  {% if campaign.armed %}
+  <!-- ═════════ 3·THE LAUNCH — the campaign's own screen ═════════
+       Every other door asks "what's the idea?". This one asks "what MOMENT is
+       this for?", because during a launch that question outranks the subject:
+       the same audit is a comment-bait post in the pre-launch fortnight and a
+       quiz post the week after. Phase first, then the written post. -->
+  <section class="scr" id="scr-launch">
+    <p class="eyebrow">⚡ {{ campaign.label }}</p>
+    <h2>What are we writing for?</h2>
+    <p class="hint">
+      {% if campaign.launch_date %}Launch {{ campaign.launch_date }} · {{ campaign.when }}. {% endif %}
+      The phase decides the ask — everything else follows it.
+    </p>
+
+    <div class="chip-row" id="phase-chips" style="margin-top:6px">
+      {% for p in campaign_phases %}
+      <button type="button" class="chip{% if p.active %} sel{% endif %}" data-phase="{{ p.key }}"
+              onclick="pickPhase('{{ p.key }}', this)">
+        {{ p.label.split('—')[0].strip() }}{% if p.active %} · now{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    <p class="hint" id="phase-goal" style="margin-top:10px"></p>
+
+    <p class="tier-label" id="plan-head">Already written for this phase</p>
+    <div class="sit-grid" id="plan-grid">
+      {% for post in planned_posts %}
+      <button type="button" class="sit{% if post.started %} used{% endif %}"
+              data-plan="{{ post.key }}" data-phase="{{ post.phase }}"
+              data-show="{{ post.show }}" data-mechanic="{{ post.mechanic }}"
+              data-ingredient="{{ post.ingredient }}"
+              onclick="pickPlanned('{{ post.key }}', this)">
+        <span class="sit-t">{{ post.title }}{% if post.started %} <span class="sit-used">started</span>{% endif %}</span>
+        <span class="sit-s">{{ post.show|upper|replace('_', ' ') }}{% if post.mechanic %} · {{ post.mechanic|replace('_', ' ') }}{% endif %}</span>
+      </button>
+      {% endfor %}
+    </div>
+    <p class="hint" id="plan-empty" style="display:none">Nothing pre-written for this phase — write your own below.</p>
+
+    <label style="margin-top:14px">Or write something else for this phase</label>
+    <input id="launch-own" placeholder="e.g. the supplements people buy in January and bin by February">
+    <p class="hint" style="margin-top:6px; font-size:12px">
+      Whatever you write here is built under the phase's brief, so the ask comes out right on its own.
+    </p>
+
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
+    <div class="cta-row">
+      <button type="button" onclick="startLaunch(true)">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startLaunch(false)">⚡ Just build it</button>
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- ═════════ 3·THE STACK — the sorting show's own screen ═════════
+       This show's first question isn't the subject, it's the SORT: which way
+       the audience gets divided decides the whole post. -->
+  <section class="scr" id="scr-thestack">
+    <p class="eyebrow">🧪 THE STACK</p>
+    <h2>How are we sorting them?</h2>
+    <p class="hint">Pick the shape. Each one cuts something — that's what makes the show credible enough to sell from later.</p>
+
+    <div class="sit-grid" id="stack-grid">
+      {% for m in stack_mechanics %}
+      <button type="button" class="sit" data-mech="{{ m.key }}"
+              onclick="pickStackMech('{{ m.key }}', this)">
+        <span class="sit-t">{{ m.label }}</span>
+        <span class="sit-s">{{ m.description }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <label style="margin-top:14px">What's it about? <span class="muted">(optional)</span></label>
+    <input id="stack-subject" placeholder="e.g. the cupboard of someone six months in">
+    <p class="hint" style="margin-top:6px; font-size:12px">
+      Leave it blank and the engine picks the sort's subject itself.
+    </p>
+
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
+    <div class="cta-row">
+      <button type="button" onclick="startStack(true)">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startStack(false)">⚡ Just build it</button>
     </div>
   </section>
 
@@ -1031,6 +1143,9 @@ const QA_MIN = 8;
 let state = { ideaId: null, source: null, style: null, show: '',
               ampSit: '', ampState: '', terrs: null, ing: '', variant: {},
               cast: [],
+              // THE LAUNCH: the phase being written for and the pre-written
+              // post chosen, if any. THE STACK: the sorting format.
+              phase: '', plan: '', stackMech: '',
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
 // The show metadata the server rendered, so the concept studio can label
@@ -1049,6 +1164,8 @@ const META = {
   session: [1, 'Who it\u2019s for', 24],
   multiverse:[1, 'The episode', 24],
   livewire:[1, 'What\u2019s live', 24],
+  launch:  [1, 'The phase',  24],
+  thestack:[1, 'The sort',   24],
   radar:   [1, 'Pick a story', 24],
   idea:    [1, 'Your idea', 24],
   facts:   [1, 'Your research', 24],
@@ -1128,7 +1245,7 @@ function pickShow(key, el){
 // yet stay on the concept studio, which is a working default, not a stub.
 const SHOW_SCREEN = {amp: 'amp', live_wire: 'livewire',
                     straight_up: 'straightup', session: 'session',
-                    multiverse: 'multiverse'};
+                    multiverse: 'multiverse', the_stack: 'thestack'};
 const MAX_CAST = 4;
 function openShowScreen(){
   const screen = SHOW_SCREEN[state.show];
@@ -1225,6 +1342,93 @@ function pickIngredient(key, el){
   document.querySelectorAll('#ing-grid .sit').forEach(b =>
     b.classList.toggle('sel', b.dataset.ing === state.ing));
 }
+/* ---------- THE LAUNCH: the campaign's journey ---------- */
+// Phase first. It is the only choice on this screen that changes what the
+// engine is told, so everything below repaints from it.
+const CAMPAIGN = {{ campaign|tojson }};
+const PHASES = {{ campaign_phases|tojson }};
+
+function openLaunch(){
+  // Default to the phase the calendar says we're in; the editor can move off
+  // it to batch next week's posts, which is the whole point of the chips.
+  if (!state.phase) pickPhase(CAMPAIGN.phase || (PHASES[0] || {}).key || '');
+  show('launch');
+}
+function pickPhase(key, el){
+  state.phase = key;
+  state.plan = '';
+  document.querySelectorAll('#phase-chips .chip').forEach(c =>
+    c.classList.toggle('sel', c.dataset.phase === key));
+  const p = PHASES.find(x => x.key === key);
+  const goal = document.getElementById('phase-goal');
+  goal.innerHTML = p
+    ? `<b>${p.label}</b><br>${p.goal || ''}${p.cta_style ? ` <span class="muted">· the ask: ${p.cta_style}</span>` : ''}`
+    : '';
+  // Only this phase's written posts, and drop any selection carried over.
+  let n = 0;
+  document.querySelectorAll('#plan-grid .sit').forEach(b => {
+    const mine = b.dataset.phase === key;
+    b.hidden = !mine;
+    b.classList.remove('sel');
+    if (mine) n++;
+  });
+  document.getElementById('plan-head').hidden = n === 0;
+  document.getElementById('plan-empty').style.display = n ? 'none' : '';
+}
+function pickPlanned(key, el){
+  state.plan = (state.plan === key) ? '' : key;
+  document.querySelectorAll('#plan-grid .sit').forEach(b =>
+    b.classList.toggle('sel', b.dataset.plan === state.plan));
+  // Picking a written post means picking its show and format too — clearing
+  // the free-text box makes that unambiguous rather than sending both.
+  if (state.plan) document.getElementById('launch-own').value = '';
+}
+async function startLaunch(takes){
+  const own = document.getElementById('launch-own').value.trim();
+  if (!state.phase) { toast('Pick a phase first.'); return; }
+  if (!state.plan && !own) { toast('Pick a written post, or write your own.'); return; }
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  body.set('campaign_phase', state.phase);
+  if (state.plan) {
+    const card = document.querySelector(`#plan-grid .sit[data-plan="${state.plan}"]`);
+    // The seed is the hook line; the show and mechanic ride alongside it so
+    // the post builds as that format, not merely about that subject.
+    body.set('text', card.querySelector('.sit-t').textContent.replace('started', '').trim());
+    if (card.dataset.show) body.set('show', card.dataset.show);
+    if (card.dataset.mechanic) body.set('mechanic', card.dataset.mechanic);
+    if (card.dataset.ingredient) body.set('ingredient', card.dataset.ingredient);
+  } else {
+    body.set('text', own);
+    // A free-written launch post still wants a format; THE STACK is the show
+    // the campaign runs on, so it's the sane default rather than off-format.
+    body.set('show', 'the_stack');
+  }
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+
+/* ---------- THE STACK: the sorting show ---------- */
+function pickStackMech(key, el){
+  state.stackMech = (state.stackMech === key) ? '' : key;
+  document.querySelectorAll('#stack-grid .sit').forEach(b =>
+    b.classList.toggle('sel', b.dataset.mech === state.stackMech));
+}
+async function startStack(takes){
+  if (!state.stackMech) { toast('Pick how we’re sorting them.'); return; }
+  const subject = document.getElementById('stack-subject').value.trim();
+  const card = document.querySelector(`#stack-grid .sit[data-mech="${state.stackMech}"]`);
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  body.set('show', 'the_stack');
+  body.set('mechanic', state.stackMech);
+  body.set('text', subject || card.querySelector('.sit-s').textContent.trim());
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+
 async function startStraightUp(takes){
   const own = document.getElementById('ing-own').value.trim();
   if (!state.ing && !own) { toast('Pick a subject, or write your own question.'); return; }

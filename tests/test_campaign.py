@@ -338,6 +338,104 @@ def test_the_stack_show_is_registered_and_sorted_into_the_week():
     assert show.gate_profile == "diagnostic_pull"
 
 
+# --- the create journeys ----------------------------------------------------
+
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    """A logged-in web client on a scratch database."""
+    from fastapi.testclient import TestClient
+
+    from chrgd.webapp import create_app
+
+    monkeypatch.setenv("CHRGD_DB_PATH", str(tmp_path / "web.db"))
+    monkeypatch.setenv("CHRGD_OUTPUT_DIR", str(tmp_path / "out"))
+    monkeypatch.setenv("CHRGD_WEB_PASSWORD", "testpw123")
+    monkeypatch.setenv("CHRGD_SECRET_KEY", "0123456789abcdef0123456789abcdef")
+    settings = Settings()
+    client = TestClient(create_app(settings))
+    client.post(
+        "/login",
+        data={"username": "admin", "password": "testpw123"},
+        follow_redirects=False,
+    )
+    client.settings = settings
+    return client
+
+
+def test_create_page_renders_both_new_journeys(client):
+    html = client.get("/create").text
+    for probe in ("scr-launch", "scr-thestack", "launch-door",
+                  "phase-chips", "plan-grid", "stack-grid"):
+        assert probe in html, f"{probe} missing from /create"
+
+
+def test_create_page_offers_every_planned_post(client):
+    html = client.get("/create").text
+    for post in load_launch_backlog():
+        assert f'data-plan="{post.key}"' in html, f"{post.key} not offered"
+
+
+def test_every_planned_post_has_a_human_readable_title():
+    """The topical posts carry no hook on purpose — they must not show a raw key."""
+    for post in load_launch_backlog():
+        title = post.title()
+        assert title and title != post.key
+        assert "_" not in title or " " in title, f"{post.key}: raw key on a card"
+
+
+def test_launch_journey_stamps_the_phase(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "campaign_phase": "launch", "show": "the_stack",
+        "mechanic": "demo_post", "text": "answer three questions"})
+    assert r.status_code == 200
+    with Store(client.settings.db_path) as store:
+        idea = store.get_idea(r.json()["idea_id"])
+    prefs = creation_prefs(idea)
+    assert prefs["campaign_phase"] == "launch"
+    assert prefs["show"] == "the_stack"
+    assert prefs["mechanic_lock"]["key"] == "demo_post"
+
+
+def test_launch_journey_batches_ahead_of_the_calendar(client):
+    """Writing launch week during prime must use the launch brief."""
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "campaign_phase": "launch", "text": "a launch post"})
+    with Store(client.settings.db_path) as store:
+        idea = store.get_idea(r.json()["idea_id"])
+    message = build_user_message(idea)
+    assert "getchrgd.co.uk" in message
+    assert "LAUNCH DAY" in message
+
+
+def test_unknown_phase_is_rejected_not_silently_dropped(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "campaign_phase": "nonsense", "text": "x"})
+    assert r.status_code == 400
+
+
+def test_stack_journey_builds_as_the_show(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "show": "the_stack", "mechanic": "cupboard_audit",
+        "text": "the cupboard of someone six months in"})
+    assert r.status_code == 200
+    with Store(client.settings.db_path) as store:
+        idea = store.get_idea(r.json()["idea_id"])
+    message = build_user_message(idea)
+    assert "THE STACK" in message
+    assert "THE SORT" in message, "the show's spine should reach the write call"
+
+
+def test_started_posts_are_marked_on_the_launch_screen(client):
+    """A planned post already seeded shows as started rather than offered twice."""
+    post = planned_posts("prime")[0]
+    with Store(client.settings.db_path) as store:
+        seed_posts(store, client.settings, [post])
+    html = client.get("/create").text
+    marked = html.split(f'data-plan="{post.key}"')[1].split("</button>")[0]
+    assert "started" in marked
+
+
 def test_the_stack_brief_forbids_diagnosis():
     """The one claim this show could plausibly make, and must not."""
     banned = " ".join(get_show("the_stack").voice.banned).lower()

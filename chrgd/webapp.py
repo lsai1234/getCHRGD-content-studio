@@ -421,6 +421,83 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
 
         return suggestion(store)
 
+    def _campaign_context(store) -> tuple[dict, list[dict], list[dict]]:
+        """The launch screen's data: where we are, the phases, the written posts.
+
+        `started` marks a planned post that already has a backlog row, using
+        the same concept-note match `chrgd campaign seed` dedupes on — so the
+        screen shows what's left to make rather than offering to make the same
+        post twice. It's a nudge and not an exclusion, exactly like STRAIGHT
+        UP's `covered` flag: re-running one deliberately is allowed.
+        """
+        from datetime import date
+
+        from .campaign import load_campaign, load_launch_backlog
+
+        campaign = load_campaign()
+        if not campaign.armed:
+            return ({"armed": False}, [], [])
+
+        today = date.today()
+        active = campaign.phase_for(today)
+        offset = campaign.day_offset(today)
+        state = {
+            "armed": True,
+            "label": campaign.label or campaign.key,
+            "what": campaign.what,
+            "domain": campaign.domain,
+            "launch_date": str(campaign.launch_date or ""),
+            "phase": active.key if active else "",
+            "phase_label": active.label if active else "",
+            # The human line the screen leads with — "15 days to go".
+            "when": (
+                "" if offset is None
+                else "launch day" if offset == 0
+                else f"{abs(offset)} days to go" if offset < 0
+                else f"{offset} days in"
+            ),
+        }
+
+        posts = load_launch_backlog()
+        counts: dict[str, int] = {}
+        planned: list[dict] = []
+        for post in posts:
+            counts[post.phase] = counts.get(post.phase, 0) + 1
+            planned.append({
+                "key": post.key,
+                "phase": post.phase,
+                "day": post.day,
+                "show": post.show,
+                "mechanic": post.mechanic,
+                "ingredient": post.ingredient,
+                "hook": post.hook,
+                "title": post.title(),
+                "note": post.note,
+                "started": store.find_by_concept_note(post.concept_note())
+                is not None,
+            })
+        phases = [
+            {"key": p.key, "label": p.label, "goal": p.goal,
+             "cta_style": p.cta_style, "count": counts.get(p.key, 0),
+             "active": bool(active and p.key == active.key)}
+            for p in campaign.phases
+        ]
+        return (state, phases, planned)
+
+    def _stack_mechanics() -> list[dict]:
+        """THE STACK's sorting formats — the launch mechanics, in file order."""
+        from .mechanics import load_mechanics
+
+        keys = ("archetype_sort", "cupboard_audit", "price_teardown",
+                "stop_buying", "demo_post", "objection_kill")
+        out = []
+        for key in keys:
+            mech = load_mechanics().get(key)
+            if mech is not None:
+                out.append({"key": mech.key, "label": mech.label,
+                            "description": mech.description})
+        return out
+
     def _roster_with_canon(store) -> list[dict]:
         """The roster, plus what the show has actually established for each —
         so the cast picker shows who's carrying a storyline, not just a trait."""
@@ -475,6 +552,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             nudge = _session_nudge(store)
             roster = _roster_with_canon(store)
             canon = _canon_summary(store)
+            campaign, campaign_phases, planned = _campaign_context(store)
         return render_page(
             request, "create.html", "create",
             mechanics=[m.model_dump() for m in load_mechanics().values()],
@@ -511,6 +589,13 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                 {"key": t.key, "label": t.label, "weight": t.weight}
                 for t in in_season()
             ],
+            # THE LAUNCH's own screen: where the campaign is, the phases you
+            # can write for, and the posts already written for each.
+            campaign=campaign,
+            campaign_phases=campaign_phases,
+            planned_posts=planned,
+            # THE STACK's own screen: the sorting formats the show runs on.
+            stack_mechanics=_stack_mechanics(),
             resume_idea=idea or "",
             preset_day=day or "",
         )
@@ -1109,12 +1194,25 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         ingredient: str = "",
         session_variant: dict | None = None,
         cast: list[str] | None = None,
+        campaign_phase: str = "",
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
         from .shows import ROUTE_KEY, get_show
 
         route: dict = {}
+        # The launch phase this post is written for. Stamped explicitly so the
+        # build uses the phase the editor CHOSE rather than the one today's
+        # date resolves to — which is what makes it possible to write launch
+        # week during the pre-launch fortnight.
+        if campaign_phase:
+            from .campaign import ROUTE_KEY as PHASE_KEY, load_campaign
+
+            if load_campaign().get_phase(campaign_phase) is None:
+                raise HTTPException(
+                    400, f"unknown campaign phase '{campaign_phase}'"
+                )
+            route[PHASE_KEY] = campaign_phase
         # Which recurring show this post is an episode of. It rides route_json
         # exactly like style and mechanic_lock, so creation_prefs carries it
         # through every rebuild; absent for an off-format post.
@@ -1218,6 +1316,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         variant: str = Form(""),   # JSON object: {axis: option}
         cast: str = Form(""),      # comma-separated roster keys
         mechanic: str = Form(""),
+        campaign_phase: str = Form(""),
         style: str = Form(""),
         length: str = Form(""),
         scheduled_for: str = Form(""),
@@ -1278,6 +1377,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     length=length, scheduled_for=when, show=show, amp=amp,
                     ingredient=ingredient, session_variant=variant_obj,
                     cast=[c for c in cast.split(",") if c.strip()],
+                    campaign_phase=campaign_phase,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}
@@ -1299,6 +1399,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     length=length,
                     scheduled_for=when,
                     show=show,
+                    campaign_phase=campaign_phase,
                 )
                 if manual:
                     # Fully manual: empty slides straight into the editor
