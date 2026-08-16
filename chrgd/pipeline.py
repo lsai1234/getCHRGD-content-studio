@@ -476,6 +476,18 @@ def build_user_message(
             show.brief_block(include_length=not prefs.get("length_pref"))
         )
 
+    # The campaign: what this post is FOR this week, and what it may say about
+    # the launch. Sits after the show because it modifies the show's job rather
+    # than replacing it — the format is still the format, the ask is what
+    # moves. Empty whenever the campaign is disarmed or the calendar has run
+    # past it, which is what keeps an off-campaign build byte-identical.
+    from .campaign import campaign_block
+
+    _, campaign_brief = campaign_block(phase_key=str(prefs.get("campaign_phase") or ""))
+    if campaign_brief:
+        lines.append("")
+        lines.append(campaign_brief)
+
     # A take the editor chose from a fan-out is the agreed direction — the
     # full write must BE that take, not a fresh interpretation of the seed.
     take = prefs.get("take")
@@ -757,6 +769,10 @@ def creation_prefs(idea: Idea) -> dict:
             # THE MULTIVERSE's cast for this episode (chrgd/roster.py), and
             # the prose episode written before the slides (chrgd/story.py).
             "cast", "story",
+            # The launch phase this post was seeded for (chrgd/campaign.py).
+            # Forces a phase regardless of today's date, so next week's launch
+            # posts can be batched this week; absent means "ask the calendar".
+            "campaign_phase",
         )
         if k in route
     }

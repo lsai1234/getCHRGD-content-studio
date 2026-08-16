@@ -71,6 +71,82 @@ skeleton = [
     "The one-line version to remember + 'send this to whoever still believes the old version'",
 ]
 
+# ── Launch formats (config/campaign.toml) ────────────────────────────────────
+# Six skeletons built for one problem: selling from an account nobody follows
+# yet. Each one works cold — no prior post, no relationship, nothing to catch
+# up on — and each one ends somewhere a CTA can honestly go. They are phase-
+# agnostic on purpose: the campaign layer supplies the ask, these supply the
+# shape, so the same skeleton earns comments in June and quiz clicks in July.
+
+[mechanics.archetype_sort]
+label = "Which one are you"
+description = "Sort the audience into named types. The highest-reach format at any follower count, and a live demo of a recommendation quiz."
+skeleton = [
+    "The sorting, stated as a fact not a question — 'there are four types of supplement buyer and three of them are wasting money'",
+    "Type 1, named and exact enough to tag a mate in, plus the one thing it gets wrong",
+    "Type 2, same treatment — a different failure, not a variation of the first",
+    "Type 3, the one most of the audience actually is — go easiest on the person and hardest on what they were sold",
+    "The type worth being, described as behaviour rather than a purchase",
+    "Which one are you — the ask the phase allows",
+]
+
+[mechanics.cupboard_audit]
+label = "Keep or bin"
+description = "Go through a real cupboard item by item and sort it. Brutal about money, neutral about bodies — the format that builds the credibility to sell later."
+skeleton = [
+    "The cupboard, described so specifically the right person feels caught — 'four tubs, two of them open, none of them finished'",
+    "BIN — the one nearly everybody has that is doing the least, and what it was sold to you as",
+    "BIN — the second one, the expensive one, and what you were actually paying for",
+    "KEEP — the boring cheap one that has the evidence behind it, stated plainly and without overselling it",
+    "The honest total: what cutting the dead weight actually saves, and what to do with the gap",
+]
+
+[mechanics.price_teardown]
+label = "What you're actually paying for"
+description = "Break a price down into what's in the tub versus what's in the marketing. Sharp about the industry, never about physiology — high shares, zero claim risk."
+skeleton = [
+    "The price, stated flat — 'a £45 tub, and here's where the £45 goes'",
+    "The part that is genuinely the active ingredient, and roughly what that costs",
+    "The part that is flavour, filler and a proprietary blend hiding the doses",
+    "The part that is the label, the sponsorship and the shelf space",
+    "What the same thing costs when nobody is selling you a personality with it",
+    "The comment prompt: the tub you can't justify, go on",
+]
+
+[mechanics.stop_buying]
+label = "Stop buying this"
+description = "The anti-list. An account that tells people to buy less is the only kind believed when it eventually sells something — this is the trust-building workhorse."
+skeleton = [
+    "'Things to stop buying before you buy anything else' — no hedging",
+    "The first one, with the honest reason it stays on shelves",
+    "The second — pick one the audience genuinely believes in, and be fair to why they believed it",
+    "The third, and the money the three of them add up to",
+    "The one thing worth the money instead, understated",
+    "What's still in your basket that shouldn't be?",
+]
+
+[mechanics.demo_post]
+label = "The post is the demo"
+description = "Do a rough, generic version of what the product does, in the carousel itself. The post has to be genuinely useful on its own — the ask only works because the demo already worked."
+skeleton = [
+    "The question the product answers, asked the way a real person asks it",
+    "The first thing that changes the answer, with both branches given honestly",
+    "The second thing that changes it — this is where a generic answer starts breaking down",
+    "The rough answer for each of the two or three most common cases",
+    "Where this stops being answerable in a carousel, said plainly — then the ask",
+]
+
+[mechanics.objection_kill]
+label = "The objection, taken seriously"
+description = "Name the strongest reason not to buy and answer it straight. For after launch, when the doubts are real and everybody else is pretending they aren't."
+skeleton = [
+    "The objection, stated more strongly than a sceptic would state it",
+    "The part of it that is completely correct — concede it fully and early",
+    "What the objection misses, argued rather than asserted",
+    "The honest limit: who this genuinely isn't for. Naming them is what makes the rest believable",
+    "The ask, aimed only at the people the last two slides described",
+]
+
 # Amp's charge cycle — the mascot journey. Every post is ONE charge cycle:
 # a relatable drain event flattens Amp, the middle slides charge him back up,
 # and the final slide lands fully charged on the product benefit. Selectable

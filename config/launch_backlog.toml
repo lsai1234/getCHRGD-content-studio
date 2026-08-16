@@ -1,0 +1,384 @@
+# The launch backlog — the written content for the fortnight either side of go-live.
+#
+# Each entry is a seed row waiting to be captured: the concept, the show it
+# belongs to, the mechanic it runs on, the campaign phase it is written for,
+# and a suggested day relative to launch. `chrgd campaign seed` turns these
+# into backlog rows with the route pre-stamped, so the build already knows the
+# show, the format and the phase before anybody opens the studio.
+#
+#   chrgd campaign seed --phase prime      # queue the pre-launch run
+#   chrgd campaign seed --all --dry-run    # see the whole calendar first
+#
+# `hook` is a STARTING POINT, not the final headline — the concept gate still
+# generates rivals and picks a winner. It is here so the engine begins from a
+# specific angle rather than a topic, which is the single biggest quality lever
+# on a seed row.
+#
+# ─── The shape of the calendar ───────────────────────────────────────────────
+#
+# PRIME (day -14 → -4) sells nothing. At ~70 followers a countdown reaches
+# nobody who cares, so the pre-launch fortnight is spent on pure reach that
+# happens to plant one thought: *you don't actually know if what you're taking
+# is doing anything.* That thought is the market for a recommendation quiz, and
+# it is genuinely true, which is why it can be said honestly and often.
+#
+# TEASE (day -3 → -1) is three posts that earn their swipe first and mention
+# the thing second.
+#
+# LAUNCH (day 0 → +7) is the same reach content with one ask bolted on: the
+# quiz, by name, with the domain written out. Never "buy".
+#
+# SELL (day +8 →) is the steady state, including the objection posts — which
+# are where the actual conversions come from once the novelty is gone.
+#
+# Day numbers are suggestions that keep each show on its own weekday; reorder
+# freely. Nothing here quotes a price, a discount or a statistic, because
+# nothing here is allowed to invent one.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PRIME — pure reach, zero selling
+# ═══════════════════════════════════════════════════════════════════════════
+
+[[posts]]
+key = "prime_types"
+phase = "prime"
+day = -14
+show = "the_stack"
+mechanic = "archetype_sort"
+category = "identity_exposure"
+hook = "there are four types of supplement buyer and three of them are skint for no reason"
+note = """Sort the audience into four supplement-buying types and name what each one gets wrong. The tub graveyard (buys on offer, finishes nothing). The mate's-recommendation lad (takes whatever the strongest bloke in the gym takes). The stacker (six things, no plan, couldn't tell you what any of them do). And the one who takes two boring things consistently and is quietly getting the most out of it. Go hardest at what each type was SOLD, not at the person. End on 'which one are you' — no product, no mention of anything coming."""
+target_viewer = "18-30 UK gym-goer who owns supplements they can't justify"
+pain_point = "spending money on tubs without knowing if any of it works"
+core_tension = "everyone has a supplement routine; almost nobody can explain theirs"
+
+[[posts]]
+key = "prime_cupboard"
+phase = "prime"
+day = -13
+show = "the_stack"
+mechanic = "cupboard_audit"
+category = "myth_fight"
+hook = "your supplement cupboard, sorted into keep and bin"
+note = """Walk one specific cupboard — four tubs, two open, none finished — and sort it item by item. Bin the fat burner. Bin the BCAAs if protein is already sorted. Keep creatine monohydrate. Keep protein powder, but as food rather than magic. Be brutal about what things cost and completely neutral about physiology. The post's authority comes from cutting more than it keeps."""
+target_viewer = "someone with a cupboard of half-used tubs"
+pain_point = "no idea which of the things they own is actually doing anything"
+core_tension = "the cheapest thing in the cupboard is usually the one with the evidence"
+
+[[posts]]
+key = "prime_creatine"
+phase = "prime"
+day = -12
+show = "straight_up"
+ingredient = "creatine"
+category = "education"
+hook = "do you actually need creatine if you only train three times a week"
+note = """The real question, answered plainly. Well-studied, cheap, monohydrate is the best-evidenced form and the one 'advanced' blends charge four times more to replace. Loading is optional. Name the myths — steroid, kidneys, cycling off — and correct them without drama. Sharp about what the industry charges for the fancy versions; neutral and reported about what it does."""
+target_viewer = "three-times-a-week trainer wondering if creatine is for serious lifters only"
+pain_point = "assuming the well-evidenced stuff is only for people who train more than them"
+
+[[posts]]
+key = "prime_teardown"
+phase = "prime"
+day = -11
+show = "the_stack"
+mechanic = "price_teardown"
+category = "myth_fight"
+hook = "where the money actually goes in a pre-workout tub"
+note = """Break a typical tub into what you're paying for: the caffeine (pennies), the beta-alanine that causes the tingle everyone mistakes for potency, the flavouring, the proprietary blend that exists mainly to hide how little of the active stuff is in there, and the sponsorship deal on the label. This is the show at its sharpest — all of the edge aimed at pricing and labelling, none of it at physiology. Do not name a real brand. No invented prices: talk in proportions and in what things are, not in figures we can't stand behind."""
+target_viewer = "anyone who buys pre-workout on the label"
+pain_point = "paying premium prices for flavouring and marketing"
+core_tension = "the tingle is a marketing accident people read as proof it's working"
+
+[[posts]]
+key = "prime_slump"
+phase = "prime"
+day = -10
+show = "amp"
+category = "humour"
+hook = "the 3pm slump, and the thing that actually shifts it"
+note = """Amp at 3pm on a Tuesday, flat, staring at the kettle, one meeting from the end of him. Escalate the slump, then land ONE usable behavioural tip in Amp's lane — the late-afternoon coffee that's still in your system at eleven, and moving the last one earlier. Habit and routine only; nothing about dosing or physiology, that's STRAIGHT UP's job. Funny first, useful second, no product anywhere."""
+target_viewer = "office worker who trains after work"
+pain_point = "knackered by 3pm, then can't sleep at 11"
+
+[[posts]]
+key = "prime_advice"
+phase = "prime"
+day = -9
+show = "multiverse"
+category = "humour"
+hook = "the new lad asks one question and the whole gym answers it differently"
+note = """An episode built on the exact confusion the quiz exists to solve, played entirely for comedy and never resolved. A new member asks what he should be taking. Every character gives him a confident, contradictory answer rooted in their own trait. He leaves with six recommendations and less certainty than he arrived with. Nobody is right, the room refuses to settle it, and the episode ends mid-argument. Cast from the roster, all likeness rules apply, no product mentioned."""
+target_viewer = "anyone who has asked this question and got six answers"
+core_tension = "everyone in the gym is certain, and they all disagree"
+
+[[posts]]
+key = "prime_stop"
+phase = "prime"
+day = -8
+show = "the_stack"
+mechanic = "stop_buying"
+category = "myth_fight"
+hook = "three things to stop buying before you buy anything else"
+note = """The anti-list, and the most important post of the pre-launch run — an account that tells people to buy less is the only kind anyone believes later. Fat burners. BCAAs on top of a decent protein intake. Anything sold on a proprietary blend. Be fair about why each one is believed before cutting it. Close on the boring cheap thing that's worth the money, understated. Comment ask only."""
+target_viewer = "someone about to place another order"
+pain_point = "buying the exciting thing instead of the working thing"
+
+[[posts]]
+key = "prime_preworkout"
+phase = "prime"
+day = -7
+show = "straight_up"
+ingredient = "caffeine"
+category = "education"
+hook = "is pre-workout just expensive coffee"
+note = """Answer it honestly: caffeine is the best-evidenced thing in most tubs, it's dose-dependent, tolerance builds, and it peaks roughly 45-60 minutes in. A late session can genuinely cost you sleep. The tingle is beta-alanine and has nothing to do with the caffeine working. Then the industry line: half the price of a tub is flavour, marketing and a blend hiding the doses."""
+target_viewer = "the 6pm-after-work trainer on their second scoop"
+pain_point = "escalating scoops and blaming the product"
+
+[[posts]]
+key = "prime_session"
+phase = "prime"
+day = -6
+show = "session"
+category = "education"
+hook = "a 40-minute full-body session for a packed 6pm gym"
+note = """A genuinely useful saveable session card built for the constraint everyone actually has: 40 minutes, one gym, every rack taken. Goal-framed, not gender-labelled. State who it's for, how long it takes and what kit it needs on the opening slide. No jargon, no %1RM, no RPE. Nothing to do with supplements — this one is here to earn reach and saves, and that's the whole job."""
+target_viewer = "beginner-to-intermediate training after work"
+pain_point = "arriving at 6pm and finding everything in use"
+
+[[posts]]
+key = "prime_eaas"
+phase = "prime"
+day = -5
+show = "straight_up"
+ingredient = "eaas_bcaas"
+category = "education"
+hook = "do you need EAAs if you're already hitting your protein"
+note = """Short answer: if you're hitting a reasonable daily protein target from food or whey, the case is weak, and for BCAAs weaker still. Say so plainly. Then the industry point — this is one of the clearest examples of a category kept alive by marketing rather than evidence. Report the physiology neutrally; be pointed about the marketing."""
+target_viewer = "someone sipping aminos through their session"
+
+[[posts]]
+key = "prime_livewire"
+phase = "prime"
+day = -4
+show = "live_wire"
+category = "topical"
+hook = ""
+note = """Topical — run the trend scout the morning it's due rather than pre-writing it, and take the gym angle on whatever's actually live that week in UK gym culture, big fitness news, new science, football, reality TV or money. The leap is the product: never just report the thing. No mention of the launch."""
+target_viewer = "18-30 UK gym-goer who watches the same telly as everyone else"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TEASE — the thing exists, and only after the post has earned it
+# ═══════════════════════════════════════════════════════════════════════════
+
+[[posts]]
+key = "tease_depends"
+phase = "tease"
+day = -3
+show = "the_stack"
+mechanic = "demo_post"
+category = "education"
+hook = "nobody can tell you what to take in a comment, and here's why"
+note = """The post that makes the case for the product without being an advert for it. What you should take genuinely depends on three things: what you're training for, what you already eat, and what you're willing to spend. Walk both branches of each honestly — this is why every answer in the comments is confidently wrong, including the good ones. Then the honest limit: this is as far as a carousel gets, the version that's actually about you lands this week. Follow, don't click — there's nothing to click yet."""
+target_viewer = "someone who has asked the internet and got noise"
+core_tension = "the honest answer is 'it depends', which is exactly what nobody wants to hear"
+
+[[posts]]
+key = "tease_shop"
+phase = "tease"
+day = -2
+show = "amp"
+category = "humour"
+hook = "Amp in the supplement aisle having a full crisis"
+note = """Amp in front of a wall of tubs, paralysed. Every label promises something, the words are all made up, the one he can afford looks the least impressive. Escalate the paralysis, land the tip — buy the boring thing you'll actually take consistently rather than the exciting thing you'll abandon — then the sign-off nods at the fact we built something that does the choosing properly, landing this week. Follow, so you see it."""
+target_viewer = "anyone who has stood in that aisle"
+pain_point = "choice paralysis in front of forty tubs"
+
+[[posts]]
+key = "tease_audit"
+phase = "tease"
+day = -1
+show = "the_stack"
+mechanic = "cupboard_audit"
+category = "identity_exposure"
+hook = "if your stack has more than three things in it, one of them is doing nothing"
+note = """A sharper, tighter audit than the earlier one — built on the stacker specifically. Six things, no plan, overlapping ingredients, two of them the same thing under different names. Cut it down live to what's actually justified. Close on: the proper version of this, about your training and your budget, goes live tomorrow. Follow it."""
+target_viewer = "the six-supplement stacker"
+pain_point = "paying twice for the same ingredient under two labels"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# LAUNCH — the quiz, by name, with the domain written out
+# ═══════════════════════════════════════════════════════════════════════════
+
+[[posts]]
+key = "launch_demo"
+phase = "launch"
+day = 0
+show = "the_stack"
+mechanic = "demo_post"
+category = "education"
+hook = "answer three questions and I'll tell you roughly what your stack should be"
+note = """LAUNCH DAY. The post IS the product. Ask three questions in the carousel — how often you train, whether you're eating enough protein, and what you're actually training for — and give the rough answer for each of the two or three common combinations. Be genuinely useful; someone should be able to act on this without ever clicking. Then the honest limit: a carousel can do three questions, the real one does it properly in about a minute. getchrgd.co.uk, written out in plain text, not 'link in bio'."""
+target_viewer = "anyone who still doesn't know what to take"
+core_tension = "a good generic answer still isn't your answer"
+
+[[posts]]
+key = "launch_types"
+phase = "launch"
+day = 1
+show = "the_stack"
+mechanic = "archetype_sort"
+category = "identity_exposure"
+hook = "which supplement buyer are you — and what it's costing you"
+note = """The archetype format again, sorted on a different axis: by how people SHOP rather than by what they own. The offer-chaser, the loyalist who's used the same brand for six years without checking, the influencer-code buyer, the one who buys nothing and wonders why they're tired. Name what each is spending on badly. Close on the quiz as the version that sorts you properly — getchrgd.co.uk."""
+target_viewer = "anyone who buys supplements at all"
+
+[[posts]]
+key = "launch_bin"
+phase = "launch"
+day = 2
+show = "the_stack"
+mechanic = "cupboard_audit"
+category = "myth_fight"
+hook = "we'll happily tell you to take less, and here's the proof"
+note = """The trust post of launch week, and the one most likely to convert a sceptic. Run an audit that BINS more than it keeps, and make the point explicitly: the quiz is perfectly capable of telling you the answer is two cheap things, or nothing at all, and it does. An account that only ever recommends buying more is one you shouldn't trust with this question. Then the ask — getchrgd.co.uk."""
+target_viewer = "the sceptic who assumes every brand quiz sells you everything"
+core_tension = "a shop's quiz that tells you to buy less is the only one worth doing"
+
+[[posts]]
+key = "launch_creatine"
+phase = "launch"
+day = 3
+show = "straight_up"
+ingredient = "creatine"
+category = "education"
+hook = "the cheapest thing on the shelf is the one with the most evidence behind it"
+note = """Straight Up on monohydrate versus the expensive 'advanced' forms — what the evidence actually supports, and what the price gap is really buying. Keep it calm, plain and claim-safe; this show's credibility is the account's credibility. One-line quiz close at the end, no harder than that — on this show the trust is worth more than the click."""
+target_viewer = "someone about to buy the four-times-pricier version"
+
+[[posts]]
+key = "launch_amp_quiz"
+phase = "launch"
+day = 4
+show = "amp"
+category = "humour"
+hook = "Amp does the quiz and gets told to bin half his cupboard"
+note = """Amp takes the quiz, fully expecting to be told he needs everything, and is instead told to stop buying three of the things he loves. He sulks. He complies. He's better off. The tip is the takeaway: the honest answer usually costs less than the exciting one. Sign off 'Stay amped.' with the domain in the final slide's copy."""
+target_viewer = "anyone who suspects they're over-supplementing"
+
+[[posts]]
+key = "launch_teardown"
+phase = "launch"
+day = 5
+show = "the_stack"
+mechanic = "price_teardown"
+category = "myth_fight"
+hook = "what you're actually paying for when a tub costs more than the one next to it"
+note = """A teardown of the price gap between two near-identical ingredient lists — flavour, brand, marketing, shelf space. All edge aimed at the industry, none at physiology, no real brand named, no invented figures. Close on the quiz: it picks on what's in it rather than what's on it. getchrgd.co.uk."""
+target_viewer = "the label-led shopper"
+
+[[posts]]
+key = "launch_livewire"
+phase = "launch"
+day = 6
+show = "live_wire"
+category = "topical"
+hook = ""
+note = """Topical, scouted on the day. Take whatever is genuinely live that week and make the gym leap. A single-line quiz close at the end only if it fits naturally — if the take doesn't lead anywhere near supplements, run it clean with no ask. A forced CTA costs more reach than the click is worth."""
+
+[[posts]]
+key = "launch_stop"
+phase = "launch"
+day = 7
+show = "the_stack"
+mechanic = "stop_buying"
+category = "myth_fight"
+hook = "still buying these? stop, then do this instead"
+note = """Close launch week the way it opened: by cutting things. Three things not worth the money, the honest reason each one persists, then the boring alternative. The ask lands as the natural next step rather than a pivot — if you want the version that knows what you train for, it's a minute at getchrgd.co.uk."""
+target_viewer = "someone with an order in their basket"
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SELL — the steady state. The objection posts are where conversions live.
+# ═══════════════════════════════════════════════════════════════════════════
+
+[[posts]]
+key = "sell_same_stuff"
+phase = "sell"
+day = 9
+show = "the_stack"
+mechanic = "objection_kill"
+category = "myth_fight"
+hook = "'it's just the same stuff I'd buy anyway' — yeah, mostly"
+note = """The strongest objection there is, so concede it completely and early: it IS largely the same well-evidenced ingredients you could buy separately anywhere. Then argue the actual value — knowing WHICH of them, in your case, and not paying for the four you don't need. State the honest limit: if you already know exactly what you take and why, you genuinely don't need this, and you should keep doing what you're doing. Aim the ask only at the people who don't."""
+target_viewer = "the informed sceptic"
+core_tension = "the product's honest pitch is 'we sorted the choosing', not 'we have special powder'"
+
+[[posts]]
+key = "sell_plan"
+phase = "sell"
+day = 11
+show = "the_stack"
+mechanic = "objection_kill"
+category = "education"
+hook = "what a plan actually is, said plainly, because most brands won't"
+note = """The subscription post, played completely straight. It's a subscription. It turns up on a cadence you pick. You can change it or cancel it. What you're paying for is not having to think about it or reorder it, not a discount and not a secret formula. Be explicit that it's a subscription — never dress one up as a deal, never quote a price or an offer that isn't in the campaign facts. The honesty IS the pitch here."""
+target_viewer = "anyone burned by a subscription they forgot about"
+pain_point = "signing up to something you can't work out how to cancel"
+
+[[posts]]
+key = "sell_none"
+phase = "sell"
+day = 13
+show = "straight_up"
+ingredient = "protein_powder"
+category = "education"
+hook = "protein powder is food, not magic — and most people are fine without it"
+note = """It's a convenient way to hit a daily target, not a special one. Total daily intake matters far more than source or timing, and the 30-minute anabolic window is not what the evidence supports. Then the industry line on the price gap between near-identical tubs. Soft quiz close — the quiz will tell plenty of people the answer here is 'eat a bit more, buy nothing'."""
+target_viewer = "someone who thinks protein powder is compulsory"
+
+[[posts]]
+key = "sell_beginner"
+phase = "sell"
+day = 15
+show = "the_stack"
+mechanic = "demo_post"
+category = "education"
+hook = "brand new to the gym? here's the entire list you need"
+note = """A demo aimed squarely at the beginner, and deliberately tiny. The whole honest list for someone eight weeks in is very short, and saying so is the most persuasive thing this account can do. Walk the two variables that change it. Close on the quiz for the people whose situation is less standard than they think."""
+target_viewer = "eight-weeks-in beginner being sold to from every direction"
+pain_point = "being sold an advanced stack before they need any of it"
+
+[[posts]]
+key = "sell_types_goal"
+phase = "sell"
+day = 17
+show = "the_stack"
+mechanic = "archetype_sort"
+category = "identity_exposure"
+hook = "sort yourself by what you're actually training for, not what you tell people"
+note = """Archetypes on a third axis — by real goal versus stated goal. The one who says strength and trains for the mirror. The one who says fat loss and trains like a powerlifter. The one training for a holiday in nine weeks. What each one is over-buying for a goal they aren't really chasing. Quiz close."""
+target_viewer = "anyone whose training doesn't match their stated goal"
+
+[[posts]]
+key = "sell_cancel"
+phase = "sell"
+day = 19
+show = "the_stack"
+mechanic = "objection_kill"
+category = "education"
+hook = "the questions people actually ask before they'll do a quiz on a shop's website"
+note = """Answer the real friction directly and unglamorously: what it asks, how long it takes, whether it's free, whether it'll tell you to buy everything, whether you have to buy anything at all, whether a plan can be cancelled. Short, plain answers, one per slide. This is the least exciting post on the account and it will convert better than most of them."""
+target_viewer = "someone hovering over the link"
+pain_point = "assuming any brand quiz is a sales funnel in a costume"
+
+[[posts]]
+key = "sell_amp_reorder"
+phase = "sell"
+day = 21
+show = "amp"
+category = "humour"
+hook = "Amp runs out of the one thing he actually needed, again"
+note = """Amp, mid-session, remembering the tub ran out nine days ago and he keeps meaning to sort it. The tip is behavioural and in his lane — the reorder is the bit everybody fails at, so take the deciding out of it. Naturally lands on the plan without pitching it. Funny first, and no pressure."""
+target_viewer = "the serial re-orderer who never re-orders"
+pain_point = "always three weeks between running out and replacing"

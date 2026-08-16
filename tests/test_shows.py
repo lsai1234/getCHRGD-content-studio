@@ -32,7 +32,8 @@ from chrgd.shows import (
     show_for_idea,
 )
 
-ALL_SHOWS = ("amp", "multiverse", "straight_up", "session", "live_wire")
+ALL_SHOWS = ("amp", "multiverse", "straight_up", "session", "live_wire",
+             "the_stack")
 
 
 @pytest.fixture()
@@ -63,14 +64,14 @@ def idea_on(show: str | None, **route) -> Idea:
 # --- the registry -----------------------------------------------------------
 
 
-def test_the_five_shows_load():
+def test_every_show_loads():
     shows = load_shows()
     assert set(shows) == set(ALL_SHOWS)
 
 
 def test_shows_are_ordered_through_the_week():
     assert [s.key for s in ordered_shows()] == [
-        "session", "straight_up", "amp", "multiverse", "live_wire"
+        "session", "straight_up", "amp", "multiverse", "live_wire", "the_stack"
     ]
 
 
@@ -204,7 +205,8 @@ def test_the_multiverse_drops_the_brand_furniture():
 
 def test_gate_profiles_load():
     assert set(load_gate_profiles()) == {
-        "comedy_useful", "claims", "useful_legible", "continuity_likeness"
+        "comedy_useful", "claims", "useful_legible", "continuity_likeness",
+        "diagnostic_pull"
     }
 
 
@@ -224,7 +226,8 @@ def test_an_unknown_profile_degrades_to_the_default():
 @pytest.mark.parametrize(
     "key,expected",
     [("amp", "comedy_useful"), ("straight_up", "claims"),
-     ("session", "useful_legible"), ("multiverse", "continuity_likeness")],
+     ("session", "useful_legible"), ("multiverse", "continuity_likeness"),
+     ("the_stack", "diagnostic_pull")],
 )
 def test_shows_are_judged_on_their_own_bar(key, expected):
     profile = gate_profile_for_idea(idea_on(key))

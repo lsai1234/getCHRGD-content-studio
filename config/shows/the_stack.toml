@@ -1,0 +1,80 @@
+# THE STACK — the diagnostic show, and the one built for the launch.
+#
+# Every other show earns attention and then hands the viewer off. This one is
+# shaped like the product: it sorts people into types, tells each type what
+# they're wasting money on, and the honest end of that thought is "the proper
+# version of this, about you specifically, is a quiz".
+#
+# That is why it is the launch show. A carousel that makes someone privately
+# diagnose themselves performs cold — no follower relationship needed, nothing
+# to catch up on — and it is simultaneously a live demo of what getCHRGD sells.
+# One format doing the reach job and the sales job is the only affordable
+# answer for an account this size.
+#
+# It works disarmed too: with no campaign running this is simply a strong
+# archetype/teardown show with a comment CTA. The campaign layer supplies the
+# ask, not the format.
+
+[show]
+key = "the_stack"
+label = "THE STACK"
+tagline = "Which one are you, and what are you paying for that does nothing."
+blurb = "The sorting-hat show. Types, cupboards, and the honest audit of what's actually worth taking."
+icon = "🧪"
+weekday = "sat"
+kpi_metric = "shares"
+kpi = "shares, then saves — people tag the mate whose cupboard it describes, then keep it for their next order"
+slides_min = 4
+slides_max = 6
+front_screen = "seed"
+cast = "none"
+gate_profile = "diagnostic_pull"
+engagement_play = "share"
+
+[spine]
+roles = ["the_sort", "the_types", "the_waste", "the_swap", "the_answer"]
+flex = 1
+briefs = [
+  "THE SORT — open by dividing the audience into named, recognisable types, or by naming one cupboard so specifically that the right person feels caught. Not a question, not a promise: a sorting. The reader must be able to place themselves inside half a second.",
+  "The types themselves, one per line or one per slide — each one exact enough that somebody recognises a mate. Names should be funny and unmistakable ('the tub graveyard', 'the six-things-no-plan lad'), never clinical categories.",
+  "THE WASTE — what this type is buying that is doing nothing for them. This is the slide the post exists for and the one that earns the share, because it is the bit nobody else will say. Be specific about the product category and neutral about the physiology.",
+  "THE SWAP — what to actually do instead, stated plainly enough to act on tomorrow. One or two things, cheap, boring, well-evidenced. Being genuinely useful here is what buys the right to the last slide.",
+  "THE ANSWER — close on the ask the campaign phase allows. Before launch that's a comment ('which one are you?'); after it, the quiz. Never both, and never a hard sell after a soft post."
+]
+
+[voice]
+block = """This show's authority comes from being HONEST ABOUT WHAT NOT TO BUY. That is its entire engine and the thing that makes it credible enough to sell from later.
+
+SORT, DON'T LECTURE. The reader should feel identified, not taught. "You're the one with four tubs and no plan" lands; "here's how to choose a supplement" does not.
+
+BE SPECIFIC ABOUT MONEY, NEUTRAL ABOUT BODIES. Prices, labels, proprietary blends, the £45 tub that's mostly flavouring, the subscription somebody forgot they had — all fair game and all where the edge lives. What happens inside a cell is reported plainly and never argued about. This split is not squeamishness; it is the difference between a defensible post and a regulatory problem.
+
+THE MOST PERSUASIVE THING THIS SHOW CAN SAY IS "YOU DON'T NEED THAT." An account that tells people to buy less is the only kind anyone believes when it eventually tells them to buy something. Every post should cut at least one thing.
+
+NAMED TYPES ARE THE FORMAT. Invent them, make them funny, make them exact. A type someone can tag a mate in is worth more than any hook.
+
+UK gym life throughout — PureGym at 6pm, the meal deal, payday, the cupboard above the kettle. Dry, deadpan, never a coach and never an advert."""
+banned = [
+  "telling anyone what their body needs, is missing, or is deficient in",
+  "any health, medical or outcome claim",
+  "naming and rubbishing a specific competitor brand",
+  "a type that mocks how someone looks, their weight, or their ability",
+  "recommending our own product before the post has been genuinely useful",
+  "clinical or diagnostic framing of any kind — this show sorts, it never diagnoses",
+]
+
+[look]
+style_preset = "clean_editorial"
+house_style = "Clean editorial product photography with a chart-like clarity: real supplement tubs, sachets and shakers arranged on a calm off-white or light grey field, shot flat-on or top-down with soft even lighting and generous space around each object. It should read as an audit — deliberate, organised, a bit forensic — never as an advert and never as a moody gym shot. Labels on any real product must be plain, unbranded and unreadable as a specific brand."
+palette = "Off-white and light grey ground, deep near-black type, one CHRGD light-blue accent used only to mark the thing worth keeping. Everything being cut sits in flat grey."
+type_style = "Confident editorial sans, tight and highly legible, arranged like a label or a chart key rather than a caption bar. Type carries the sorting — it is the loudest element on the slide."
+motif = "The audit itself: things laid out in a row, sorted into keep and cut, one item marked in blue while the rest sit grey."
+title_card = "THE STACK"
+title_note = "small, plain, top-left, set like a section header in a magazine"
+
+[look.furniture]
+wordmark = true
+scrim = false
+counter = true
+handle = true
+footer_bar = true
