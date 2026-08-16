@@ -32,6 +32,19 @@ what = "getCHRGD: a free 60-second quiz that reads your training, your goals and
 domain = "getchrgd.co.uk"
 handle = "@getchrgd"
 
+# Shows the launch does NOT use, dimmed on the create screen while the campaign
+# runs. Not disabled — you can still pick one — because this is a statement of
+# what the fortnight is for, not a lock on the studio.
+#
+# AMP and THE MULTIVERSE are affinity formats: they were built for a brand with
+# no product, and they pay off over months of returning viewers. That is the
+# one currency a 70-follower account launching in a fortnight does not have.
+# Amp's tips are behavioural rather than about what to take, the Multiverse is
+# a serial that rewards people who saw the last one, and neither can carry a
+# quiz CTA without an advert crashing into a cartoon. They come back after
+# there is revenue to protect.
+paused_shows = ["amp", "multiverse"]
+
 # --- The strategic spine ----------------------------------------------------
 # Why the campaign is shaped the way it is. Injected into the write call
 # because the engine writes better CTAs when it knows WHY the CTA is that one.

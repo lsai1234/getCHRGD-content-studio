@@ -101,6 +101,13 @@
     border-radius:12px; border:1px solid var(--accent); cursor:pointer;
     background:rgba(79,195,247,.12); color:inherit; font-weight:600;
     font-size:13.5px; letter-spacing:.02em}
+  /* `display:block` beats the UA's [hidden] rule, so the "open the journey"
+     button was painting as an empty blue bar until a show was picked. */
+  .cta-wide[hidden]{display:none}
+  /* A show the running campaign doesn't use. Still selectable — this is a
+     nudge about what the launch is for, not a lock. */
+  .show-tile.paused{opacity:.45}
+  .sh-paused{font-size:10px; color:var(--faint); letter-spacing:.04em}
   .cta-wide:hover{background:rgba(79,195,247,.2)}
   #offformat-line a{color:var(--muted); text-decoration:none;
     border-bottom:1px dashed var(--line)}
@@ -432,14 +439,16 @@
          off-format escape, and still work exactly as they did. -->
     <div class="show-grid" id="show-grid">
       {% for sh in shows %}
-      <button type="button" class="show-tile" data-show="{{ sh.key }}"
+      <button type="button" class="show-tile{% if sh.paused %} paused{% endif %}"
+              data-show="{{ sh.key }}"
               onclick="pickShow('{{ sh.key }}', this)">
         <span class="sh-ic">{{ sh.icon }}</span>
         <span class="sh-tx">
           <span class="sh-t">{{ sh.label }}</span>
           <span class="sh-s">{{ sh.tagline }}</span>
         </span>
-        {% if sh.weekday %}<span class="sh-day">{{ sh.weekday }}</span>{% endif %}
+        {% if sh.paused %}<span class="sh-paused">paused<br>for launch</span>
+        {% elif sh.weekday %}<span class="sh-day">{{ sh.weekday }}</span>{% endif %}
       </button>
       {% endfor %}
     </div>
@@ -707,6 +716,87 @@
     </div>
   </section>
   {% endif %}
+
+  <!-- ═════════ 3·VERDICT — the ruling show's own screen ═════════
+       The only screen in the studio where the EDITOR supplies the opinion.
+       A brand's ruling on whether something is worth money is the thing a
+       customer quotes back at you, so it is not the engine's to invent —
+       see chrgd/rulings.py. -->
+  <section class="scr" id="scr-verdict">
+    <p class="eyebrow">⚖️ VERDICT</p>
+    <h2>What are we ruling on?</h2>
+    <p class="hint">One thing somebody's deciding whether to buy this week. Pick from the library or name your own.</p>
+
+    <div class="sit-grid" id="verdict-grid">
+      {% for i in ingredients %}
+      <button type="button" class="sit" data-ing="{{ i.key }}"
+              onclick="pickVerdictSubject('{{ i.key }}', this)">
+        <span class="sit-t">{{ i.label }}</span>
+        <span class="sit-s">{{ i.question }}</span>
+      </button>
+      {% endfor %}
+    </div>
+
+    <label style="margin-top:14px">Or something else</label>
+    <input id="verdict-own" placeholder="e.g. the £60 &quot;advanced&quot; creatine on the shelf next to the monohydrate"
+           oninput="clearVerdictSubject()">
+
+    <label style="margin-top:16px">Your ruling <span class="muted">— this is the post, and the engine won't second-guess it</span></label>
+    <div class="chip-row" id="ruling-chips">
+      {% for r in rulings %}
+      <button type="button" class="chip" data-ruling="{{ r.key }}"
+              onclick="pickRuling('{{ r.key }}', this)">{{ r.label }}</button>
+      {% endfor %}
+    </div>
+
+    <div id="verdict-condition-wrap" style="display:none">
+      <label style="margin-top:14px">Only if… <span class="muted">(required — it goes on slide 1)</span></label>
+      <input id="verdict-condition" placeholder="e.g. you're training more than 4x a week and already eating enough protein">
+    </div>
+
+    <label style="margin-top:14px">Why? <span class="muted">(optional — the case you want made)</span></label>
+    <input id="verdict-reason" placeholder="e.g. it's the same active as the cheap one with a flavour and a story on top">
+    <p class="hint" style="margin-top:6px; font-size:12px">
+      Ruling against something we'd happily sell is the most valuable post on this account — it's what makes the rest believable.
+    </p>
+
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
+    <div class="cta-row">
+      <button type="button" onclick="startVerdict(true)">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startVerdict(false)">⚡ Just build it</button>
+    </div>
+  </section>
+
+  <!-- ═════════ 3·RECEIPTS — the teardown's own screen ═════════
+       The editor types the real price. Asked for "a typical tub price" a model
+       produces one that sounds right and isn't, and a teardown built on an
+       invented number is worthless. -->
+  <section class="scr" id="scr-receipts">
+    <p class="eyebrow">🧾 RECEIPTS</p>
+    <h2>What are we tearing down?</h2>
+    <p class="hint">A real product and its real price. The number is the hook — it's the one thing on the feed that reads as evidence.</p>
+
+    <label style="margin-top:8px">The thing</label>
+    <input id="receipt-product" placeholder="e.g. a 30-serving tub of branded pre-workout">
+
+    <label style="margin-top:14px">What it actually costs <span class="muted">— the real figure, not a guess</span></label>
+    <input id="receipt-price" placeholder="e.g. £44.99">
+    <p class="hint" style="margin-top:6px; font-size:12px">
+      This is the only number the engine gets. It's barred from inventing a second one — no percentages, no margins, no "typically around £X".
+    </p>
+
+    <label style="margin-top:14px">Your angle <span class="muted">(optional)</span></label>
+    <input id="receipt-note" placeholder="e.g. the blend is hiding how little caffeine is actually in it">
+    <p class="hint" style="margin-top:6px; font-size:12px">
+      Never names a brand — the target is how the category prices itself, never a competitor.
+    </p>
+
+    <div class="chip-row" data-len-slot style="margin-top:10px"></div>
+    <div class="cta-row">
+      <button type="button" onclick="startReceipts(true)">🎯 Show me the takes</button>
+      <button type="button" class="ghost" onclick="startReceipts(false)">⚡ Just build it</button>
+    </div>
+  </section>
 
   <!-- ═════════ 3·THE STACK — the sorting show's own screen ═════════
        This show's first question isn't the subject, it's the SORT: which way
@@ -1146,6 +1236,8 @@ let state = { ideaId: null, source: null, style: null, show: '',
               // THE LAUNCH: the phase being written for and the pre-written
               // post chosen, if any. THE STACK: the sorting format.
               phase: '', plan: '', stackMech: '',
+              // VERDICT: what we're ruling on and the editor's ruling.
+              verdictSubject: '', ruling: '',
               length: '', mech: null, detail: null, slideIdx: 0, anglesJob: null,
               takesJob: null };
 // The show metadata the server rendered, so the concept studio can label
@@ -1166,6 +1258,8 @@ const META = {
   livewire:[1, 'What\u2019s live', 24],
   launch:  [1, 'The phase',  24],
   thestack:[1, 'The sort',   24],
+  verdict: [1, 'The ruling', 24],
+  receipts:[1, 'The price',  24],
   radar:   [1, 'Pick a story', 24],
   idea:    [1, 'Your idea', 24],
   facts:   [1, 'Your research', 24],
@@ -1245,7 +1339,8 @@ function pickShow(key, el){
 // yet stay on the concept studio, which is a working default, not a stub.
 const SHOW_SCREEN = {amp: 'amp', live_wire: 'livewire',
                     straight_up: 'straightup', session: 'session',
-                    multiverse: 'multiverse', the_stack: 'thestack'};
+                    multiverse: 'multiverse', the_stack: 'thestack',
+                    verdict: 'verdict', receipts: 'receipts'};
 const MAX_CAST = 4;
 function openShowScreen(){
   const screen = SHOW_SCREEN[state.show];
@@ -1404,6 +1499,74 @@ async function startLaunch(takes){
     // the campaign runs on, so it's the sane default rather than off-format.
     body.set('show', 'the_stack');
   }
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+
+/* ---------- VERDICT: the editor rules, the engine argues ---------- */
+function pickVerdictSubject(key, el){
+  state.verdictSubject = (state.verdictSubject === key) ? '' : key;
+  document.querySelectorAll('#verdict-grid .sit').forEach(b =>
+    b.classList.toggle('sel', b.dataset.ing === state.verdictSubject));
+  if (state.verdictSubject) document.getElementById('verdict-own').value = '';
+}
+// Typing your own subject clears a library pick, so only one can be in play.
+function clearVerdictSubject(){
+  if (!document.getElementById('verdict-own').value.trim()) return;
+  state.verdictSubject = '';
+  document.querySelectorAll('#verdict-grid .sit').forEach(b => b.classList.remove('sel'));
+}
+function pickRuling(key, el){
+  state.ruling = (state.ruling === key) ? '' : key;
+  document.querySelectorAll('#ruling-chips .chip').forEach(c =>
+    c.classList.toggle('sel', c.dataset.ruling === state.ruling));
+  // An "only if" whose condition never appears is just a hedge, so the field
+  // is revealed and required the moment that ruling is picked.
+  document.getElementById('verdict-condition-wrap').style.display =
+    state.ruling === 'only_if' ? '' : 'none';
+}
+async function startVerdict(takes){
+  const own = document.getElementById('verdict-own').value.trim();
+  const card = document.querySelector(`#verdict-grid .sit[data-ing="${state.verdictSubject}"]`);
+  const subject = own || (card ? card.querySelector('.sit-t').textContent.trim() : '');
+  if (!subject) { toast('Pick something to rule on, or name your own.'); return; }
+  if (!state.ruling) { toast('Give it a ruling — that’s the post.'); return; }
+  const condition = document.getElementById('verdict-condition').value.trim();
+  if (state.ruling === 'only_if' && !condition) {
+    toast('An “only if” needs its condition.'); return;
+  }
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  body.set('show', 'verdict');
+  body.set('text', `is ${subject} worth it?`);
+  if (state.verdictSubject) body.set('ingredient', state.verdictSubject);
+  body.set('verdict', JSON.stringify({
+    subject: subject,
+    ruling: state.ruling,
+    condition: condition,
+    reason: document.getElementById('verdict-reason').value.trim(),
+  }));
+  const r = await post('/api/create/start', body);
+  if (!r) return;
+  afterStart(r, false, takes);
+}
+
+/* ---------- RECEIPTS: the editor's real number ---------- */
+async function startReceipts(takes){
+  const product = document.getElementById('receipt-product').value.trim();
+  const price = document.getElementById('receipt-price').value.trim();
+  if (!product) { toast('What are we tearing down?'); return; }
+  if (!price) { toast('Give the real price — this show can’t invent one.'); return; }
+  const body = baseParams(false, takes);
+  body.set('mode', 'idea');
+  body.set('show', 'receipts');
+  body.set('mechanic', 'price_teardown');
+  body.set('text', `where the money goes in ${product}`);
+  body.set('receipt', JSON.stringify({
+    product: product, price: price,
+    note: document.getElementById('receipt-note').value.trim(),
+  }));
   const r = await post('/api/create/start', body);
   if (!r) return;
   afterStart(r, false, takes);

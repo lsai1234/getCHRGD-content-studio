@@ -81,6 +81,14 @@ prompt = "A comic book page: bold black ink linework, halftone dot shading, satu
 label = "Straight Up — clean editorial"
 prompt = "Bright, clean editorial product photography. Light or off-white background, generous negative space, soft even lighting, one clear subject on a calm field. Calm and legible is the aesthetic — it is what makes the information read as trustworthy. Never moody, never gritty."
 
+[styles.verdict_stamp]
+label = "Verdict — the ruling"
+prompt = "One object, photographed straight on against a plain near-black field with a single hard light and a lot of empty space around it — the composition of a piece of evidence, not an advert. The look is a judgement being handed down: calm, certain, slightly severe. No lifestyle, no gym, no hands, no aspiration. Any product shown is plain and unbranded."
+
+[styles.receipts_paper]
+label = "Receipts — the paper trail"
+prompt = "The visual language of a receipt, a price label or a spreadsheet made physical: crisp white or off-white paper against a dark surface, hard shadows, tight crops on printed detail, a torn edge, a highlighter line. It should feel like documentary evidence somebody photographed on a kitchen table, not a designed infographic. Never glossy, never a product hero shot."
+
 [styles.session_reference]
 label = "The Session — reference card"
 prompt = "A reference card that happens to be a photograph: a real UK gym shot with high contrast and deep shadows, composed with a large clear area for the workout text. Type-first — the imagery serves the legibility of the session, never competes with it."

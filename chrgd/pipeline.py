@@ -660,6 +660,25 @@ def _seed_context(idea: Idea, prefs: dict, store: Store | None = None) -> list[s
             lines.append("")
             lines.append(ingredient.brief_block())
 
+    # VERDICT and RECEIPTS build from something the EDITOR decided — the
+    # ruling, and the real price. Neither is the engine's to choose; see
+    # chrgd/rulings.py for why that split is the safety model of both shows.
+    if prefs.get("verdict"):
+        from .rulings import verdict_brief
+
+        block = verdict_brief(prefs["verdict"])
+        if block:
+            lines.append("")
+            lines.append(block)
+
+    if prefs.get("receipt"):
+        from .rulings import receipt_brief
+
+        block = receipt_brief(prefs["receipt"])
+        if block:
+            lines.append("")
+            lines.append(block)
+
     # THE SESSION builds from a point in the variant matrix rather than a
     # topic — that segmentation IS the show.
     if prefs.get("session_variant"):
@@ -769,6 +788,10 @@ def creation_prefs(idea: Idea) -> dict:
             # THE MULTIVERSE's cast for this episode (chrgd/roster.py), and
             # the prose episode written before the slides (chrgd/story.py).
             "cast", "story",
+            # VERDICT's ruling and RECEIPTS' real price (chrgd/rulings.py) —
+            # editor-owned, so a rebuild keeps the judgement it was written
+            # under instead of quietly re-deciding it.
+            "verdict", "receipt",
             # The launch phase this post was seeded for (chrgd/campaign.py).
             # Forces a phase regardless of today's date, so next week's launch
             # posts can be batched this week; absent means "ask the calendar".

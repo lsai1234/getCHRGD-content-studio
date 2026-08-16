@@ -484,14 +484,30 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         ]
         return (state, phases, planned)
 
-    def _stack_mechanics() -> list[dict]:
-        """THE STACK's sorting formats — the launch mechanics, in file order."""
+    #: Which mechanics each launch show offers on its own screen. THE STACK
+    #: used to offer all six, which made it overlap the two shows that now own
+    #: the teardown and the ruling — a show that can do everything has no
+    #: recognisable shape, which is the thing the show layer exists to prevent.
+    SHOW_MECHANICS = {
+        "the_stack": ("archetype_sort", "cupboard_audit", "stop_buying",
+                      "demo_post"),
+        "verdict": ("objection_kill",),
+        "receipts": ("price_teardown",),
+    }
+
+    def _paused_shows() -> list[str]:
+        """Shows the running campaign doesn't use. Empty when disarmed."""
+        from .campaign import load_campaign
+
+        campaign = load_campaign()
+        return list(campaign.paused_shows) if campaign.armed else []
+
+    def _show_mechanics(show_key: str) -> list[dict]:
+        """The formats a launch show's own screen offers, in listed order."""
         from .mechanics import load_mechanics
 
-        keys = ("archetype_sort", "cupboard_audit", "price_teardown",
-                "stop_buying", "demo_post", "objection_kill")
         out = []
-        for key in keys:
+        for key in SHOW_MECHANICS.get(show_key, ()):
             mech = load_mechanics().get(key)
             if mech is not None:
                 out.append({"key": mech.key, "label": mech.label,
@@ -539,6 +555,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         from .character import AMP_STATES, STATE_ORDER
         from .mechanics import load_mechanics
         from .sessions import load_axes
+        from .rulings import RULINGS
         from .shows import ordered_shows
         from .territories import in_season
 
@@ -553,16 +570,24 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             roster = _roster_with_canon(store)
             canon = _canon_summary(store)
             campaign, campaign_phases, planned = _campaign_context(store)
+        paused_shows = set(_paused_shows())
         return render_page(
             request, "create.html", "create",
             mechanics=[m.model_dump() for m in load_mechanics().values()],
-            shows=[
-                {
-                    "key": sh.key, "label": sh.label, "tagline": sh.tagline,
-                    "blurb": sh.blurb, "icon": sh.icon, "weekday": sh.weekday,
-                }
-                for sh in ordered_shows()
-            ],
+            # Paused shows sort to the end and render dimmed, so the grid reads
+            # as "these are what the launch is made of, those are waiting".
+            shows=sorted(
+                (
+                    {
+                        "key": sh.key, "label": sh.label, "tagline": sh.tagline,
+                        "blurb": sh.blurb, "icon": sh.icon,
+                        "weekday": sh.weekday,
+                        "paused": sh.key in paused_shows,
+                    }
+                    for sh in ordered_shows()
+                ),
+                key=lambda s: s["paused"],
+            ),
             # AMP's own screen: the situation bank with what's been used
             # recently marked (a nudge, never a rule — D12) and his states.
             amp_situations=amp,
@@ -595,7 +620,11 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             campaign_phases=campaign_phases,
             planned_posts=planned,
             # THE STACK's own screen: the sorting formats the show runs on.
-            stack_mechanics=_stack_mechanics(),
+            stack_mechanics=_show_mechanics("the_stack"),
+            # VERDICT's own screen: the rulings it can hand down, and the
+            # ingredient library as ready-made subjects to rule on.
+            rulings=[{"key": k, "label": v} for k, v in RULINGS.items()],
+            # RECEIPTS' own screen needs nothing but the editor's real figure.
             resume_idea=idea or "",
             preset_day=day or "",
         )
@@ -1195,6 +1224,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         session_variant: dict | None = None,
         cast: list[str] | None = None,
         campaign_phase: str = "",
+        verdict: dict | None = None,
+        receipt: dict | None = None,
     ) -> Idea:
         """One seed row carrying the create journey's up-front choices."""
         from .mechanics import get_mechanic
@@ -1252,6 +1283,40 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             if missing:
                 raise HTTPException(400, "still to pick: " + ", ".join(missing))
             route[SESSION_KEY] = validate(session_variant)
+        # VERDICT's ruling. Validated here because an unknown ruling would be
+        # dropped by `verdict_brief` and the post would then be written with
+        # no verdict at all — a show whose entire product is committing,
+        # quietly shipping a balanced overview.
+        if verdict:
+            from .rulings import RULINGS, VERDICT_KEY
+
+            if not str(verdict.get("subject") or "").strip():
+                raise HTTPException(400, "what are we ruling on?")
+            if verdict.get("ruling") not in RULINGS:
+                raise HTTPException(
+                    400, "pick a ruling: " + ", ".join(RULINGS)
+                )
+            if verdict["ruling"] == "only_if" and not str(
+                verdict.get("condition") or ""
+            ).strip():
+                raise HTTPException(
+                    400, "an 'only if' ruling needs its condition — that's the "
+                    "whole verdict"
+                )
+            route[VERDICT_KEY] = verdict
+        # RECEIPTS' real price. Both fields are required: without the figure
+        # the show has no opener, and the engine is explicitly barred from
+        # inventing one to fill the gap.
+        if receipt:
+            from .rulings import RECEIPT_KEY
+
+            if not str(receipt.get("product") or "").strip():
+                raise HTTPException(400, "what are we tearing down?")
+            if not str(receipt.get("price") or "").strip():
+                raise HTTPException(
+                    400, "give the real price — this show can't invent one"
+                )
+            route[RECEIPT_KEY] = receipt
         # THE MULTIVERSE's cast. Validated against the approved roster here,
         # because "the engine never free-picks a person" is a likeness rule and
         # this is the edge it has to hold at.
@@ -1317,6 +1382,8 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
         cast: str = Form(""),      # comma-separated roster keys
         mechanic: str = Form(""),
         campaign_phase: str = Form(""),
+        verdict: str = Form(""),   # JSON: {subject, ruling, condition, reason}
+        receipt: str = Form(""),   # JSON: {product, price, note}
         style: str = Form(""),
         length: str = Form(""),
         scheduled_for: str = Form(""),
@@ -1341,6 +1408,20 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             raise HTTPException(400, "variant must be a JSON object") from None
         if variant_obj is not None and not isinstance(variant_obj, dict):
             raise HTTPException(400, "variant must be a JSON object")
+
+        def _json_obj(raw: str, what: str) -> dict | None:
+            if not raw.strip():
+                return None
+            try:
+                obj = json.loads(raw)
+            except json.JSONDecodeError:
+                raise HTTPException(400, f"{what} must be a JSON object") from None
+            if not isinstance(obj, dict):
+                raise HTTPException(400, f"{what} must be a JSON object")
+            return obj
+
+        verdict_obj = _json_obj(verdict, "verdict")
+        receipt_obj = _json_obj(receipt, "receipt")
 
         # The default journey fans out to competing takes first; develop and
         # straight-build remain as explicit choices.
@@ -1378,6 +1459,7 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
                     ingredient=ingredient, session_variant=variant_obj,
                     cast=[c for c in cast.split(",") if c.strip()],
                     campaign_phase=campaign_phase,
+                    verdict=verdict_obj, receipt=receipt_obj,
                     moment=(
                         {"kind": "ragebait", "title": text.strip(),
                          "angle": text.strip()}

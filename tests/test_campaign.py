@@ -34,7 +34,7 @@ from chrgd.db import Store
 from chrgd.mechanics import get_mechanic
 from chrgd.models import Idea
 from chrgd.pipeline import build_user_message, creation_prefs
-from chrgd.shows import get_show
+from chrgd.shows import get_show, load_shows
 
 LAUNCH = date(2026, 8, 31)
 
@@ -434,6 +434,159 @@ def test_started_posts_are_marked_on_the_launch_screen(client):
     html = client.get("/create").text
     marked = html.split(f'data-plan="{post.key}"')[1].split("</button>")[0]
     assert "started" in marked
+
+
+# --- VERDICT and RECEIPTS: the editor owns the facts ------------------------
+
+
+def test_no_launch_post_uses_a_retired_show():
+    """Amp and the Multiverse are audience formats, cut from the launch."""
+    for post in load_launch_backlog():
+        assert post.show not in ("amp", "multiverse"), (
+            f"{post.key} still routes at an affinity show"
+        )
+
+
+def test_every_verdict_post_carries_a_ruling():
+    """A VERDICT seed with no ruling would let the engine invent the opinion."""
+    from chrgd.rulings import RULINGS
+
+    for post in load_launch_backlog():
+        if post.show != "verdict":
+            continue
+        assert post.verdict_subject, f"{post.key}: nothing to rule on"
+        assert post.verdict_ruling in RULINGS, f"{post.key}: no valid ruling"
+        if post.verdict_ruling == "only_if":
+            assert post.verdict_condition, f"{post.key}: 'only if' with no condition"
+
+
+def test_every_receipts_post_carries_a_real_price():
+    """A teardown with no figure hands the engine the one job it's barred from."""
+    for post in load_launch_backlog():
+        if post.show != "receipts":
+            continue
+        assert post.receipt_product, f"{post.key}: nothing to tear down"
+        assert post.receipt_price, f"{post.key}: no price"
+
+
+def test_the_launch_rules_against_things_we_sell():
+    """The trust play only works if some ruling actually goes against us."""
+    against = [p for p in load_launch_backlog()
+               if p.verdict_ruling == "not_worth_it"]
+    assert len(against) >= 2, "no ruling cuts against the shop — that's an advert"
+
+
+def test_verdict_route_reaches_the_write_call():
+    post = [p for p in load_launch_backlog() if p.show == "verdict"][0]
+    route = post.route()
+    assert route["verdict"]["ruling"] == post.verdict_ruling
+    idea = Idea(idea_id="G-1", concept_note=post.concept_note(),
+                route_json=json.dumps(route))
+    message = build_user_message(idea)
+    assert "THE EDITOR'S RULING" in message
+    assert "EXECUTE THIS RULING" in message
+
+
+def test_receipt_route_reaches_the_write_call_and_bans_second_figures():
+    post = [p for p in load_launch_backlog() if p.show == "receipts"][0]
+    idea = Idea(idea_id="G-2", concept_note=post.concept_note(),
+                route_json=json.dumps(post.route()))
+    message = build_user_message(idea)
+    assert post.receipt_price in message
+    assert "ONLY FIGURE YOU HAVE" in message
+    assert "NAME NO BRAND" in message
+
+
+def test_a_ruling_against_us_is_told_not_to_pull_the_punch():
+    from chrgd.rulings import verdict_brief
+
+    block = verdict_brief({"subject": "fat burners", "ruling": "not_worth_it"})
+    assert "Do not pull the punch" in block
+
+
+def test_an_only_if_must_surface_its_condition_on_slide_one():
+    from chrgd.rulings import verdict_brief
+
+    block = verdict_brief({"subject": "x", "ruling": "only_if",
+                           "condition": "you train five times a week"})
+    assert "opening slide" in block
+    assert "you train five times a week" in block
+
+
+def test_an_incomplete_ruling_yields_nothing_rather_than_half_a_brief():
+    from chrgd.rulings import receipt_brief, verdict_brief
+
+    assert verdict_brief({"subject": "x", "ruling": "nonsense"}) == ""
+    assert verdict_brief({"ruling": "worth_it"}) == ""
+    assert receipt_brief({"product": "a tub"}) == ""
+
+
+def test_verdict_journey_rejects_an_only_if_with_no_condition(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "show": "verdict", "text": "is x worth it?",
+        "verdict": json.dumps({"subject": "x", "ruling": "only_if"})})
+    assert r.status_code == 400
+
+
+def test_verdict_journey_rejects_an_unknown_ruling(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "show": "verdict", "text": "is x worth it?",
+        "verdict": json.dumps({"subject": "x", "ruling": "maybe"})})
+    assert r.status_code == 400
+
+
+def test_receipts_journey_requires_the_price(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "show": "receipts", "text": "teardown",
+        "receipt": json.dumps({"product": "a tub"})})
+    assert r.status_code == 400
+
+
+def test_verdict_journey_builds_with_the_editors_ruling(client):
+    r = client.post("/api/create/start", data={
+        "mode": "idea", "show": "verdict", "text": "is x worth it?",
+        "verdict": json.dumps({"subject": "fat burners",
+                               "ruling": "not_worth_it",
+                               "reason": "caffeine with a story on top"})})
+    assert r.status_code == 200
+    with Store(client.settings.db_path) as store:
+        idea = store.get_idea(r.json()["idea_id"])
+    message = build_user_message(idea)
+    assert "NOT WORTH IT" in message
+    assert "caffeine with a story on top" in message
+
+
+def test_paused_shows_are_dimmed_not_removed(client):
+    """A pause is a statement about the fortnight, never a lock on the studio."""
+    html = client.get("/create").text
+    for key in load_campaign().paused_shows:
+        tile = html.split(f'data-show="{key}"')[0].rsplit("<button", 1)[1]
+        assert "paused" in tile, f"{key} should be dimmed"
+        assert f'data-show="{key}"' in html, f"{key} must still be selectable"
+
+
+def test_the_launch_leaves_one_show_per_weekday(client):
+    """Two shows on one weekday is what the pause exists to prevent."""
+    active = [s for s in load_shows().values()
+              if s.key not in load_campaign().paused_shows and s.weekday]
+    days = [s.weekday for s in active]
+    assert len(days) == len(set(days)), f"weekday clash among {days}"
+
+
+def test_create_page_renders_the_two_new_screens(client):
+    html = client.get("/create").text
+    for probe in ("scr-verdict", "scr-receipts", "ruling-chips",
+                  "receipt-price", "verdict-condition"):
+        assert probe in html, f"{probe} missing from /create"
+
+
+def test_the_stack_no_longer_offers_the_teardown(client):
+    """It moved to RECEIPTS; a show that can do everything has no shape."""
+    html = client.get("/create").text
+    stack = html.split('id="stack-grid"')[1].split("</div>")[0]
+    assert "price_teardown" not in stack
+    assert "objection_kill" not in stack
+    assert "archetype_sort" in stack
 
 
 def test_the_stack_brief_forbids_diagnosis():
