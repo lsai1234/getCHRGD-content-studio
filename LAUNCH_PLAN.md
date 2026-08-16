@@ -1,0 +1,170 @@
+# The launch plan — TikTok, from 70 followers
+
+What the studio is doing for the fortnight either side of go-live, why it's
+shaped this way, and the four commands that run it.
+
+---
+
+## The situation, stated honestly
+
+- Launching in ~1–2 weeks: a **free quiz** that reads your training, goals and
+  budget and builds a **personalised supplement stack**, orderable once or as a
+  plan, at **getchrgd.co.uk**.
+- **~70 followers.** Carousels only — nobody on camera.
+- Pre-launch goal: **reach and followers**. Post-launch: **quiz completions**.
+
+## Five decisions everything else follows from
+
+**1. There is no countdown.** At 70 followers a "3 days to go" post reaches
+almost nobody who has any reason to care. A stranger cannot count down to a
+brand they met eleven seconds ago. So the pre-launch fortnight sells nothing
+and mentions nothing — it is spent entirely on reach.
+
+**2. Pre-launch content plants the question the quiz answers.** Every post in
+the `prime` phase is built to leave someone slightly less certain that their
+current supplement routine makes sense. That confusion is the market, it is
+genuinely how most people feel, and naming it out loud is both the highest-
+reach content this brand can make and the thing that makes a recommendation
+quiz obviously worth doing later. The priming is free — it rides inside content
+that was worth posting anyway.
+
+**3. We promote the quiz, never the supplements.** The stock is lines anyone
+can buy anywhere; there is no story in it. The quiz is yours, it is free, it
+takes a minute, and it answers the one question this audience actually has. It
+is a *far* cheaper ask than a purchase — a stranger won't buy a tub off a new
+account, but they will answer six questions about themselves, because that is a
+normal thing to do on the internet and the answer is about them. **The store is
+what happens after the quiz.** This is the "most efficient way" you asked for.
+
+**4. The quiz's format IS the content format.** "Answer this, find out which
+one you are" is already one of the best-performing shapes on the platform.
+A carousel that makes someone privately diagnose themselves reaches people cold
+whether or not they ever click — *and* it's a live demo of the product. One
+format doing the reach job and the sales job is the only affordable answer at
+this size. That's what **THE STACK** is.
+
+**5. The account earns the right to sell by telling people to buy less.**
+Roughly half the launch content cuts something — bins a category, tears down a
+price, says "you probably don't need this". An account that only recommends
+buying more is not one anybody believes when it eventually recommends
+something. This is also why the quiz post that converts best is the one saying
+*it will happily tell you to take nothing*.
+
+---
+
+## The four phases
+
+Everything keys off one field — `launch_date` in `config/campaign.toml`. Move
+it and the whole calendar moves.
+
+| Phase | Days | Sells? | The ask | What it's for |
+|---|---|---|---|---|
+| **prime** | −14 → −4 | No | comment / follow | Pure reach. Plants the confusion. |
+| **tease** | −3 → −1 | Barely | follow | Earns the swipe, then says the thing exists. |
+| **launch** | 0 → +7 | Yes | the quiz, domain in plain text | Same reach content, one ask bolted on. |
+| **sell** | +8 → | Yes | quiz by default, plan occasionally | The steady state. |
+
+The phase brief is injected into **every** write call, so a Tuesday STRAIGHT UP
+knows it's launch week without you re-briefing it.
+
+### Two rules the engine enforces rather than trusts
+
+- **`prime` cannot sell.** The quiz, the domain and any mention of a launch are
+  in that phase's `banned` list. A test asserts no `prime` seed contains the
+  domain.
+- **"link in bio" is banned during launch.** A first-time FYP viewer is not
+  going to your profile to hunt for a link. The domain gets written out in
+  plain text where it can be read and typed.
+
+---
+
+## The content
+
+**29 posts are written and queued-ready** in `config/launch_backlog.toml` —
+11 prime, 3 tease, 8 launch, 7 sell. Each carries a hook direction, a brief, a
+show, a mechanic and a phase, so a build starts from a specific angle rather
+than a topic.
+
+A new show and six new formats carry them:
+
+**THE STACK** (`config/shows/the_stack.toml`) — the sorting show, Saturdays,
+and the one the launch runs on. Named types, cupboard audits, price teardowns.
+Clean editorial look — it reads as an *audit*, forensic and organised, which is
+deliberately the opposite of a supplement advert. Its gate profile
+(`diagnostic_pull`) judges openers on self-recognition rather than hot-take
+heat, so the concept gate stops "sharpening" calm audits into shouting.
+
+Six new mechanics in `config/mechanics.toml`, all built to work cold:
+`archetype_sort` · `cupboard_audit` · `price_teardown` · `stop_buying` ·
+`demo_post` · `objection_kill`.
+
+The other five shows keep their weekdays and their jobs — the campaign changes
+what they're *for* this fortnight, not what they *are*.
+
+### The posts that matter most
+
+- **D+0, launch day** — `demo_post`: asks three questions in the carousel and
+  answers them for the common cases. Useful without ever clicking; the quiz is
+  the honest next step, not a pivot.
+- **D+2** — the audit that bins more than it keeps, making the point that the
+  quiz will tell you to take less. The single best trust-buyer of launch week.
+- **D+9** — *"it's just the same stuff I'd buy anyway" — yeah, mostly.* Concedes
+  the strongest objection completely, then argues the real value. Objection
+  posts are where the conversions live once the novelty is gone.
+- **D+19** — the boring FAQ post: what it asks, is it free, do I have to buy
+  anything, can I cancel. Least exciting post on the account; will outconvert
+  most of them.
+
+---
+
+## Compliance — the one new risk
+
+A personalisation product carries an exposure the rest of the account doesn't:
+the gap between a **recommendation** and a **diagnosis**. The quiz reads typed
+answers. It does not assess a body, detect anything, or know about a
+deficiency. Every framing that crosses that line ("find out what your body is
+missing", "see what you're deficient in") would *test brilliantly*, which is
+exactly why it can't be left to an editor's judgement at 11pm.
+
+So six patterns went into the claims lint (`chrgd/claims.py`) — deficiency
+claims, diagnostic framing, "tailored to your body", prescribing — alongside
+the existing EFSA/ASA/CAP rules. They run offline on every post, and
+`[campaign.compliance]` tells the writer the same rules up front so the first
+draft lands inside the line.
+
+`[campaign.facts]` also holds a **never-say** list: no supplier, no fulfilment
+partner, no platform names, nothing about the range being new or the account
+being small.
+
+> ⚠️ **`launch_date` is a placeholder** (`2026-08-31`). Set the real one before
+> seeding. Nothing else needs touching.
+
+---
+
+## Running it
+
+```bash
+chrgd campaign status                    # where we are, and this week's ask
+chrgd campaign seed --all --dry-run      # the whole calendar, nothing written
+chrgd campaign seed --phase prime        # queue the pre-launch run
+chrgd build --count 11                   # write them
+chrgd render G-0001                      # images
+chrgd export --week                      # Metricool CSV + assets
+```
+
+Seeding stamps show, mechanic and phase onto each row, so `build` needs no
+further choices. It dedupes on the concept note — re-seed after editing the
+calendar and only the new posts queue.
+
+Batching ahead of the calendar works: a row's stamped phase beats today's date,
+so you can write launch week during prime and the brief still reads as launch
+day.
+
+## Where to put your attention
+
+1. **Set `launch_date`.**
+2. **Paste 3–6 of your best-performing real posts into `brand_bible.md`.** It's
+   loaded into every build and it is still the highest-leverage lever in the
+   repo — the placeholders are costing you quality on all 29 of these.
+3. **Check the D+0 and D+9 posts by hand before they go out.** Everything else
+   can run on the gate.

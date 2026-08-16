@@ -89,6 +89,28 @@ PATTERNS: tuple[Pattern, ...] = (
             "an unsubstantiated superiority claim"),
     Pattern("outcome_promise", r"\b(?:you\s+will|you'll)\s+(?:lose|gain|build|burn|drop)\b",
             "promises the viewer a specific result"),
+    # --- The quiz's own risk (config/campaign.toml [campaign.compliance]) ----
+    # A recommendation built from six typed answers is not an assessment of a
+    # body, and the gap between those two things is the whole compliance
+    # exposure of a personalisation product. These match the framings that
+    # cross it — every one of which is a phrasing that would test WELL, which
+    # is exactly why a regex has to hold the line rather than an editor's
+    # judgement at 11pm.
+    Pattern("deficiency_claim",
+            r"\b(?:what|which)\b[^.?!]{0,40}\byour\s+body\s+(?:needs|is\s+missing|lacks)\b",
+            "implies the quiz assesses a body — it reads answers, it cannot know this"),
+    Pattern("deficiency_word", r"\bdeficien(?:t|cy|cies)\b",
+            "a clinical finding this brand cannot make from a questionnaire"),
+    Pattern("diagnose", r"\bdiagnos(?:e|es|ed|ing|is|tic)\b",
+            "diagnostic framing — the quiz recommends, it never diagnoses"),
+    Pattern("quiz_knows_body",
+            r"\b(?:quiz|test|scan|assessment)\b[^.?!]{0,30}\b(?:analys|assess|detect|reveal)\w*\b",
+            "implies clinical assessment; the quiz reads typed answers and nothing else"),
+    Pattern("tailored_to_body",
+            r"\b(?:tailored|personalised|personalized|matched|formulated)\s+to\s+your\s+(?:body|biology|dna|genetics|blood|hormones)\b",
+            "implies biological personalisation — it is personalised to your ANSWERS"),
+    Pattern("prescribe", r"\bprescri(?:be|bes|bed|bing|ption)\b",
+            "prescribing is a regulated act — this is a recommendation"),
 )
 
 _COMPILED = tuple((p, re.compile(p.regex, re.I)) for p in PATTERNS)

@@ -111,6 +111,89 @@ def backlog(
     )
 
 
+campaign_app = typer.Typer(help="The launch campaign — phase, calendar, seeding.")
+app.add_typer(campaign_app, name="campaign")
+
+
+@campaign_app.command("status")
+def campaign_status() -> None:
+    """Where the launch campaign is today, and what this week's ask is."""
+    from .campaign import planned_posts, status_lines
+
+    for line in status_lines():
+        typer.echo(line)
+
+    posts = planned_posts()
+    if not posts:
+        return
+    counts: dict[str, int] = {}
+    for post in posts:
+        counts[post.phase] = counts.get(post.phase, 0) + 1
+    typer.secho(
+        "\nPlanned: "
+        + " · ".join(f"{phase} {n}" for phase, n in counts.items())
+        + f" ({len(posts)} posts in config/launch_backlog.toml)",
+        fg=typer.colors.BLUE,
+    )
+
+
+@campaign_app.command("seed")
+def campaign_seed(
+    phase: str = typer.Option(
+        "", "--phase", "-p", help="Seed one phase (prime/tease/launch/sell)."
+    ),
+    all_phases: bool = typer.Option(False, "--all", help="Seed every phase."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be queued, write nothing."
+    ),
+) -> None:
+    """Queue the campaign's planned posts as routed backlog rows.
+
+    Each row lands with its show, mechanic and phase already stamped on
+    `route_json`, so `chrgd build` writes it as the right format for the right
+    moment without any further choices. Deduped on the concept note, so
+    re-seeding after editing the calendar queues only what's new.
+    """
+    from .campaign import planned_posts, seed_posts
+
+    if not phase and not all_phases:
+        typer.secho(
+            "Pick a phase with --phase, or --all for the whole campaign.",
+            fg=typer.colors.YELLOW,
+        )
+        raise typer.Exit(code=2)
+
+    posts = planned_posts("" if all_phases else phase)
+    if not posts:
+        typer.secho(
+            f"No planned posts for phase '{phase}'. Phases live in "
+            "config/launch_backlog.toml.",
+            fg=typer.colors.YELLOW,
+        )
+        raise typer.Exit(code=1)
+
+    if dry_run:
+        for post in posts:
+            day = f"D{post.day:+d}"
+            typer.echo(
+                f"{day:>4}  {post.phase:<7} {post.show or '—':<12} "
+                f"{post.mechanic or post.ingredient or '—':<16} {post.hook or post.key}"
+            )
+        typer.secho(f"\n{len(posts)} posts would be queued.", fg=typer.colors.BLUE)
+        return
+
+    settings = get_settings()
+    with _store() as store:
+        created, skipped = seed_posts(store, settings, posts)
+
+    for idea in created:
+        typer.echo(f"{idea.idea_id}  {idea.learning_tag}  {idea.concept_note[:70]}…")
+    typer.secho(
+        f"\n{len(created)} queued · {len(skipped)} already in the backlog",
+        fg=typer.colors.GREEN,
+    )
+
+
 # --- Stubs for later milestones --------------------------------------------
 
 

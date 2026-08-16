@@ -37,6 +37,33 @@ Implemented now:
 
 - `chrgd trends` — scout current UK-gym topical hooks and (with `--seed`) queue them.
 - `chrgd run` — the full chain: `[--scout] → build → render → export` (for cron).
+- `chrgd campaign` — the launch campaign: where it is today, and seeding its
+  written content into the backlog. See [`LAUNCH_PLAN.md`](LAUNCH_PLAN.md).
+
+### The launch campaign
+
+Every other config here describes a *format*; `config/campaign.toml` describes
+a *moment*. It carries the launch date, four phases defined as day offsets from
+it, and the CTA each phase is allowed to use — injected into every write call,
+so a Tuesday STRAIGHT UP knows it's launch week without being re-briefed.
+
+The shape: the pre-launch fortnight **sells nothing** (at ~70 followers a
+countdown reaches nobody who cares) and spends itself on reach that plants the
+question the quiz answers; launch week bolts one ask onto the same content —
+the **quiz**, never "buy", with the domain written out in plain text rather
+than "link in bio". 29 posts are written and ready in
+`config/launch_backlog.toml`, carried by a new show (**THE STACK**) and six
+cold-open mechanics.
+
+```bash
+chrgd campaign status                 # the phase, and this week's ask
+chrgd campaign seed --all --dry-run   # the whole calendar, nothing written
+chrgd campaign seed --phase prime     # queue the pre-launch run
+```
+
+Set `armed = false` (or let the window lapse) and the studio builds exactly
+what it built before the campaign existed — the same pass-through guarantee the
+show layer makes, asserted in `tests/test_campaign.py`.
 
 **The weekly loop now:** `capture` → `build` → `render` → `export`, then
 bulk-import one CSV into Metricool. That's the daily grind gone.

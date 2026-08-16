@@ -1,0 +1,198 @@
+# The launch campaign — what the studio is selling, and what it is allowed to
+# say about it THIS WEEK.
+#
+# Every other config here describes a *format* (a show, a mechanic, an
+# ingredient). This one describes a *moment*: the fortnight either side of
+# launch, where the same show has to do a different job on Tuesday than it did
+# the Tuesday before. Rather than rewrite five shows twice, the campaign layer
+# injects one extra block into every write call — the phase, the CTA that
+# phase is allowed to use, and the product facts the engine may state.
+#
+#   chrgd/campaign.py loads this; pipeline.build_user_message injects it.
+#
+# **It is a pass-through when disarmed.** Set `armed = false` (or let the
+# window lapse) and the build message is byte-identical to what it was before
+# the campaign existed — the same property the show layer protects.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# SET THIS ONE FIELD AND THE REST FOLLOWS: `launch_date`.
+# Every phase below is defined as an OFFSET from it, so moving the launch by
+# four days moves the whole content calendar by four days. Nothing else needs
+# touching.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[campaign]
+armed = true
+key = "quiz_launch"
+label = "The quiz launch"
+# ⚠️ PLACEHOLDER — set this to the real date. Everything keys off it.
+launch_date = "2026-08-31"
+# What is actually launching, in one line the engine can reason from.
+what = "getCHRGD: a free 60-second quiz that reads your training, your goals and your budget, and builds you a personalised supplement stack you can order as a one-off or as a plan."
+domain = "getchrgd.co.uk"
+handle = "@getchrgd"
+
+# --- The strategic spine ----------------------------------------------------
+# Why the campaign is shaped the way it is. Injected into the write call
+# because the engine writes better CTAs when it knows WHY the CTA is that one.
+
+[campaign.strategy]
+audience_reality = """The account has roughly 70 followers. That number is close to irrelevant on TikTok — the For You page decides reach, not the follower list — but it has two hard consequences the copy must respect.
+
+FIRST: nothing can assume prior knowledge. Every post is somebody's first contact with this brand. An announcement ("we're live!", "3 days to go") is worthless to a stranger, because a stranger has no relationship to count down to. Anything that only lands for an existing follower is a wasted post.
+
+SECOND: the follower list cannot be the distribution. A launch-day post does not reach 70 people and convert them; it reaches whoever the FYP hands it to. So the launch is not one big day — it is a normal high-reach post that happens to have a reason to click at the end of it."""
+
+the_wedge = """THE QUIZ IS THE PRODUCT WE PROMOTE — not the supplements.
+
+The supplements are stocked lines anyone can buy anywhere; there is no story in them and no advantage in shouting about them. The quiz is ours, it is free, it takes a minute, and it answers the single question this audience genuinely has: "what should I actually be taking?"
+
+That makes it a far cheaper ask than a purchase. A stranger will not buy a tub from an account they met eleven seconds ago. They will answer six questions about themselves, because that is a normal thing to do on the internet and because the answer is about them.
+
+So: every selling post sells the QUIZ. The store is what happens after the quiz, and the copy almost never has to mention it."""
+
+the_format_is_the_product = """The quiz's shape — "answer this, find out which one you are" — is already one of the best-performing formats on the platform. That is not a coincidence to exploit, it is the whole plan: a carousel that makes someone privately diagnose themselves is a high-reach post whether or not they ever click, and it is also a live demo of the product. One format does the reach job and the sales job at once, which is what makes it the efficient answer for an account this size."""
+
+# --- What the engine may and may not say ------------------------------------
+
+[campaign.facts]
+# Stated as plainly true. The engine may use any of these in copy.
+true = [
+    "The quiz is free and takes about a minute.",
+    "It asks about your training, your goals, what you already take and what you want to spend.",
+    "It gives you a stack — the specific things worth taking for what you're actually doing — and tells you what to skip.",
+    "You can order it once, or set it up as a plan that arrives on a cadence you choose.",
+    "A plan can be changed or cancelled.",
+    "It runs at getchrgd.co.uk.",
+]
+# Internal reality. NEVER on a slide, in a caption, or in a comment reply.
+never_say = [
+    "dropship, dropshipping, or that stock is fulfilled by a third party",
+    "the name of any supplier, warehouse or fulfilment partner",
+    "the name of any platform in the stack (Shopify, Stripe, Klaviyo, PowerBody)",
+    "anything about margins, sourcing cost, or what the business pays",
+    "that the range is small, new, or that we have just started",
+    "follower counts, view counts, or any reference to the account being small",
+]
+
+# --- Compliance: the line the claims gate enforces --------------------------
+# EFSA/ASA/CAP. chrgd/claims.py owns the enforcement; this is what the WRITER
+# is told so the first draft lands inside the line rather than earning a flag.
+
+[campaign.compliance]
+block = """CLAIMS — UK rules, and this campaign has one risk the rest of the account does not.
+
+The quiz produces a RECOMMENDATION, never a DIAGNOSIS and never a prescription. It reads what you told it and suggests what is worth taking. It does not assess your health, identify a deficiency, detect anything, or know anything about your body that you did not type into it. Any copy implying otherwise is a fail, not a deduction — "find out what your body is missing", "see what you're deficient in", "we'll tell you what's wrong" are all banned framings, however well they would perform.
+
+"Personalised" means built from your answers. It is safe and accurate to say the stack is based on what you told it. It is NOT safe to imply the personalisation is biological, tested, clinical or diagnostic.
+
+The existing account rules stand and are stricter here, not looser: describe what a thing does, never promise what it will do for someone; no health claims of any kind; nothing "proven"; be sharp about the industry's pricing and marketing, neutral and reported about physiology.
+
+MONEY: if a post mentions a plan, it must be obvious it is a subscription and that it can be cancelled. Never state a price, a discount, or a launch offer unless it is in the facts above — an invented number is a compliance problem and a customer-service problem."""
+
+# ─────────────────────────────────────────────────────────────────────────────
+# THE PHASES
+#
+# `starts` / `ends` are days relative to launch_date (0 = launch day).
+# The phase whose window contains today wins; the last phase runs open-ended.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[[campaign.phases]]
+key = "prime"
+label = "Prime — pure reach, zero selling"
+starts = -60
+ends = -4
+goal = "Reach and followers. Nothing else is being measured this phase."
+brief = """THIS POST DOES NOT SELL ANYTHING. There is no product in it, no link, no mention that anything is coming. If a reader finishes it knowing we sell something, the post has failed its job.
+
+What it IS doing: making the audience feel the question the quiz will answer. Every post this phase should leave someone slightly less certain that their current supplement routine makes sense — because they're taking something on a mate's say-so, because they're paying for something that does nothing, because they genuinely have no idea whether the tub in their cupboard is doing anything at all.
+
+That confusion is the market. We are not creating it — it is genuinely how most people feel — we are just naming it out loud, being useful about it, and being the account that was honest about it first.
+
+Play it as comedy, as an argument, as a teardown, as a genuinely useful explainer. Not as a teaser."""
+cta_style = "comment or follow — a question worth answering, never a link"
+ctas = [
+    "what's in your cupboard that you can't justify? go on",
+    "name the one you keep buying and can't explain",
+    "argue with me in the comments",
+    "which one are you? be honest",
+    "save this before your next order",
+]
+banned = [
+    "any mention of a launch, a countdown, or something coming soon",
+    "any mention of the quiz",
+    "any link, domain or 'link in bio'",
+    "any product recommendation of ours",
+]
+
+[[campaign.phases]]
+key = "tease"
+label = "Tease — the thing exists"
+starts = -3
+ends = -1
+goal = "Reach, plus a reason to follow: the payoff is imminent and specific."
+brief = """Still reach-first — the post has to work completely for someone who has never heard of this account, and it must be worth a swipe on its own terms. But this phase is allowed ONE move the last one wasn't: it can end by saying the thing exists.
+
+The move is not "we're launching". It is "we built the answer to this". The post makes the case that picking supplements by vibes is daft, then closes on: there's a quiz that does it properly, it lands this week, follow if you want it.
+
+The tease is a PAYOFF, not an ad. It only lands if the four slides before it made someone want the answer."""
+cta_style = "follow, so you see it when it lands — the link is not the ask yet"
+ctas = [
+    "the quiz that does this properly lands this week — follow so you catch it",
+    "we built the thing that answers this. it's live in a few days.",
+    "follow if you want the version of this that's actually about you",
+]
+banned = [
+    "a countdown as the hook or the subject of the post",
+    "pushing the link before it is live",
+    "any hype word — 'huge', 'game-changing', 'you're not ready'",
+]
+
+[[campaign.phases]]
+key = "launch"
+label = "Launch week — the quiz, hard"
+starts = 0
+ends = 7
+goal = "Quiz completions. Reach is still the vehicle; the quiz is the ask."
+brief = """The quiz is live and every post this phase earns a go at it. The ask is ALWAYS the quiz — never 'buy', never a product, never the shop.
+
+The post still has to work as a post. A carousel whose only content is "do our quiz" reaches nobody, and reaching nobody with a link is worse than reaching people without one. So: give the value first, in full, then make the quiz the obvious next step for someone who wants it applied to them specifically.
+
+The strongest structure this phase, and the one to default to: a carousel that does a rough, generic version of what the quiz does — sort people into types, call out what each type is wasting money on — and then closes on "the proper version, about you specifically, takes a minute". The post IS the demo.
+
+THE LINK: say the domain out loud in the copy. Say it as a plain address someone could type. Do not write 'link in bio' as the only route — a first-time viewer on the For You page is not going to your profile to hunt for it."""
+cta_style = "do the quiz — name the domain in plain text"
+ctas = [
+    "the proper version takes a minute — getchrgd.co.uk",
+    "find out what your actual stack is: getchrgd.co.uk",
+    "60 seconds, six questions, and you'll know what to stop buying — getchrgd.co.uk",
+    "want this done properly for you? getchrgd.co.uk",
+]
+banned = [
+    "'link in bio' as the only route to the quiz",
+    "urgency invented for the sake of it — fake scarcity, fake deadlines",
+    "asking for a purchase; the ask is the quiz",
+]
+
+[[campaign.phases]]
+key = "sell"
+label = "After launch — the quiz, forever"
+starts = 8
+ends = 3650
+goal = "Quiz completions, then plans. The steady state."
+brief = """The launch is over and nothing about it was ever the point. This is the permanent posture: high-reach content about supplements being confusing and overpriced, closing on a free quiz that sorts it out.
+
+Roughly four in five posts should still be pure value with a soft quiz close. The remaining one in five may make the plan argument directly — but make it honestly, and make it the argument a sceptic would accept: you are paying for the thinking and the not-having-to-reorder, it turns up on the cadence you pick, and you can change or cancel it. Never dress a subscription up as a deal.
+
+Objection posts earn their place here: 'is it just the same stuff I'd buy anyway' (yes — the value is knowing which, and not paying for the four you don't need), 'can I cancel' (yes), 'do I need any of this' (often no, and the quiz tells you that too — saying so is the most persuasive thing on the account)."""
+cta_style = "the quiz by default; the plan argument occasionally and honestly"
+ctas = [
+    "the quiz is free and takes a minute — getchrgd.co.uk",
+    "it'll also tell you if the answer is 'none of it' — getchrgd.co.uk",
+    "stop guessing at it: getchrgd.co.uk",
+]
+banned = [
+    "hiding that a plan is a subscription",
+    "quoting a price, discount or offer that isn't in the campaign facts",
+    "guilt or fear as a motivator",
+]

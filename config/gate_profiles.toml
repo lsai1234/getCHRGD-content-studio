@@ -55,6 +55,19 @@ rival_focus = """Every rival opener must state a concrete promise: the goal, the
 tourney_focus = """Prefer the opener most likely to be SAVED — the one whose promise is most concrete and most obviously worth keeping. Cleverness is worth nothing here if the offer is vague."""
 glance_focus = """You are glancing at a workout post. In half a second: did you know who it was for, how long it takes, and what you'd need?"""
 
+[profiles.diagnostic_pull]
+label = "I know which one I am"
+judge_focus = """THIS OPENER IS FOR **THE STACK**, the sorting show and the one carrying the launch. Judge it on self-recognition, not on heat:
+- Can a reader place THEMSELVES in it within half a second? That is the whole test. An opener that describes a topic rather than a person has failed, however sharp it is.
+- Are the types SPECIFIC and funny ('four tubs and no plan', 'the tub graveyard') rather than clinical categories ('the beginner', 'the intermediate lifter')? Vague types are the main failure mode here.
+- Does it promise an honest audit — that the post will tell them what to STOP buying? That promise is what earns the share and what makes the account credible enough to sell from later.
+- Is it about MONEY AND MARKETING rather than about bodies? An opener that promises to tell someone what their body needs, is missing, or is deficient in is an automatic fail, not a deduction — that is a diagnostic claim and this brand cannot make one.
+- Would somebody tag a mate in it? If no type in the opener is tag-able, score it down.
+A shouty confrontational hook is the wrong show. So is a soft, friendly, advisory one — the register is dry, forensic and a bit brutal about money."""
+rival_focus = """Every rival opener must sort the audience into named, recognisable types, or describe one person's supplement cupboard so exactly that the right reader feels caught. Vary the sorting axis between rivals — by what's in the cupboard, by how they shop, by what they believe, by what they're spending. No health claims, no 'what your body needs', no diagnosis framing, no clinical category names. Every rival must imply the post will name something not worth buying."""
+tourney_focus = """Prefer the opener that most reliably makes a stranger think 'that's me' or 'that's him' — self-recognition beats cleverness and beats provocation on this show. An opener promising to diagnose a body rather than audit a cupboard cannot win; rank it last and say why."""
+glance_focus = """You are glancing at a supplement audit post. In half a second: did you know which type you were, and did you believe it was about to tell you what to stop wasting money on?"""
+
 [profiles.continuity_likeness]
 label = "In-world, gripping, and safe"
 judge_focus = """THIS OPENER IS FOR **THE MULTIVERSE**, a comic serial. Judge it on grip and on safety:

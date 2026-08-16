@@ -162,6 +162,96 @@ def check_gate_profiles() -> None:
     ok(f"claims lint: {len(PATTERNS)} patterns armed")
 
 
+def check_campaign() -> None:
+    """The launch campaign, and the content queued behind it.
+
+    Same reasoning as the show checks: `config/campaign.toml` and
+    `config/launch_backlog.toml` are config files that a build reads at write
+    time, so a typo in either is a *deploy-time* problem that would otherwise
+    surface as a wrong-phase post going out on launch day. The routing checks
+    here are the campaign's version of "style_preset that isn't in brand.toml".
+    """
+    section("Launch campaign")
+    from datetime import date
+
+    from chrgd.campaign import load_campaign, load_launch_backlog
+    from chrgd.mechanics import get_mechanic
+    from chrgd.ingredients import get_ingredient
+    from chrgd.shows import get_show
+
+    campaign = load_campaign()
+    if not campaign.armed:
+        ok("campaign disarmed — builds run off-campaign (a valid steady state)")
+        return
+
+    if campaign.launch_date is None:
+        fail("config/campaign.toml: armed with no launch_date — every phase is "
+             "defined as an offset from it, so nothing would resolve")
+        return
+    ok(f"{campaign.label or campaign.key} · launch {campaign.launch_date}")
+
+    if not campaign.phases:
+        fail("config/campaign.toml: armed with no phases")
+        return
+
+    # A gap between phases is a day the campaign silently stops running.
+    for earlier, later in zip(campaign.phases, campaign.phases[1:]):
+        if later.starts != earlier.ends + 1:
+            fail(f"config/campaign.toml: gap or overlap between phase "
+                 f"'{earlier.key}' (ends {earlier.ends:+d}) and '{later.key}' "
+                 f"(starts {later.starts:+d}) — those days would build "
+                 "off-campaign")
+    for phase in campaign.phases:
+        where = f"config/campaign.toml [{phase.key}]"
+        if not phase.brief.strip():
+            fail(f"{where}: no brief — the phase would inject a bare heading")
+        if not phase.ctas:
+            fail(f"{where}: no CTAs — the write call gets a register with no "
+                 "examples, which is where invented asks come from")
+
+    today = date.today()
+    phase = campaign.phase_for(today)
+    if phase is None:
+        warn(f"today ({today}) is outside every phase window — the campaign is "
+             "armed but builds would run off-campaign. Check launch_date.")
+    else:
+        ok(f"today is in '{phase.key}' · the ask: {phase.cta_style or '—'}")
+
+    # The written content, and whether it routes anywhere real.
+    posts = load_launch_backlog()
+    if not posts:
+        warn("config/launch_backlog.toml: no planned posts — `chrgd campaign "
+             "seed` would queue nothing")
+        return
+    phase_keys = {p.key for p in campaign.phases}
+    seen: set[str] = set()
+    before = len(FAILURES)
+    for post in posts:
+        where = f"config/launch_backlog.toml [{post.key}]"
+        if post.key in seen:
+            fail(f"{where}: duplicate key — seeding dedupes on the note, so "
+                 "one of these is unreachable")
+        seen.add(post.key)
+        if not post.concept_note().strip():
+            fail(f"{where}: no hook and no note — seeding would skip it")
+        if post.phase and post.phase not in phase_keys:
+            fail(f"{where}: phase '{post.phase}' is not in campaign.toml")
+        if post.show and get_show(post.show) is None:
+            fail(f"{where}: show '{post.show}' does not exist — it would build "
+                 "as a generic post")
+        if post.mechanic and get_mechanic(post.mechanic) is None:
+            fail(f"{where}: mechanic '{post.mechanic}' does not exist — the "
+                 "format lock would be dropped silently")
+        if post.ingredient and get_ingredient(post.ingredient) is None:
+            fail(f"{where}: ingredient '{post.ingredient}' is not in the library")
+    if len(FAILURES) == before:
+        counts: dict[str, int] = {}
+        for post in posts:
+            counts[post.phase] = counts.get(post.phase, 0) + 1
+        ok(f"{len(posts)} planned posts route cleanly · "
+           + " ".join(f"{k}:{n}" for k, n in counts.items()))
+
+
 # --- the box itself ---------------------------------------------------------
 
 
@@ -252,8 +342,8 @@ def check_app_boots() -> None:
 def main() -> int:
     print("CHRGD Content Studio — pre-flight (offline, no paid calls)")
     for check in (check_shows, check_roster, check_content_libraries,
-                  check_gate_profiles, check_render_prerequisites,
-                  check_settings, check_app_boots):
+                  check_gate_profiles, check_campaign,
+                  check_render_prerequisites, check_settings, check_app_boots):
         try:
             check()
         except Exception as exc:  # noqa: BLE001
