@@ -38,7 +38,7 @@ from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 log = logging.getLogger(__name__)
 
@@ -108,6 +108,32 @@ class Campaign(BaseModel):
     #: Shows this campaign doesn't use — dimmed on the create screen, never
     #: disabled. A statement about what the fortnight is for, not a lock.
     paused_shows: list[str] = Field(default_factory=list)
+    #: Run in this phase regardless of the calendar.
+    #:
+    #: A launch date is usually the last thing to get fixed, and the phases are
+    #: all defined as offsets from one — so before there is a date the campaign
+    #: would resolve to no phase at all and every build would quietly run
+    #: off-campaign. Pinning is the answer to "we're launching soon-ish": the
+    #: studio writes `prime` content until somebody says when, then you set
+    #: `launch_date`, clear this, and the calendar takes over.
+    #:
+    #: A pin always wins over the calendar, so a stale pin is visible rather
+    #: than subtle — `chrgd campaign status` and the create screen both say
+    #: they're pinned.
+    pin_phase: str = ""
+
+    @field_validator("launch_date", mode="before")
+    @classmethod
+    def _blank_date_is_no_date(cls, value):
+        """`launch_date = ""` means "not decided yet", not a parse error.
+
+        Leaving the key present and empty is how the config says there is no
+        date — clearer than deleting the line, and it keeps the field visible
+        as the thing to fill in.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # --- resolving the moment ----------------------------------------------
 
@@ -118,14 +144,18 @@ class Campaign(BaseModel):
         return (today - self.launch_date).days
 
     def phase_for(self, today: date) -> Phase | None:
-        """The phase today falls in, or None if the campaign isn't running.
+        """The phase we're in, or None if the campaign isn't running.
 
-        The first phase whose window contains the offset wins, so overlapping
-        windows resolve by file order rather than raising — a config mistake
-        should cost a slightly wrong brief, never a failed build.
+        A pinned phase wins outright — that's the mode the studio runs in
+        before a launch date exists. Otherwise the first phase whose window
+        contains the offset wins, so overlapping windows resolve by file order
+        rather than raising: a config mistake should cost a slightly wrong
+        brief, never a failed build.
         """
         if not self.armed or not self.phases:
             return None
+        if self.pin_phase:
+            return self.get_phase(self.pin_phase)
         offset = self.day_offset(today)
         if offset is None:
             return None
@@ -151,11 +181,12 @@ class Campaign(BaseModel):
         and a parallel prompt file would drift from the real one inside a month
         — exactly the reasoning behind `Show.brief_block`.
         """
+        when = self._when(today)
         lines = [
-            f"THE CAMPAIGN — this post is being written {self._when(today)}, "
-            f"in the **{phase.label or phase.key}** phase. That changes what "
-            "this post is FOR. It does not change the show's format, its "
-            "voice, or the quality bar.",
+            f"THE CAMPAIGN — this post is being written{when} in the "
+            f"**{phase.label or phase.key}** phase. That changes what this "
+            "post is FOR. It does not change the show's format, its voice, or "
+            "the quality bar.",
         ]
         if self.what:
             lines.append("")
@@ -221,17 +252,24 @@ class Campaign(BaseModel):
         return "\n".join(lines)
 
     def _when(self, today: date | None) -> str:
-        """'4 days before launch' — the offset in words, for the brief."""
+        """' 4 days before launch,' — the offset in words, for the brief.
+
+        Empty when there is no launch date, and deliberately so: the phase
+        already tells the engine everything it needs, and inventing a timing
+        clause to fill the gap would put "days to go" in copy at a point when
+        nobody knows how many. Leads with a space and ends without one so the
+        sentence reads either way.
+        """
         if today is None or self.launch_date is None:
-            return "during the launch campaign"
+            return ""
         offset = self.day_offset(today)
         if offset is None:
-            return "during the launch campaign"
+            return ""
         if offset == 0:
-            return "on LAUNCH DAY itself"
+            return " on LAUNCH DAY itself,"
         if offset < 0:
-            return f"{abs(offset)} day(s) BEFORE launch"
-        return f"{offset} day(s) AFTER launch"
+            return f" {abs(offset)} day(s) BEFORE launch,"
+        return f" {offset} day(s) AFTER launch,"
 
 
 #: What an unarmed studio resolves to — every field empty, nothing injected.
@@ -492,11 +530,21 @@ def status_lines(today: date | None = None) -> list[str]:
             else f"{offset} days since launch"
         )
         out.append(f"Launch:   {campaign.launch_date}  ({when_word})")
+    else:
+        out.append("Launch:   not set yet")
     phase = campaign.phase_for(when)
-    out.append(
-        f"Phase:    {phase.label or phase.key}" if phase
-        else "Phase:    none — today is outside every phase window"
-    )
+    if phase and campaign.pin_phase:
+        out.append(
+            f"Phase:    {phase.label or phase.key}  (PINNED — ignoring the "
+            "calendar until a launch date is set)"
+        )
+    elif phase:
+        out.append(f"Phase:    {phase.label or phase.key}")
+    else:
+        out.append(
+            "Phase:    none — no launch date and no pinned phase, so builds "
+            "are running OFF-CAMPAIGN"
+        )
     if phase:
         out.append(f"Goal:     {phase.goal}")
         out.append(f"The ask:  {phase.cta_style}")

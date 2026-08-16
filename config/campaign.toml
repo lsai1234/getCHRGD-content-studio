@@ -15,18 +15,31 @@
 # the campaign existed — the same property the show layer protects.
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# SET THIS ONE FIELD AND THE REST FOLLOWS: `launch_date`.
-# Every phase below is defined as an OFFSET from it, so moving the launch by
-# four days moves the whole content calendar by four days. Nothing else needs
-# touching.
+# TWO WAYS TO RUN, and the studio is in the first one.
+#
+#   1. PINNED (now). There is no launch date yet, so `pin_phase` names the
+#      phase everything is written for. The studio makes `prime` content —
+#      pure reach, zero selling — indefinitely, which is exactly the right
+#      thing to be doing while a date firms up.
+#
+#   2. ON THE CALENDAR (later). When there IS a date: set `launch_date`, clear
+#      `pin_phase`, and the phases below resolve themselves from it. Every one
+#      is an OFFSET from that date, so moving the launch four days moves the
+#      whole content calendar four days. Nothing else needs touching.
+#
+# A pin always beats the calendar, so a forgotten pin shows up loudly —
+# `chrgd campaign status` and the create screen both say PINNED — rather than
+# silently writing pre-launch copy through launch week.
 # ─────────────────────────────────────────────────────────────────────────────
 
 [campaign]
 armed = true
 key = "quiz_launch"
 label = "The quiz launch"
-# ⚠️ PLACEHOLDER — set this to the real date. Everything keys off it.
-launch_date = "2026-08-31"
+# No date yet, and nothing invents one. Phases come from `pin_phase` below
+# until this is filled in — see the two modes above.
+launch_date = ""
+pin_phase = "prime"
 # What is actually launching, in one line the engine can reason from.
 what = "getCHRGD: a free 60-second quiz that reads your training, your goals and your budget, and builds you a personalised supplement stack you can order as a one-off or as a plan."
 domain = "getchrgd.co.uk"
@@ -146,19 +159,23 @@ ends = -1
 goal = "Reach, plus a reason to follow: the payoff is imminent and specific."
 brief = """Still reach-first — the post has to work completely for someone who has never heard of this account, and it must be worth a swipe on its own terms. But this phase is allowed ONE move the last one wasn't: it can end by saying the thing exists.
 
-The move is not "we're launching". It is "we built the answer to this". The post makes the case that picking supplements by vibes is daft, then closes on: there's a quiz that does it properly, it lands this week, follow if you want it.
+The move is not "we're launching". It is "we built the answer to this". The post makes the case that picking supplements by vibes is daft, then closes on: there's a quiz that does it properly, it's nearly ready, follow if you want it.
 
 The tease is a PAYOFF, not an ad. It only lands if the four slides before it made someone want the answer."""
-cta_style = "follow, so you see it when it lands — the link is not the ask yet"
+cta_style = "follow, so you see it when it lands — the link is not the ask yet, and never name a date we haven't fixed"
 ctas = [
-    "the quiz that does this properly lands this week — follow so you catch it",
-    "we built the thing that answers this. it's live in a few days.",
+    "we built the quiz that does this properly — follow so you catch it",
+    "we built the thing that answers this. it's nearly ready.",
     "follow if you want the version of this that's actually about you",
 ]
 banned = [
     "a countdown as the hook or the subject of the post",
     "pushing the link before it is live",
     "any hype word — 'huge', 'game-changing', 'you're not ready'",
+    # A date said out loud is a promise, and a missed one is the worst first
+    # impression a new brand can make. 'Nearly ready' costs nothing and can't
+    # be broken.
+    "naming a day, a date or a countdown — 'this week', 'tomorrow', 'Friday', 'in 3 days'",
 ]
 
 [[campaign.phases]]

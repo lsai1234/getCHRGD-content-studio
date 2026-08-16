@@ -449,7 +449,12 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
             "launch_date": str(campaign.launch_date or ""),
             "phase": active.key if active else "",
             "phase_label": active.label if active else "",
-            # The human line the screen leads with — "15 days to go".
+            # Pinned is a mode worth seeing on the screen: it means the phase
+            # chips are describing a decision somebody made, not a date.
+            "pinned": bool(campaign.pin_phase),
+            # The human line the screen leads with. Empty when there's no date
+            # — nothing here invents a countdown out of a launch nobody has
+            # scheduled yet.
             "when": (
                 "" if offset is None
                 else "launch day" if offset == 0

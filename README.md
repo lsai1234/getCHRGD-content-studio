@@ -55,6 +55,11 @@ than "link in bio". 29 posts are written and ready in
 `config/launch_backlog.toml`, carried by a new show (**THE STACK**) and six
 cold-open mechanics.
 
+Before there is a launch date the campaign runs **pinned** (`pin_phase` in
+`config/campaign.toml`): it writes for one named phase and no copy anywhere
+names a day. Set `launch_date` and clear the pin, and the phases resolve
+themselves from it as day offsets.
+
 Two create-journey doors drive it: **⚡ The launch** (pick the phase, then one
 of the written posts for it — or write your own under that phase's brief) and
 **🧪 THE STACK** (the sorting show's own screen). The phase is stamped on the
