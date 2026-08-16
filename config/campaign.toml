@@ -15,18 +15,36 @@
 # the campaign existed — the same property the show layer protects.
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# SET THIS ONE FIELD AND THE REST FOLLOWS: `launch_date`.
-# Every phase below is defined as an OFFSET from it, so moving the launch by
-# four days moves the whole content calendar by four days. Nothing else needs
-# touching.
+# TWO WAYS TO RUN, and the studio is in the first one.
+#
+#   1. PINNED (now). There is no launch date yet, so `pin_phase` names the
+#      phase everything is written for. The studio sits in `buildup`: full
+#      reach content that would be worth posting even if we sold nothing, with
+#      ONE line at the end teasing what's being built and asking for a follow.
+#      It can hold there indefinitely, which is the point — no date is needed
+#      and none is ever named.
+#
+#      `prime` is the same thing with no tease at all, if you'd rather the
+#      account said nothing about a launch yet. Swap the pin to switch.
+#
+#   2. ON THE CALENDAR (later). When there IS a date: set `launch_date`, clear
+#      `pin_phase`, and the phases below resolve themselves from it. Every one
+#      is an OFFSET from that date, so moving the launch four days moves the
+#      whole content calendar four days. Nothing else needs touching.
+#
+# A pin always beats the calendar, so a forgotten pin shows up loudly —
+# `chrgd campaign status` and the create screen both say PINNED — rather than
+# silently writing pre-launch copy through launch week.
 # ─────────────────────────────────────────────────────────────────────────────
 
 [campaign]
 armed = true
 key = "quiz_launch"
 label = "The quiz launch"
-# ⚠️ PLACEHOLDER — set this to the real date. Everything keys off it.
-launch_date = "2026-08-31"
+# No date yet, and nothing invents one. Phases come from `pin_phase` below
+# until this is filled in — see the two modes above.
+launch_date = ""
+pin_phase = "buildup"
 # What is actually launching, in one line the engine can reason from.
 what = "getCHRGD: a free 60-second quiz that reads your training, your goals and your budget, and builds you a personalised supplement stack you can order as a one-off or as a plan."
 domain = "getchrgd.co.uk"
@@ -65,6 +83,36 @@ That makes it a far cheaper ask than a purchase. A stranger will not buy a tub f
 So: every selling post sells the QUIZ. The store is what happens after the quiz, and the copy almost never has to mention it."""
 
 the_format_is_the_product = """The quiz's shape — "answer this, find out which one you are" — is already one of the best-performing formats on the platform. That is not a coincidence to exploit, it is the whole plan: a carousel that makes someone privately diagnose themselves is a high-reach post whether or not they ever click, and it is also a live demo of the product. One format does the reach job and the sales job at once, which is what makes it the efficient answer for an account this size."""
+
+# --- How we're allowed to talk about the technology -------------------------
+#
+# ⚠️ SET `uses_ai` HONESTLY. It is false by default on purpose.
+#
+# If the quiz is a rules-based recommendation flow — you answer, it maps your
+# answers to a stack — then it is NOT AI, and calling it AI is a false claim
+# about your own product. That is the easiest kind of claim for a sceptic to
+# disprove and the most expensive to walk back, and on a supplement account it
+# invites exactly the scrutiny you don't want.
+#
+# Flip this to true ONLY if there is a genuine model in the loop, and then say
+# what it actually does rather than that it exists.
+
+[campaign.tech]
+uses_ai = false
+# How the product is described when the copy talks about how it works. The
+# claim-safe framing is always the CONCRETE one: what it asks, what it returns.
+# "It reads six answers and builds a stack" is more impressive than "AI-powered"
+# because it is specific, and it happens to be defensible.
+how_it_works = "You answer about six questions — how you train, what you're after, what you already take, what you'll spend — and it builds you a stack from those answers, including telling you what to skip."
+block = """TALKING ABOUT THE TECHNOLOGY — the line, and why it is where it is.
+
+DESCRIBE WHAT IT DOES, NEVER HOW ADVANCED IT IS. "It asks six questions and tells you what to skip" is both more persuasive and more defensible than "state of the art" or "cutting-edge". Superiority and technology-leadership claims ("the most advanced", "state of the art", "next-generation", "the first of its kind") are objective claims that have to be substantiated on demand under UK advertising rules, and we are not going to be able to substantiate them. They are banned outright.
+
+PERSONALISED MEANS PERSONALISED TO YOUR ANSWERS. Never to your body, your biology, your genetics or your needs. "Built from what you told it" is the safe and accurate phrasing. "It works out what your body needs" is a diagnostic claim and an automatic fail — that line does not move because the technology sounds clever; if anything a clever-sounding system makes the implication WORSE, because it sounds like it might really know.
+
+DO NOT CALL IT AI UNLESS THE CONFIG SAYS IT IS. If `uses_ai` is false, the words AI, machine learning, algorithm-that-learns and smart-in-the-technical-sense are banned. Describing a rules-based recommendation flow as AI is a false claim about our own product.
+
+THE TEASE IS THE THINKING, NOT THE LAUNCH. "Something amazing is coming" gives a stranger nothing — they have no relationship with us and no reason to care that we are excited. What DOES land is showing the thinking: the problem we got annoyed enough about to build something for, the decisions inside it, what it refuses to do. Tease the argument and the audience arrives already agreeing with you."""
 
 # --- What the engine may and may not say ------------------------------------
 
@@ -139,6 +187,46 @@ banned = [
 ]
 
 [[campaign.phases]]
+key = "buildup"
+label = "Build-up — reach, and a reason to follow"
+# Sits inside prime's window on purpose: before a launch date exists this is
+# the phase to PIN, and once a date is set the calendar runs prime → tease →
+# launch as before. Two phases can overlap because `phase_for` takes the first
+# match and a pin outranks both.
+starts = -60
+ends = -5
+# Pin-only: it overlaps `prime` deliberately, so the calendar must never pick
+# it by date. Which of the two you want is a decision, not a day.
+on_calendar = false
+goal = "Reach first, followers second. Nobody is being sold anything yet."
+brief = """THE POST STILL HAS TO WORK COMPLETELY FOR A STRANGER WHO HAS NEVER HEARD OF US. That is not negotiable and it is most of the job: four or five slides of something genuinely useful, funny or annoying about supplements, which would have been worth posting even if we were selling nothing. Everything below only applies to the LAST slide.
+
+THE LAST SLIDE MAY TEASE WHAT WE'RE BUILDING. One line, at the end, after the value has already landed. The ask is FOLLOW — not click, not buy, not wait. Nothing is live yet and there is nothing to link to.
+
+TEASE THE THINKING, NOT THE LAUNCH. This is the whole difference between a tease that works and one that reads as a brand talking about itself. A stranger does not care that something is coming; they have no relationship with us. What they DO care about is the argument — that picking supplements by vibes is daft, that most people are paying for things doing nothing, that nobody can honestly answer 'what should I take' in a comment. So the tease is: we got annoyed enough about this to build something that does it properly. That earns a follow because the person already agrees with the post they just read.
+
+CONCRETE BEATS EXCITED, EVERY TIME. 'It asks about six questions and tells you what to skip' is a better tease than 'something big is coming', because it is specific enough to picture and it promises something useful rather than something exciting. Excitement is ours; usefulness is theirs.
+
+NEVER NAME A DATE. Not a day, not a week, not a countdown. 'Nearly ready' and 'soon' are the strongest things we can honestly say, and neither can be broken."""
+cta_style = "follow, so you see it when it lands — never a link, never a date"
+ctas = [
+    "we got so annoyed about this we built something to fix it. follow if you want it.",
+    "there's a proper version of this coming — about you specifically. follow so you catch it.",
+    "we built the thing that answers this properly. nearly ready. follow.",
+    "follow if you want the version of this that's actually about your training",
+    "which one are you? and follow — the thing that sorts this out is nearly done.",
+]
+banned = [
+    "leading with the launch, or making the post ABOUT the thing coming",
+    "naming a day, a date or a countdown — 'this week', 'tomorrow', 'Friday', 'in 3 days'",
+    "'state of the art', 'cutting-edge', 'next-generation', 'the first of its kind', 'revolutionary' — unsubstantiated superiority claims",
+    "calling it AI, machine learning or an algorithm unless the campaign's tech config says it is",
+    "implying the thing knows what your body needs — it reads your answers and nothing else",
+    "any hype word — 'huge', 'game-changing', 'you're not ready for this'",
+    "a link, a domain or 'link in bio' — nothing is live yet",
+]
+
+[[campaign.phases]]
 key = "tease"
 label = "Tease — the thing exists"
 starts = -3
@@ -146,19 +234,23 @@ ends = -1
 goal = "Reach, plus a reason to follow: the payoff is imminent and specific."
 brief = """Still reach-first — the post has to work completely for someone who has never heard of this account, and it must be worth a swipe on its own terms. But this phase is allowed ONE move the last one wasn't: it can end by saying the thing exists.
 
-The move is not "we're launching". It is "we built the answer to this". The post makes the case that picking supplements by vibes is daft, then closes on: there's a quiz that does it properly, it lands this week, follow if you want it.
+The move is not "we're launching". It is "we built the answer to this". The post makes the case that picking supplements by vibes is daft, then closes on: there's a quiz that does it properly, it's nearly ready, follow if you want it.
 
 The tease is a PAYOFF, not an ad. It only lands if the four slides before it made someone want the answer."""
-cta_style = "follow, so you see it when it lands — the link is not the ask yet"
+cta_style = "follow, so you see it when it lands — the link is not the ask yet, and never name a date we haven't fixed"
 ctas = [
-    "the quiz that does this properly lands this week — follow so you catch it",
-    "we built the thing that answers this. it's live in a few days.",
+    "we built the quiz that does this properly — follow so you catch it",
+    "we built the thing that answers this. it's nearly ready.",
     "follow if you want the version of this that's actually about you",
 ]
 banned = [
     "a countdown as the hook or the subject of the post",
     "pushing the link before it is live",
     "any hype word — 'huge', 'game-changing', 'you're not ready'",
+    # A date said out loud is a promise, and a missed one is the worst first
+    # impression a new brand can make. 'Nearly ready' costs nothing and can't
+    # be broken.
+    "naming a day, a date or a countdown — 'this week', 'tomorrow', 'Friday', 'in 3 days'",
 ]
 
 [[campaign.phases]]

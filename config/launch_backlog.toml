@@ -176,6 +176,79 @@ note = """Topical — run the trend scout the morning it's due rather than pre-w
 target_viewer = "18-30 UK gym-goer who watches the same telly as everyone else"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# BUILD-UP — reach first, and one line at the end that earns a follow.
+#
+# The phase to pin while there is no launch date. Every post here would have
+# been worth posting even if we were selling nothing; the tease is the LAST
+# SLIDE only, and it teases the ARGUMENT rather than the launch. A stranger
+# does not care that something is coming — they care that they agree with the
+# post they just read, and that there is a proper version of it.
+# ═══════════════════════════════════════════════════════════════════════════
+
+[[posts]]
+key = "buildup_annoyed"
+phase = "buildup"
+day = -30
+show = "verdict"
+category = "myth_fight"
+hook = "fat burners: not worth it — and we got annoyed enough about it to do something"
+note = """The purest build-up post: a real ruling, and the tease is simply that we were annoyed enough to build the answer. NOT WORTH IT, argued on money and marketing — mostly caffeine with a story on top. The exception given fairly. Then the last slide, one line: nobody can answer 'what should I take' honestly in a comment, so we built something that does it properly. Follow, don't click — there's nothing to click. Never a date."""
+verdict_subject = "fat burners"
+verdict_ruling = "not_worth_it"
+verdict_reason = "caffeine with a story on top, priced like it isn't"
+target_viewer = "someone with a fat burner in the basket"
+core_tension = "the category sold hardest is the one with least behind it"
+
+[[posts]]
+key = "buildup_six_questions"
+phase = "buildup"
+day = -28
+show = "the_stack"
+mechanic = "demo_post"
+category = "education"
+hook = "nobody can tell you what to take in a comment — here's what it actually depends on"
+note = """The post that makes the case for the product by BEING a rough version of it. What you should take genuinely depends on how you train, what you already eat, and what you'll spend — walk each branch honestly and give the rough answer for the common cases. Genuinely useful with no click required. Last slide: this is as far as a carousel gets; the proper version asks about six questions and tells you what to skip. Follow. Describe what it does — never 'state of the art', never AI, never a date."""
+target_viewer = "someone who has asked the internet and got noise"
+core_tension = "the honest answer is 'it depends', which is exactly what nobody wants to hear"
+
+[[posts]]
+key = "buildup_tell_you_less"
+phase = "buildup"
+day = -26
+show = "the_stack"
+mechanic = "cupboard_audit"
+category = "identity_exposure"
+hook = "we're building something that will happily tell you to buy less"
+note = """The trust post of the build-up, and the strongest tease we have because it is a promise a shop isn't supposed to make. Run a real audit that bins more than it keeps. Then the last slide makes the argument explicit: the thing we're building will tell plenty of people the answer is two cheap things, or nothing — a shop's quiz that only ever recommends buying more isn't worth doing. Follow if that's the version you want. No date, no link."""
+target_viewer = "the sceptic who assumes every brand quiz is a funnel"
+core_tension = "a shop building something that tells you to spend less"
+
+[[posts]]
+key = "buildup_price_gap"
+phase = "buildup"
+day = -24
+show = "receipts"
+category = "myth_fight"
+hook = "two tubs, near-identical ingredients, £20 between them"
+note = """Open on the two prices and break down what the gap actually buys — the label, the athlete on it, the shelf position, the flavour development. Nothing that enters your body. Fair to the dearer one where it deserves it, no brand named, no second figure invented. Last slide: picking on what's IN it rather than what's ON it is the whole problem we're building for. Follow."""
+receipt_product = "two 1kg tubs of whey with near-identical ingredient lists"
+receipt_price = "£25 and £45"
+target_viewer = "the label-led shopper"
+core_tension = "the ingredient lists match; the prices don't"
+
+[[posts]]
+key = "buildup_types"
+phase = "buildup"
+day = -22
+show = "the_stack"
+mechanic = "archetype_sort"
+category = "identity_exposure"
+hook = "there are four types of supplement buyer and three of them are skint for no reason"
+note = """The reach workhorse, with a follow ask instead of a comment one. Four types — the tub graveyard, the mate's-recommendation lad, the six-things-no-plan stacker, and the one quietly taking two boring things consistently. Hardest on what each was SOLD, never on the person. Last slide: which one are you — and follow, because the thing that sorts this out properly is nearly ready. No date."""
+target_viewer = "18-30 UK gym-goer who owns supplements they can't justify"
+pain_point = "spending money on tubs without knowing if any of it works"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # TEASE — the thing exists, and only after the post has earned it
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -187,7 +260,7 @@ show = "the_stack"
 mechanic = "demo_post"
 category = "education"
 hook = "nobody can tell you what to take in a comment, and here's why"
-note = """The post that makes the case for the product without being an advert for it. What you should take genuinely depends on three things: what you're training for, what you already eat, and what you're willing to spend. Walk both branches of each honestly — this is why every answer in the comments is confidently wrong, including the good ones. Then the honest limit: this is as far as a carousel gets, the version that's actually about you lands this week. Follow, don't click — there's nothing to click yet."""
+note = """The post that makes the case for the product without being an advert for it. What you should take genuinely depends on three things: what you're training for, what you already eat, and what you're willing to spend. Walk both branches of each honestly — this is why every answer in the comments is confidently wrong, including the good ones. Then the honest limit: this is as far as a carousel gets, the version that's actually about you is nearly ready. Follow, don't click — there's nothing to click yet."""
 target_viewer = "someone who has asked the internet and got noise"
 core_tension = "the honest answer is 'it depends', which is exactly what nobody wants to hear"
 
@@ -198,7 +271,7 @@ day = -2
 show = "verdict"
 category = "education"
 hook = "most of that aisle: not worth it. the hard part is which bit isn't."
-note = """A ruling on the aisle itself rather than one product. NOT WORTH IT, for most of what's on it, argued honestly: a handful of things are well-evidenced and cheap, and the rest is priced on hope. The exception is the whole post — which few things ARE worth it depends on what you're training for and what you already eat, and a carousel can't do that bit for you. Close on: we built the thing that can, it lands this week, follow it. No link yet."""
+note = """A ruling on the aisle itself rather than one product. NOT WORTH IT, for most of what's on it, argued honestly: a handful of things are well-evidenced and cheap, and the rest is priced on hope. The exception is the whole post — which few things ARE worth it depends on what you're training for and what you already eat, and a carousel can't do that bit for you. Close on: we built the thing that can, and it's nearly ready. Follow it. No link yet."""
 verdict_subject = "most of the supplement aisle"
 verdict_ruling = "not_worth_it"
 verdict_reason = "a handful of things are cheap and well-evidenced; the rest is priced on hope"
@@ -213,7 +286,7 @@ show = "the_stack"
 mechanic = "cupboard_audit"
 category = "identity_exposure"
 hook = "if your stack has more than three things in it, one of them is doing nothing"
-note = """A sharper, tighter audit than the earlier one — built on the stacker specifically. Six things, no plan, overlapping ingredients, two of them the same thing under different names. Cut it down live to what's actually justified. Close on: the proper version of this, about your training and your budget, goes live tomorrow. Follow it."""
+note = """A sharper, tighter audit than the earlier one — built on the stacker specifically. Six things, no plan, overlapping ingredients, two of them the same thing under different names. Cut it down live to what's actually justified. Close on: the proper version of this, about your training and your budget, is about to go live. Follow it."""
 target_viewer = "the six-supplement stacker"
 pain_point = "paying twice for the same ingredient under two labels"
 

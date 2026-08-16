@@ -171,11 +171,15 @@ def test_never_say_list_reaches_the_write_call():
 def test_shipped_campaign_loads_and_is_coherent():
     campaign = load_campaign()
     assert campaign.armed, "the launch campaign should ship armed"
-    assert campaign.launch_date is not None
-    keys = [p.key for p in campaign.phases]
+    # A date or a pin — one of them has to resolve, or builds run off-campaign
+    # while the config still claims to be armed.
+    assert campaign.launch_date is not None or campaign.pin_phase
+    keys = [p.key for p in campaign.calendar_phases()]
     assert keys == ["prime", "tease", "launch", "sell"]
-    # No gaps: each phase must start the day the previous one ends.
-    for earlier, later in zip(campaign.phases, campaign.phases[1:]):
+    # No gaps: each calendar phase must start the day the previous one ends.
+    # Pin-only phases are exempt — `buildup` overlaps `prime` on purpose.
+    for earlier, later in zip(campaign.calendar_phases(),
+                              campaign.calendar_phases()[1:]):
         assert later.starts == earlier.ends + 1, f"gap before {later.key}"
 
 
@@ -187,6 +191,22 @@ def test_prime_phase_forbids_selling():
     assert "link" in banned
     for cta in prime.ctas:
         assert "getchrgd.co.uk" not in cta, "prime must not push the domain"
+
+
+def test_no_phase_promises_a_date_we_havent_fixed():
+    """A date said out loud is a promise; a missed one is the worst first
+    impression a new brand can make. Nothing may name one."""
+    banned_words = ("this week", "tomorrow", "next week", "in a few days",
+                    "days to go")
+    campaign = load_campaign()
+    for phase in campaign.phases:
+        blob = " ".join([phase.brief] + phase.ctas).lower()
+        for word in banned_words:
+            assert word not in blob, f"{phase.key} promises '{word}'"
+    for post in load_launch_backlog():
+        blob = f"{post.hook} {post.note}".lower()
+        for word in banned_words:
+            assert word not in blob, f"{post.key} promises '{word}'"
 
 
 def test_launch_phase_names_the_domain():
@@ -317,15 +337,111 @@ def test_forced_phase_beats_the_calendar():
 
 
 def test_forced_phase_is_dated_from_the_phase_not_from_today():
-    """Otherwise the brief opens by contradicting itself."""
+    """Otherwise the brief opens by contradicting itself.
+
+    With no launch date configured there is no timing clause at all, which is
+    the point — the phase carries the meaning and nothing invents a countdown.
+    What must never happen is the brief claiming one phase and a contradictory
+    timing in the same sentence.
+    """
     _, brief = campaign_block(today=date(2026, 8, 1), phase_key="launch")
-    assert "LAUNCH DAY" in brief
+    assert "Launch week" in brief
     assert "BEFORE launch" not in brief
 
 
-def test_unknown_forced_phase_falls_back_to_the_calendar():
+def test_timing_clause_appears_only_once_there_is_a_date():
+    campaign = _campaign()
+    assert "on LAUNCH DAY itself" in campaign.brief_block(
+        campaign.get_phase("launch"), today=LAUNCH)
+    campaign.launch_date = None
+    brief = campaign.brief_block(campaign.get_phase("launch"), today=LAUNCH)
+    assert "LAUNCH DAY" not in brief
+    assert "day(s)" not in brief
+
+
+def test_a_pinned_phase_beats_the_calendar():
+    campaign = _campaign()
+    campaign.pin_phase = "prime"
+    # A date that would otherwise resolve to launch week.
+    assert campaign.phase_for(LAUNCH).key == "prime"
+
+
+def test_no_date_and_no_pin_resolves_to_nothing():
+    campaign = _campaign()
+    campaign.launch_date = None
+    assert campaign.phase_for(LAUNCH) is None
+
+
+def test_no_date_with_a_pin_still_runs():
+    campaign = _campaign()
+    campaign.launch_date = None
+    campaign.pin_phase = "prime"
+    assert campaign.phase_for(LAUNCH).key == "prime"
+
+
+def test_blank_launch_date_parses_as_no_date():
+    """`launch_date = ""` is how the config says 'not decided yet'."""
+    assert Campaign(armed=True, launch_date="").launch_date is None
+    assert Campaign(armed=True, launch_date="   ").launch_date is None
+
+
+def test_status_says_pinned_out_loud():
+    """A forgotten pin has to be visible, not subtle."""
+    lines = "\n".join(status_lines())
+    campaign = load_campaign()
+    if campaign.pin_phase:
+        assert "PINNED" in lines
+        assert "not set yet" in lines or str(campaign.launch_date) in lines
+
+
+def test_unknown_forced_phase_falls_back_to_the_resolved_phase():
+    """A typo degrades to correct behaviour rather than dropping the campaign."""
+    campaign = load_campaign()
+    expected = campaign.phase_for(date(2026, 8, 1))
     key, brief = campaign_block(today=date(2026, 8, 1), phase_key="nonsense")
-    assert key == "prime" and brief
+    assert key == expected.key and brief
+
+
+def test_a_pin_only_phase_is_unreachable_by_date():
+    """`buildup` overlaps `prime`; the calendar must never pick it itself."""
+    campaign = load_campaign()
+    pin_only = [p for p in campaign.phases if not p.on_calendar]
+    assert pin_only, "buildup should be pin-only"
+    for phase in pin_only:
+        assert campaign.get_phase(phase.key) is not None, "still selectable"
+    # With the pin cleared, a date inside the overlap resolves to the calendar
+    # phase, never to the pin-only one.
+    unpinned = campaign.model_copy(update={"pin_phase": "",
+                                           "launch_date": LAUNCH})
+    assert unpinned.phase_for(date(2026, 8, 1)).key == "prime"
+
+
+def test_buildup_teases_without_selling_or_dating():
+    buildup = load_campaign().get_phase("buildup")
+    assert buildup is not None
+    banned = " ".join(buildup.banned).lower()
+    for forbidden in ("state of the art", "ai", "date", "link"):
+        assert forbidden in banned, f"buildup should ban {forbidden}"
+    # The ask is a follow, and never a link.
+    for cta in buildup.ctas:
+        assert "getchrgd.co.uk" not in cta
+    assert "follow" in buildup.cta_style.lower()
+
+
+def test_tech_block_bans_ai_language_when_the_product_has_none():
+    campaign = load_campaign()
+    block = campaign.tech.as_block()
+    if campaign.tech.uses_ai:
+        assert "you may say so" in block
+    else:
+        assert "BANNED" in block
+        assert "false claim about our own product" in block
+
+
+def test_tech_block_reaches_the_write_call():
+    _, brief = campaign_block(phase_key="buildup")
+    assert "TALKING ABOUT THE TECHNOLOGY" in brief
+    assert "THIS PRODUCT USES AI" in brief
 
 
 # --- the show the campaign runs on ------------------------------------------
@@ -405,7 +521,7 @@ def test_launch_journey_batches_ahead_of_the_calendar(client):
         idea = store.get_idea(r.json()["idea_id"])
     message = build_user_message(idea)
     assert "getchrgd.co.uk" in message
-    assert "LAUNCH DAY" in message
+    assert "Launch week" in message
 
 
 def test_unknown_phase_is_rejected_not_silently_dropped(client):

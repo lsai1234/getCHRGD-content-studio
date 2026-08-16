@@ -38,7 +38,7 @@ from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +62,15 @@ class Phase(BaseModel):
     cta_style: str = ""
     ctas: list[str] = Field(default_factory=list)
     banned: list[str] = Field(default_factory=list)
+    #: Whether the calendar can resolve to this phase on its own.
+    #:
+    #: False makes a phase PIN-ONLY: reachable by `pin_phase` or an explicit
+    #: editor choice, invisible to date arithmetic. That's what lets a phase
+    #: overlap another one's window without making the calendar ambiguous —
+    #: `buildup` sits inside `prime` because it is the same content with one
+    #: extra line at the end, and which of the two you want is a decision, not
+    #: a date.
+    on_calendar: bool = True
 
     def contains(self, offset: int) -> bool:
         return self.starts <= offset <= self.ends
@@ -93,6 +102,41 @@ class Compliance(BaseModel):
     block: str = ""
 
 
+class Tech(BaseModel):
+    """How the product's own machinery may be described.
+
+    Its own block because the risk here is different from the health-claim
+    risk: it is a claim about US rather than about a body, and the failure
+    mode is a false statement about our own product plus an unsubstantiated
+    superiority claim — both of which sound like marketing rather than like
+    something to be careful with, which is exactly why they need a rule.
+    """
+
+    uses_ai: bool = False
+    how_it_works: str = ""
+    block: str = ""
+
+    def as_block(self) -> str:
+        lines = []
+        if self.block.strip():
+            lines.append(self.block.strip())
+        if self.how_it_works.strip():
+            lines.append(
+                "HOW IT ACTUALLY WORKS — the description to reach for when a "
+                f"post talks about the mechanism: {self.how_it_works.strip()}"
+            )
+        lines.append(
+            "THIS PRODUCT USES AI: "
+            + ("yes — you may say so, but say what it does rather than that "
+               "it exists. 'AI-powered' on its own is a boast, not a benefit."
+               if self.uses_ai else
+               "NO. The words AI, machine learning, neural, and "
+               "algorithm-that-learns are BANNED — using them would be a false "
+               "claim about our own product.")
+        )
+        return "\n\n".join(lines)
+
+
 class Campaign(BaseModel):
     armed: bool = False
     key: str = ""
@@ -104,10 +148,37 @@ class Campaign(BaseModel):
     strategy: Strategy = Field(default_factory=Strategy)
     facts: Facts = Field(default_factory=Facts)
     compliance: Compliance = Field(default_factory=Compliance)
+    tech: Tech = Field(default_factory=Tech)
     phases: list[Phase] = Field(default_factory=list)
     #: Shows this campaign doesn't use — dimmed on the create screen, never
     #: disabled. A statement about what the fortnight is for, not a lock.
     paused_shows: list[str] = Field(default_factory=list)
+    #: Run in this phase regardless of the calendar.
+    #:
+    #: A launch date is usually the last thing to get fixed, and the phases are
+    #: all defined as offsets from one — so before there is a date the campaign
+    #: would resolve to no phase at all and every build would quietly run
+    #: off-campaign. Pinning is the answer to "we're launching soon-ish": the
+    #: studio writes `prime` content until somebody says when, then you set
+    #: `launch_date`, clear this, and the calendar takes over.
+    #:
+    #: A pin always wins over the calendar, so a stale pin is visible rather
+    #: than subtle — `chrgd campaign status` and the create screen both say
+    #: they're pinned.
+    pin_phase: str = ""
+
+    @field_validator("launch_date", mode="before")
+    @classmethod
+    def _blank_date_is_no_date(cls, value):
+        """`launch_date = ""` means "not decided yet", not a parse error.
+
+        Leaving the key present and empty is how the config says there is no
+        date — clearer than deleting the line, and it keeps the field visible
+        as the thing to fill in.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # --- resolving the moment ----------------------------------------------
 
@@ -118,21 +189,29 @@ class Campaign(BaseModel):
         return (today - self.launch_date).days
 
     def phase_for(self, today: date) -> Phase | None:
-        """The phase today falls in, or None if the campaign isn't running.
+        """The phase we're in, or None if the campaign isn't running.
 
-        The first phase whose window contains the offset wins, so overlapping
-        windows resolve by file order rather than raising — a config mistake
-        should cost a slightly wrong brief, never a failed build.
+        A pinned phase wins outright — that's the mode the studio runs in
+        before a launch date exists. Otherwise the first phase whose window
+        contains the offset wins, so overlapping windows resolve by file order
+        rather than raising: a config mistake should cost a slightly wrong
+        brief, never a failed build.
         """
         if not self.armed or not self.phases:
             return None
+        if self.pin_phase:
+            return self.get_phase(self.pin_phase)
         offset = self.day_offset(today)
         if offset is None:
             return None
         for phase in self.phases:
-            if phase.contains(offset):
+            if phase.on_calendar and phase.contains(offset):
                 return phase
         return None
+
+    def calendar_phases(self) -> list[Phase]:
+        """The phases date arithmetic can reach — what must stay contiguous."""
+        return [p for p in self.phases if p.on_calendar]
 
     def get_phase(self, key: str) -> Phase | None:
         """A phase by key, ignoring the calendar — what `--phase` seeds from."""
@@ -151,11 +230,12 @@ class Campaign(BaseModel):
         and a parallel prompt file would drift from the real one inside a month
         — exactly the reasoning behind `Show.brief_block`.
         """
+        when = self._when(today)
         lines = [
-            f"THE CAMPAIGN — this post is being written {self._when(today)}, "
-            f"in the **{phase.label or phase.key}** phase. That changes what "
-            "this post is FOR. It does not change the show's format, its "
-            "voice, or the quality bar.",
+            f"THE CAMPAIGN — this post is being written{when} in the "
+            f"**{phase.label or phase.key}** phase. That changes what this "
+            "post is FOR. It does not change the show's format, its voice, or "
+            "the quality bar.",
         ]
         if self.what:
             lines.append("")
@@ -214,6 +294,11 @@ class Campaign(BaseModel):
                 + "."
             )
 
+        tech = self.tech.as_block()
+        if tech.strip():
+            lines.append("")
+            lines.append(tech)
+
         if self.compliance.block.strip():
             lines.append("")
             lines.append(self.compliance.block.strip())
@@ -221,17 +306,24 @@ class Campaign(BaseModel):
         return "\n".join(lines)
 
     def _when(self, today: date | None) -> str:
-        """'4 days before launch' — the offset in words, for the brief."""
+        """' 4 days before launch,' — the offset in words, for the brief.
+
+        Empty when there is no launch date, and deliberately so: the phase
+        already tells the engine everything it needs, and inventing a timing
+        clause to fill the gap would put "days to go" in copy at a point when
+        nobody knows how many. Leads with a space and ends without one so the
+        sentence reads either way.
+        """
         if today is None or self.launch_date is None:
-            return "during the launch campaign"
+            return ""
         offset = self.day_offset(today)
         if offset is None:
-            return "during the launch campaign"
+            return ""
         if offset == 0:
-            return "on LAUNCH DAY itself"
+            return " on LAUNCH DAY itself,"
         if offset < 0:
-            return f"{abs(offset)} day(s) BEFORE launch"
-        return f"{offset} day(s) AFTER launch"
+            return f" {abs(offset)} day(s) BEFORE launch,"
+        return f" {offset} day(s) AFTER launch,"
 
 
 #: What an unarmed studio resolves to — every field empty, nothing injected.
@@ -492,11 +584,21 @@ def status_lines(today: date | None = None) -> list[str]:
             else f"{offset} days since launch"
         )
         out.append(f"Launch:   {campaign.launch_date}  ({when_word})")
+    else:
+        out.append("Launch:   not set yet")
     phase = campaign.phase_for(when)
-    out.append(
-        f"Phase:    {phase.label or phase.key}" if phase
-        else "Phase:    none — today is outside every phase window"
-    )
+    if phase and campaign.pin_phase:
+        out.append(
+            f"Phase:    {phase.label or phase.key}  (PINNED — ignoring the "
+            "calendar until a launch date is set)"
+        )
+    elif phase:
+        out.append(f"Phase:    {phase.label or phase.key}")
+    else:
+        out.append(
+            "Phase:    none — no launch date and no pinned phase, so builds "
+            "are running OFF-CAMPAIGN"
+        )
     if phase:
         out.append(f"Goal:     {phase.goal}")
         out.append(f"The ask:  {phase.cta_style}")

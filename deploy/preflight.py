@@ -184,18 +184,35 @@ def check_campaign() -> None:
         ok("campaign disarmed — builds run off-campaign (a valid steady state)")
         return
 
-    if campaign.launch_date is None:
-        fail("config/campaign.toml: armed with no launch_date — every phase is "
-             "defined as an offset from it, so nothing would resolve")
+    # No date is a legitimate state — you pin a phase instead. No date AND no
+    # pin is the broken one: nothing resolves and every build runs off-campaign
+    # while the config still claims to be armed.
+    if campaign.launch_date is None and not campaign.pin_phase:
+        fail("config/campaign.toml: armed with no launch_date and no "
+             "pin_phase — nothing resolves, so every build would silently run "
+             "off-campaign")
         return
-    ok(f"{campaign.label or campaign.key} · launch {campaign.launch_date}")
+    if campaign.pin_phase:
+        if campaign.get_phase(campaign.pin_phase) is None:
+            fail(f"config/campaign.toml: pin_phase '{campaign.pin_phase}' is "
+                 "not one of the phases below it")
+            return
+        ok(f"{campaign.label or campaign.key} · PINNED to "
+           f"'{campaign.pin_phase}'"
+           + (f" (launch {campaign.launch_date} set but overridden)"
+              if campaign.launch_date else " · no launch date yet"))
+    else:
+        ok(f"{campaign.label or campaign.key} · launch {campaign.launch_date}")
 
     if not campaign.phases:
         fail("config/campaign.toml: armed with no phases")
         return
 
     # A gap between phases is a day the campaign silently stops running.
-    for earlier, later in zip(campaign.phases, campaign.phases[1:]):
+    # Pin-only phases are exempt: they overlap on purpose and the calendar
+    # can never reach them.
+    calendar = campaign.calendar_phases()
+    for earlier, later in zip(calendar, calendar[1:]):
         if later.starts != earlier.ends + 1:
             fail(f"config/campaign.toml: gap or overlap between phase "
                  f"'{earlier.key}' (ends {earlier.ends:+d}) and '{later.key}' "
@@ -215,7 +232,7 @@ def check_campaign() -> None:
         warn(f"today ({today}) is outside every phase window — the campaign is "
              "armed but builds would run off-campaign. Check launch_date.")
     else:
-        ok(f"today is in '{phase.key}' · the ask: {phase.cta_style or '—'}")
+        ok(f"writing for '{phase.key}' · the ask: {phase.cta_style or '—'}")
 
     # The written content, and whether it routes anywhere real.
     posts = load_launch_backlog()

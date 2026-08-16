@@ -52,8 +52,22 @@ countdown reaches nobody who cares) and spends itself on reach that plants the
 question the quiz answers; launch week bolts one ask onto the same content —
 the **quiz**, never "buy", with the domain written out in plain text rather
 than "link in bio". 29 posts are written and ready in
-`config/launch_backlog.toml`, carried by a new show (**THE STACK**) and six
-cold-open mechanics.
+`config/launch_backlog.toml`, carried by three new shows — **⚖️ VERDICT** (one
+purchase, one ruling), **🧾 RECEIPTS** (a real price, broken down) and **🧪 THE
+STACK** (which one are you) — plus six cold-open mechanics. AMP and THE
+MULTIVERSE are paused for the campaign: they earn affinity over months of
+returning viewers, which is the one thing a 70-follower account launching soon
+hasn't got.
+
+On VERDICT and RECEIPTS the editor supplies the judgement and the figures —
+the ruling is chosen on the screen and executed, and the real price is typed in
+and is the only number the engine may use. Neither is something a model should
+be producing for a brand that has to stand behind it.
+
+Before there is a launch date the campaign runs **pinned** (`pin_phase` in
+`config/campaign.toml`): it writes for one named phase and no copy anywhere
+names a day. Set `launch_date` and clear the pin, and the phases resolve
+themselves from it as day offsets.
 
 Two create-journey doors drive it: **⚡ The launch** (pick the phase, then one
 of the written posts for it — or write your own under that phase's brief) and

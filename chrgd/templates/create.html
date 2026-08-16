@@ -464,7 +464,9 @@
     <button type="button" class="opt launch-door" onclick="openLaunch()">
       <span class="ic">⚡</span>
       <span class="tx">
-        <span class="t">{{ campaign.label }} <span class="launch-when">{{ campaign.when }}</span></span>
+        <span class="t">{{ campaign.label }}
+          {%- if campaign.when %} <span class="launch-when">{{ campaign.when }}</span>
+          {%- elif campaign.pinned %} <span class="launch-when">{{ campaign.phase }}</span>{% endif %}</span>
         <span class="s">
           {%- if campaign.phase_label -%}
             Now: {{ campaign.phase_label }} — {{ planned_posts|selectattr('phase', 'equalto', campaign.phase)|rejectattr('started')|list|length }} written and waiting
@@ -674,7 +676,9 @@
     <p class="eyebrow">⚡ {{ campaign.label }}</p>
     <h2>What are we writing for?</h2>
     <p class="hint">
-      {% if campaign.launch_date %}Launch {{ campaign.launch_date }} · {{ campaign.when }}. {% endif %}
+      {% if campaign.launch_date %}Launch {{ campaign.launch_date }} · {{ campaign.when }}.
+      {%- elif campaign.pinned %}No launch date set, so everything is pinned to <b>{{ campaign.phase }}</b> until there is one.
+      {% endif %}
       The phase decides the ask — everything else follows it.
     </p>
 
@@ -682,7 +686,7 @@
       {% for p in campaign_phases %}
       <button type="button" class="chip{% if p.active %} sel{% endif %}" data-phase="{{ p.key }}"
               onclick="pickPhase('{{ p.key }}', this)">
-        {{ p.label.split('—')[0].strip() }}{% if p.active %} · now{% endif %}
+        {{ p.label.split('—')[0].strip() }}{% if p.active %} · {% if campaign.pinned %}pinned{% else %}now{% endif %}{% endif %}
       </button>
       {% endfor %}
     </div>
