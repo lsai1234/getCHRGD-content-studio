@@ -68,6 +68,32 @@ rival_focus = """Every rival opener must sort the audience into named, recognisa
 tourney_focus = """Prefer the opener that most reliably makes a stranger think 'that's me' or 'that's him' — self-recognition beats cleverness and beats provocation on this show. An opener promising to diagnose a body rather than audit a cupboard cannot win; rank it last and say why."""
 glance_focus = """You are glancing at a supplement audit post. In half a second: did you know which type you were, and did you believe it was about to tell you what to stop wasting money on?"""
 
+[profiles.verdict_trust]
+label = "It commits, and I believe it"
+judge_focus = """THIS OPENER IS FOR **VERDICT**, the ruling show. Judge it on commitment and credibility:
+- Does it COMMIT? A ruling — worth it, not worth it, or 'only if X' — must be legible in the first few words. An opener that promises a balanced look at both sides has failed this show entirely, however well written. Score it down hard.
+- Is the subject a SPECIFIC purchase somebody could be weighing this week, rather than a category in the abstract?
+- Is it about MONEY AND EVIDENCE rather than about bodies? Any opener promising to tell someone what their body needs, is missing, or is deficient in is an automatic fail, not a deduction.
+- Would a sceptic believe it? On this show credibility outranks intrigue: an opener that sounds like an advert for the thing being ruled on has failed even if it would stop a thumb.
+- Does it contain an invented figure? Any price, percentage or statistic not supplied in the brief is an automatic fail.
+The best openers on this show are often the ones ruling AGAINST something — that is the shape to prefer, not to flag."""
+rival_focus = """Every rival opener must state a ruling on ONE specific purchase, in the first few words, with no hedging. Vary the thing being ruled on and vary the ruling itself between rivals — at least one should rule against something the shop would happily sell. No invented prices or percentages. No claims about what anything does in a body. No 'here are both sides'."""
+tourney_focus = """Prefer the opener that commits hardest while staying defensible. A balanced or hedged opener cannot win this show — rank it last and say why. Between two committed openers, prefer the one a sceptical viewer would find more credible, not the one that is louder."""
+glance_focus = """You are glancing at a purchase-advice post. In half a second: did you know what the ruling was, and did it feel like an honest answer rather than an advert?"""
+
+[profiles.receipts_edge]
+label = "The number lands, and it's about money"
+judge_focus = """THIS OPENER IS FOR **RECEIPTS**, the price-teardown show. Judge it on the number and the target:
+- Does it lead with a real, concrete FIGURE supplied in the brief? A number is the one thing on a feed that reads as evidence rather than opinion, and this show's openers live or die on having one up front.
+- Is any figure in it one that was GIVEN? An invented price, percentage, margin or 'typically around £X' is an automatic fail, not a deduction — a teardown with made-up numbers is worthless and dangerous.
+- Is the target the CATEGORY's pricing and marketing rather than a named competitor? Naming a brand is an automatic fail.
+- Is it about money rather than physiology? Any argument about what an ingredient does inside a body belongs to a different show — score it down.
+- Does it punch at the SELLER rather than the buyer? An opener that makes the reader feel stupid for having bought one will not be shared, because sharing it means admitting they did.
+Faintly annoyed and forensic is the right register. Outraged and shouty is not."""
+rival_focus = """Every rival opener must lead with the real figure given in the brief and promise to break it down. Vary the angle of attack between rivals — the blend, the flavouring, the label, the sponsorship, the shelf space. Use no figure other than the one supplied. Name no brand. Make no claim about what anything does in a body. Never mock the buyer."""
+tourney_focus = """Prefer the opener where the number does the most work and the target is clearly the seller. An opener that needs a second invented figure to make sense cannot win. Between two, prefer the one somebody would forward to the mate who bought the expensive tub."""
+glance_focus = """You are glancing at a price teardown. In half a second: did a real number hit you, and did you want to know where it went?"""
+
 [profiles.continuity_likeness]
 label = "In-world, gripping, and safe"
 judge_focus = """THIS OPENER IS FOR **THE MULTIVERSE**, a comic serial. Judge it on grip and on safety:

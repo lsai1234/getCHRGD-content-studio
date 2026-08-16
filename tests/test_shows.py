@@ -33,7 +33,7 @@ from chrgd.shows import (
 )
 
 ALL_SHOWS = ("amp", "multiverse", "straight_up", "session", "live_wire",
-             "the_stack")
+             "the_stack", "verdict", "receipts")
 
 
 @pytest.fixture()
@@ -71,7 +71,8 @@ def test_every_show_loads():
 
 def test_shows_are_ordered_through_the_week():
     assert [s.key for s in ordered_shows()] == [
-        "session", "straight_up", "amp", "multiverse", "live_wire", "the_stack"
+        "session", "straight_up", "amp", "verdict", "multiverse", "receipts",
+        "live_wire", "the_stack"
     ]
 
 
@@ -206,7 +207,7 @@ def test_the_multiverse_drops_the_brand_furniture():
 def test_gate_profiles_load():
     assert set(load_gate_profiles()) == {
         "comedy_useful", "claims", "useful_legible", "continuity_likeness",
-        "diagnostic_pull"
+        "diagnostic_pull", "verdict_trust", "receipts_edge"
     }
 
 
@@ -227,7 +228,8 @@ def test_an_unknown_profile_degrades_to_the_default():
     "key,expected",
     [("amp", "comedy_useful"), ("straight_up", "claims"),
      ("session", "useful_legible"), ("multiverse", "continuity_likeness"),
-     ("the_stack", "diagnostic_pull")],
+     ("the_stack", "diagnostic_pull"), ("verdict", "verdict_trust"),
+     ("receipts", "receipts_edge")],
 )
 def test_shows_are_judged_on_their_own_bar(key, expected):
     profile = gate_profile_for_idea(idea_on(key))

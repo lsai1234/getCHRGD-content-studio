@@ -1,0 +1,81 @@
+# RECEIPTS — where the money actually goes.
+#
+# The reach engine of the launch, and the safest sharp thing this brand can
+# say. Supplement pricing is genuinely opaque, people genuinely resent it, and
+# every word of a teardown is about MARKETING rather than physiology — which
+# means it carries the account's edge with none of its claim risk.
+#
+# THE HUMAN SUPPLIES THE NUMBER. The editor types the real price on the show's
+# screen and the write call is told it may use that figure and no other. A
+# price teardown is worthless if the prices are invented, and a language model
+# asked for "a typical tub price" will produce one that sounds right and isn't.
+# Same principle as VERDICT: the human owns the facts, the engine owns the
+# craft.
+#
+# It never names a competitor. The target is the CATEGORY's pricing model —
+# proprietary blends, flavour, sponsorship, shelf space — not a rival brand,
+# which would be both legally daft and beneath the account.
+
+[show]
+key = "receipts"
+label = "RECEIPTS"
+tagline = "What you're actually paying for."
+blurb = "A price, broken into what's in the tub and what's in the marketing. The post people send to whoever sold them the thing."
+icon = "🧾"
+weekday = "thu"
+kpi_metric = "shares"
+kpi = "shares — a teardown gets sent to the mate who swears by the expensive one"
+slides_min = 4
+slides_max = 6
+front_screen = "receipts"
+cast = "none"
+gate_profile = "receipts_edge"
+engagement_play = "share"
+
+[spine]
+roles = ["the_price", "the_active", "the_padding", "the_brand_tax", "the_swap"]
+flex = 1
+briefs = [
+  "THE PRICE, stated flat as the opening fact — the real figure supplied in the brief, and the thing it buys. No preamble. The number IS the hook, because a number is the one thing on the feed that reads as evidence rather than opinion.",
+  "What is genuinely in there doing the work — the active ingredient, named plainly, and roughly what a sensible amount of it is worth. This slide has to be scrupulously fair, because everything after it depends on the reader trusting this one.",
+  "THE PADDING — flavour, filler, and the proprietary blend whose real job is hiding how little of the active stuff is in there. This is the slide people screenshot.",
+  "THE BRAND TAX — the label, the sponsorship, the shelf space, the influencer code. What you are paying for that never enters your body at all.",
+  "THE SWAP — what the same thing costs when nobody is selling you a personality alongside it, stated without smugness. Then the ask the campaign phase allows."
+]
+
+[voice]
+block = """This show is about MONEY, and only about money. Pricing, labelling, marketing, what a category is sold on, what a proprietary blend is actually for. It is allowed to be genuinely sharp here because all of it is verifiable commercial reality rather than a claim about a body.
+
+IT IS NEVER ABOUT PHYSIOLOGY. The moment a teardown starts arguing about what an ingredient does inside somebody, it has wandered into the one place this brand has to be neutral, hedged and reported. State what a thing is; leave what it does to STRAIGHT UP.
+
+ONLY THE FIGURES YOU WERE GIVEN. The editor supplies the real price. You may use that number and any arithmetic you can do on it honestly. You may NOT invent a second price, a percentage, a margin, an industry average or a 'typically around £X'. If a slide needs a number you weren't given, rewrite the slide to work without one — proportions, mechanisms and plain description carry it fine.
+
+NO NAMED BRANDS, EVER. The target is the category's pricing model, not a competitor. Naming one is legally daft and beneath the account. 'A £45 tub' is the subject; whose tub it is never matters.
+
+NEVER SNEER AT THE BUYER. They were sold this, cleverly, by people who do it for a living. The mark is always the seller, never the person who fell for it — a teardown that makes the reader feel stupid gets no shares, because sharing it would mean admitting they bought one.
+
+Dry, forensic, faintly annoyed. British. The register of somebody reading a bill out loud."""
+banned = [
+  "any invented price, percentage, margin or industry average",
+  "naming a specific competitor brand or product",
+  "any claim about what an ingredient does in the body beyond plain description",
+  "mocking the person who bought it",
+  "health, medical or outcome claims of any kind",
+  "smugness about knowing better",
+]
+
+[look]
+style_preset = "receipts_paper"
+house_style = "The visual language of a receipt, a price label or a spreadsheet made physical: crisp white or off-white paper against a dark surface, hard shadows, tight crops on printed detail, a torn edge, a highlighter line drawn by hand. Documentary evidence photographed on a kitchen table, never a designed infographic and never a glossy product shot."
+palette = "Paper white and near-black, with one highlighter stripe in the CHRGD light blue marking the line that matters on each slide."
+type_style = "Monospaced or receipt-printer type for anything that is a figure, plain bold sans for the commentary. The number is always the largest element on its slide."
+motif = "The paper trail itself — a receipt, a label, a line item ringed in blue."
+title_card = "RECEIPTS"
+title_note = "small, plain, top-left, set like a header on a printed docket"
+
+[look.furniture]
+wordmark = true
+scrim = false
+counter = true
+handle = true
+footer_bar = true

@@ -1,0 +1,82 @@
+# VERDICT — the ruling show, and the closest thing the account has to the
+# product itself.
+#
+# The quiz's whole proposition is "we'll tell you what's actually worth
+# taking". This show is that, performed in public on one thing at a time: a
+# specific purchase somebody is weighing this week, and a ruling that commits.
+#
+# THE HUMAN SUPPLIES THE JUDGEMENT. The engine never picks the verdict — the
+# editor does, on the show's screen, and the write call is told to execute it.
+# That is deliberate and it is the whole safety model of this show: a brand's
+# opinion about whether something is worth money has to be the brand's, not a
+# language model's guess at one. It also means the show can never invent a
+# stance the business would have to defend later.
+#
+# The move that makes it credible: it is allowed — expected — to rule AGAINST
+# things the shop stocks. An account that has never once said "don't buy that"
+# is an advert, and nobody takes purchase advice from an advert.
+
+[show]
+key = "verdict"
+label = "VERDICT"
+tagline = "Worth it, or not. One thing, one ruling."
+blurb = "A straight answer on a single purchase, with the money reasoning and the exception that proves it honest."
+icon = "⚖️"
+weekday = "wed"
+kpi_metric = "saves"
+kpi = "saves — a ruling gets kept for the next order, which is exactly when it pays off"
+slides_min = 4
+slides_max = 6
+front_screen = "verdict"
+cast = "none"
+gate_profile = "verdict_trust"
+engagement_play = "save"
+
+[spine]
+roles = ["the_question", "the_ruling", "the_reasoning", "the_exception", "the_move"]
+flex = 1
+briefs = [
+  "The thing, named the way a real person names it, and the question they are actually weighing — 'is X worth it?'. A specific purchase decision somebody could be making this week, never a category in the abstract.",
+  "THE RULING, in the first few words, with no hedging and no throat-clearing. Worth it, not worth it, or only if — and 'only if' must name the condition immediately. This show's entire value is that it commits; a post that arrives at 'it depends' without saying what it depends on has failed and should not ship.",
+  "The reasoning — and it is about MONEY and EVIDENCE, never about bodies. What the thing does as the evidence actually stands, hedged exactly where the evidence is hedged, and what you are paying for it. Never upgrade a hedge into a claim to make the ruling sound stronger.",
+  "THE EXCEPTION — who this ruling does NOT apply to, named specifically enough that they'd recognise themselves. Conceding the exception is what makes the ruling believable; a verdict with no exception reads as an advert and gets treated as one.",
+  "THE MOVE — what to do instead, or next, stated cheaply and concretely enough to act on before the next order. Then the ask the campaign phase allows."
+]
+
+[voice]
+block = """This show COMMITS. That is the entire product. Everywhere else on the internet this question gets answered with 'it depends' and a shrug, which is useless to somebody standing in a shop — so here it gets a ruling, and the ruling goes in the first few words.
+
+THE EDITOR'S RULING IS THE POST. When a verdict has been supplied to you, execute it — build the strongest honest case for that ruling. Do not soften it, do not reverse it, do not quietly turn a 'not worth it' into a balanced overview. If the ruling genuinely cannot be defended within the claims rules, say so plainly in your reasoning rather than writing around it.
+
+WE ARE ALLOWED TO RULE AGAINST THINGS WE SELL, and it is the most valuable thing this account does. An account that has never told anyone not to buy something is an advert, and nobody takes purchase advice from an advert. Never soften a ruling because the shop stocks the thing.
+
+MONEY IS WHERE THE EDGE GOES. Be pointed about pricing, labelling, marketing and what a category is sold on. Be neutral, reported and hedged about what happens inside a body. That split is not timidity — it is the difference between a defensible post and a regulatory problem.
+
+NEVER INVENT A FIGURE. No prices, no percentages, no study counts unless they were given to you in the brief. Talk in proportions, mechanisms and what things are. A made-up number on a purchase-advice post is the fastest way to lose the only thing this show has.
+
+Dry, plain, certain. The register is a mate who has already done the reading and is not enjoying being right about it. Never a coach, never a lab, never excited."""
+banned = [
+  "hedging the ruling into a balanced overview — the commitment is the product",
+  "'it depends' without immediately naming what it depends on",
+  "any invented price, percentage or statistic",
+  "any health, medical, deficiency or guaranteed-outcome claim",
+  "naming and rubbishing a specific competitor brand",
+  "softening a verdict because the shop stocks the thing",
+  "telling anyone what their body needs or is missing",
+]
+
+[look]
+style_preset = "verdict_stamp"
+house_style = "One object, shot straight on against a plain near-black field with a single hard light and a great deal of empty space around it — the composition of a piece of evidence rather than an advert. Calm, certain, a bit severe. No gym, no lifestyle, no hands, no aspiration. Any product in shot is plain and unbranded."
+palette = "Near-black ground, one hard white key light, deep shadow. The CHRGD light blue used once and only on the ruling itself, so the verdict is the only coloured thing on the slide."
+type_style = "Heavy, plain, confident sans — set like a decision, not a headline. The ruling is the largest thing on the slide by a wide margin, everything else is small and quiet beneath it."
+motif = "The single object under one hard light, and the ruling set in blue over it."
+title_card = "VERDICT"
+title_note = "small and plain, top-left, set like a case reference"
+
+[look.furniture]
+wordmark = true
+scrim = false
+counter = true
+handle = true
+footer_bar = true

@@ -105,6 +105,9 @@ class Campaign(BaseModel):
     facts: Facts = Field(default_factory=Facts)
     compliance: Compliance = Field(default_factory=Compliance)
     phases: list[Phase] = Field(default_factory=list)
+    #: Shows this campaign doesn't use — dimmed on the create screen, never
+    #: disabled. A statement about what the fortnight is for, not a lock.
+    paused_shows: list[str] = Field(default_factory=list)
 
     # --- resolving the moment ----------------------------------------------
 
@@ -322,6 +325,18 @@ class LaunchPost(BaseModel):
     mechanic: str = ""
     #: STRAIGHT UP's subject, when the post is one of its episodes.
     ingredient: str = ""
+    #: VERDICT's ruling, decided here rather than by the engine — the calendar
+    #: is where the brand's opinions live, so a planned ruling is part of the
+    #: content, not something to re-litigate at build time (chrgd/rulings.py).
+    verdict_subject: str = ""
+    verdict_ruling: str = ""
+    verdict_condition: str = ""
+    verdict_reason: str = ""
+    #: RECEIPTS' real figure. A planned teardown with no price is not a
+    #: planned teardown — seeding one would hand the engine the one job it is
+    #: explicitly barred from doing.
+    receipt_product: str = ""
+    receipt_price: str = ""
     hook: str = ""
     note: str = ""
     category: str = ""
@@ -381,6 +396,24 @@ class LaunchPost(BaseModel):
                 }
         if self.ingredient:
             route["ingredient"] = self.ingredient
+        if self.verdict_subject and self.verdict_ruling:
+            from .rulings import RULINGS, VERDICT_KEY
+
+            if self.verdict_ruling in RULINGS:
+                route[VERDICT_KEY] = {
+                    "subject": self.verdict_subject,
+                    "ruling": self.verdict_ruling,
+                    "condition": self.verdict_condition,
+                    "reason": self.verdict_reason,
+                }
+        if self.receipt_product and self.receipt_price:
+            from .rulings import RECEIPT_KEY
+
+            route[RECEIPT_KEY] = {
+                "product": self.receipt_product,
+                "price": self.receipt_price,
+                "note": "",
+            }
         if self.phase:
             route[ROUTE_KEY] = self.phase
         return route

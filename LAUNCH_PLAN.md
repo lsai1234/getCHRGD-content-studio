@@ -85,21 +85,47 @@ knows it's launch week without you re-briefing it.
 show, a mechanic and a phase, so a build starts from a specific angle rather
 than a topic.
 
-A new show and six new formats carry them:
+### Four shows carry the launch — and two sit it out
 
-**THE STACK** (`config/shows/the_stack.toml`) — the sorting show, Saturdays,
-and the one the launch runs on. Named types, cupboard audits, price teardowns.
-Clean editorial look — it reads as an *audit*, forensic and organised, which is
-deliberately the opposite of a supplement advert. Its gate profile
-(`diagnostic_pull`) judges openers on self-recognition rather than hot-take
-heat, so the concept gate stops "sharpening" calm audits into shouting.
+The brand is not a supplement brand; anyone can ship the same tubs. What
+getCHRGD sells is **judgment**: "tell me what's actually worth taking." So the
+launch shows are all acts of judgment, and the content *is* the product running
+in public.
 
-Six new mechanics in `config/mechanics.toml`, all built to work cold:
-`archetype_sort` · `cupboard_audit` · `price_teardown` · `stop_buying` ·
-`demo_post` · `objection_kill`.
+| Show | Asks first | KPI |
+|---|---|---|
+| **⚖️ VERDICT** | What are we ruling on — and what's the ruling? | saves |
+| **🧾 RECEIPTS** | What's the product, and what does it cost? | shares |
+| **🧪 THE STACK** | What are we sorting on? | shares |
+| **🧫 STRAIGHT UP** | Which ingredient? | saves |
 
-The other five shows keep their weekdays and their jobs — the campaign changes
-what they're *for* this fortnight, not what they *are*.
+Different KPIs on purpose: with no rated posts yet there is **no data** on what
+works for this account, so the honest move is to ship a small set and let the
+learning loop discriminate. Four formats, four signals, then expand what wins.
+
+**AMP and THE MULTIVERSE are paused for the launch** (`paused_shows` in
+`config/campaign.toml` — dimmed on the create screen, never disabled). They're
+affinity formats built for a brand with no product, and they pay off over
+months of returning viewers, which is the one thing a 70-follower account
+launching in a fortnight hasn't got. Amp's tips are behavioural rather than
+about what to take; the Multiverse is a serial that rewards people who saw the
+last one. They come back once there's revenue to protect.
+
+### The editor owns the facts, the engine owns the craft
+
+This is what makes the two new shows trustworthy, and it's enforced in code:
+
+- **VERDICT** never picks the verdict. You do, on its screen. A brand's ruling
+  on whether something is worth money is the thing a customer quotes back at
+  you — it can't be a language model's guess. An `only if` with no condition is
+  rejected outright, because that's just a hedge wearing a ruling's clothes.
+- **RECEIPTS** never invents a price. You type the real figure and the engine is
+  told it may use that one and no other — no percentages, no margins, no
+  "typically around £X". Asked for a typical tub price a model produces one that
+  sounds right and isn't, and a teardown built on a made-up number is worthless.
+
+Neither show ever names a competitor; the target is always how the category
+prices itself.
 
 ### The posts that matter most
 
@@ -151,9 +177,12 @@ Two journeys in **/create**:
   tap one and it builds as the right show and format, already stamped. Ones
   you've started are marked. A free-text box under them writes anything else
   for that phase, under the same brief.
-- **🧪 THE STACK** — the show's own screen. Asks the sort first (which one are
-  you / keep or bin / what you're paying for / stop buying / the demo / the
-  objection), subject optional.
+- **🧪 THE STACK** — asks the sort first (which one are you / keep or bin /
+  stop buying / the demo), subject optional.
+- **⚖️ VERDICT** — pick the thing, then hand down *your* ruling: worth it, not
+  worth it, or only if (which demands its condition there and then).
+- **🧾 RECEIPTS** — the product and its real price. That figure is the only
+  number the engine is allowed to use.
 
 Because the phase is stamped on the row rather than read from the clock, a post
 written through the launch door on a Tuesday in `prime` still builds under the
