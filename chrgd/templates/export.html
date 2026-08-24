@@ -19,9 +19,109 @@
   <form method="post" action="/export" class="row">
     <button type="submit">Export week</button>
     <a href="/export?sample=1"><button type="button" class="ghost">Write sample CSV</button></a>
-    {% if csvs %}<a href="/download/assets.zip"><button type="button" class="ghost">Download all assets (zip)</button></a>{% endif %}
   </form>
 </div>
+
+<div class="inline" id="bulk-download">
+  <strong>Download every post</strong>
+  <p class="muted" style="margin:8px 0 14px">
+    One zip, one folder per post — slides in order, <code>caption.txt</code>,
+    the first comment to pin, and the whole post as readable copy. This is the
+    backup / hand-it-to-an-editor button; it changes nothing in the studio, so
+    you can take it as often as you like.
+  </p>
+
+  <div class="row" style="align-items:flex-end; gap:14px">
+    <div style="flex:1 1 210px; min-width:180px">
+      <label for="dl-scope" style="margin-top:0">What to include</label>
+      <select id="dl-scope">
+        <option value="all">Everything built</option>
+        <option value="done">Finished posts only</option>
+        <option value="scheduled">A date range</option>
+      </select>
+    </div>
+    <div id="dl-dates" style="display:none; flex:1 1 300px">
+      <div class="row" style="gap:10px">
+        <div style="flex:1 1 130px">
+          <label for="dl-from" style="margin-top:0">From</label>
+          <input type="date" id="dl-from">
+        </div>
+        <div style="flex:1 1 130px">
+          <label for="dl-to" style="margin-top:0">To</label>
+          <input type="date" id="dl-to">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="muted" id="dl-estimate" style="margin:14px 0 0; font-size:13px">
+    Sizing it up…
+  </p>
+
+  <div class="row">
+    <button type="button" id="dl-go">⬇ Download posts (zip)</button>
+    {% if csvs %}<a href="/download/assets.zip"><button type="button" class="ghost">Export assets only</button></a>{% endif %}
+  </div>
+</div>
+
+<script>
+const dlScope = document.getElementById('dl-scope');
+const dlDates = document.getElementById('dl-dates');
+const dlFrom  = document.getElementById('dl-from');
+const dlTo    = document.getElementById('dl-to');
+const dlNote  = document.getElementById('dl-estimate');
+const dlGo    = document.getElementById('dl-go');
+
+// A month either side of today is the range people actually reach for.
+(function seedDates(){
+  const now = new Date();
+  const iso = d => d.toISOString().slice(0, 10);
+  dlFrom.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  dlTo.value   = iso(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+})();
+
+function dlQuery(){
+  const p = new URLSearchParams({scope: dlScope.value});
+  if (dlScope.value === 'scheduled'){ p.set('date_from', dlFrom.value); p.set('date_to', dlTo.value); }
+  return p.toString();
+}
+
+let dlPending;
+async function refreshEstimate(){
+  dlDates.style.display = dlScope.value === 'scheduled' ? '' : 'none';
+  if (dlScope.value === 'scheduled' && !(dlFrom.value && dlTo.value)){
+    dlNote.textContent = 'Pick both dates.'; dlGo.disabled = true; return;
+  }
+  dlNote.textContent = 'Sizing it up…';
+  dlPending?.abort();
+  dlPending = new AbortController();
+  try {
+    const r = await fetch('/api/download/estimate?' + dlQuery(), {signal: dlPending.signal});
+    if (!r.ok) throw new Error(await r.text());
+    const e = await r.json();
+    dlGo.disabled = e.posts === 0;
+    dlNote.textContent = e.posts
+      ? `${e.posts} post(s) · ${e.files} media file(s) · about ${e.size} before compression.`
+      : 'Nothing matches that — no zip to make.';
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    dlNote.textContent = 'Could not size it up: ' + err.message;
+    dlGo.disabled = false;
+  }
+}
+
+dlScope.addEventListener('change', refreshEstimate);
+dlFrom.addEventListener('change', refreshEstimate);
+dlTo.addEventListener('change', refreshEstimate);
+
+dlGo.addEventListener('click', () => {
+  // A straight navigation, not fetch(): the browser streams the zip to disk
+  // and shows its own progress instead of buffering it all in the tab.
+  window.location = '/download/posts.zip?' + dlQuery();
+});
+
+refreshEstimate();
+</script>
 
 <h1 style="font-size:18px;">CSV files in ready/</h1>
 <table>

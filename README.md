@@ -34,6 +34,7 @@ Implemented now:
 - `chrgd review` — inspect posts the QA gate flagged.
 - `chrgd render` — generate the carousel images for a built post.
 - `chrgd export` — write the Metricool CSV + `ready/` folder for the week.
+- `chrgd bundle` — download every post's content into one zip, a folder per post.
 
 - `chrgd trends` — scout current UK-gym topical hooks and (with `--seed`) queue them.
 - `chrgd run` — the full chain: `[--scout] → build → render → export` (for cron).
@@ -208,6 +209,12 @@ chrgd render G-0001 --dry-run     # branded placeholder backgrounds, no spend
 chrgd export --sample             # sample CSV to diff against Metricool's template
 chrgd export --week               # CSV + ready/ folder; marks rows exported
 
+# Download every post's content — one zip, one folder per post:
+chrgd bundle                      # everything built, to ./chrgd_posts_<stamp>.zip
+chrgd bundle --status done -o ~/backup.zip
+chrgd bundle --since 2026-08-01 --until 2026-08-31
+chrgd bundle --ids G-0007,G-0009  # just these posts
+
 # Clear out content past the retention window (the studio also does this daily):
 chrgd prune --dry-run             # what the next sweep would take
 chrgd prune                       # sweep now
@@ -223,6 +230,15 @@ references), copies assets into `output/ready/`, and stamps rows `exported_at`
 so nothing exports twice. Column headers and filename-vs-URL media style are
 read from `config/metricool_columns.toml` — run `chrgd export --sample` and diff
 its headers against the template you download from Metricool, then edit the TOML.
+
+`bundle` is the other direction: instead of pushing one week into a scheduler,
+it hands you everything. The zip holds one folder per post — the slides in
+order, `caption.txt` (with its line breaks intact, unlike the CSV), the first
+comment to pin, `post.md` for reading and `post.json` for anything
+programmatic — plus an `index.csv` across the lot. It reads only, so it can't
+disturb an export and you can take one as often as you like. The same thing
+lives on the **Library** screen (with a size estimate before you commit) and,
+for a single post, behind the calendar's *Post it manually* modal.
 
 `build` calls OpenAI to run the six-stage engine, validates the JSON against the
 `Post` model, and applies the QA thresholds from `content_engine_prompt.md`

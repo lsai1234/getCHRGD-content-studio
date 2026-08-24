@@ -2583,6 +2583,125 @@ def create_app(settings: Settings | None = None, *, run_worker: bool = True) -> 
     def download_ready(filename: str, _: str = Depends(require_user)):
         return FileResponse(_safe_output_path(settings, "ready", filename))
 
+    # --- bulk post download (every post's content, one folder each) ---------
+
+    def _bundle_scope(
+        scope: str, ids: str, date_from: str, date_to: str, limit: int | None
+    ) -> dict:
+        """Turn the download form's scope into `bundle.select` arguments.
+
+        The screen offers plain words ("everything built", "finished posts",
+        "a date range"); this is the one place that decides what each means.
+        """
+        args: dict = {"limit": limit}
+        chosen = [i.strip() for i in (ids or "").split(",") if i.strip()]
+        if chosen:
+            return {"ids": chosen, "limit": None}
+        if scope == "done":
+            args["status"] = Status.done
+        elif scope == "scheduled":
+            if not date_from or not date_to:
+                raise HTTPException(400, "a date range is needed for that scope")
+        elif scope not in ("", "all"):
+            raise HTTPException(400, f"unknown scope '{scope}'")
+        if date_from or date_to:
+            try:
+                if date_from:
+                    args["date_from"] = datetime.fromisoformat(date_from)
+                if date_to:
+                    # Inclusive range, same as the calendar's CSV export.
+                    args["date_to"] = datetime.fromisoformat(date_to) + timedelta(days=1)
+            except ValueError:
+                raise HTTPException(400, "bad date range")
+        return args
+
+    @app.get("/api/download/estimate")
+    def api_download_estimate(
+        scope: str = "all", ids: str = "", date_from: str = "", date_to: str = "",
+        limit: int | None = None, include_unbuilt: bool = False,
+        _: str = Depends(require_user),
+    ):
+        """How many posts and how many megabytes that download would be.
+
+        Asked before the click: on a studio that has been running for months
+        this archive can run to gigabytes, and the browser gives no warning.
+        """
+        from . import bundle
+
+        args = _bundle_scope(scope, ids, date_from, date_to, limit)
+        with _store(settings) as store:
+            return bundle.estimate(store, settings, include_unbuilt=include_unbuilt, **args)
+
+    def _stream_bundle(tmp_path: Path, filename: str):
+        """Send a built archive, then delete the temp file it was built in.
+
+        The zip is written to disk rather than held in memory — a whole
+        studio's renders will not fit comfortably in a BytesIO, and this box
+        runs the worker at the same time.
+        """
+        from starlette.background import BackgroundTask
+
+        def _cleanup() -> None:
+            tmp_path.unlink(missing_ok=True)
+
+        return FileResponse(
+            tmp_path,
+            media_type="application/zip",
+            filename=filename,
+            background=BackgroundTask(_cleanup),
+        )
+
+    @app.get("/download/posts.zip")
+    def download_posts_zip(
+        scope: str = "all", ids: str = "", date_from: str = "", date_to: str = "",
+        limit: int | None = None, include_unbuilt: bool = False,
+        _: str = Depends(require_user),
+    ):
+        """Every selected post's content, one folder per post, in one zip."""
+        import tempfile
+
+        from . import bundle
+
+        args = _bundle_scope(scope, ids, date_from, date_to, limit)
+        fd, tmp = tempfile.mkstemp(prefix=".bundle_", suffix=".zip", dir=str(settings.output_dir))
+        tmp_path = Path(tmp)
+        try:
+            with _store(settings) as store:
+                with open(fd, "wb") as fh:
+                    result = bundle.bundle_for(
+                        store, settings, dest=fh,
+                        include_unbuilt=include_unbuilt, **args,
+                    )
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+        if not result.entries:
+            tmp_path.unlink(missing_ok=True)
+            raise HTTPException(404, "no posts matched — nothing to download")
+        return _stream_bundle(tmp_path, f"{result.name}.zip")
+
+    @app.get("/download/post/{idea_id}.zip")
+    def download_one_post_zip(idea_id: str, _: str = Depends(require_user)):
+        """One post's folder — slides, caption, first comment, brief."""
+        import tempfile
+
+        from . import bundle
+
+        fd, tmp = tempfile.mkstemp(prefix=".bundle_", suffix=".zip", dir=str(settings.output_dir))
+        tmp_path = Path(tmp)
+        try:
+            with _store(settings) as store:
+                _idea_or_404(store, idea_id)
+                with open(fd, "wb") as fh:
+                    result = bundle.bundle_for(
+                        store, settings, dest=fh, ids=[idea_id],
+                        include_unbuilt=True, name=idea_id,
+                    )
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+        return _stream_bundle(tmp_path, f"{result.name}.zip")
+
     @app.get("/download/assets.zip")
     def download_assets_zip(_: str = Depends(require_user)):
         import io

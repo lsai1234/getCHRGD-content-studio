@@ -7,6 +7,8 @@ surface is visible and stable; each later milestone fills one in.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from .capture import capture_ideas
@@ -519,6 +521,92 @@ def review(
     typer.secho(
         "\nInspect one with:  chrgd review --show <idea_id>", fg=typer.colors.BLUE
     )
+
+
+@app.command()
+def bundle(
+    out: str = typer.Option(
+        None, "--out", "-o", help="Where to write the zip (default: ./chrgd_posts_<stamp>.zip)."
+    ),
+    ids: str = typer.Option(
+        None, "--ids", help="Comma-separated idea ids — just these posts."
+    ),
+    status: str = typer.Option(
+        None, "--status", help="Only posts with this status (e.g. done, review)."
+    ),
+    since: str = typer.Option(
+        None, "--since", help="Only posts scheduled on/after this date (YYYY-MM-DD)."
+    ),
+    until: str = typer.Option(
+        None, "--until", help="Only posts scheduled on/before this date (YYYY-MM-DD)."
+    ),
+    limit: int = typer.Option(None, "--limit", help="Cap the number of posts."),
+    include_unbuilt: bool = typer.Option(
+        False, "--include-unbuilt", help="Include captured ideas that were never built."
+    ),
+) -> None:
+    """Download every post's content into one zip — a folder per post.
+
+    Slides in slide order, the paste-ready caption, the first comment to pin,
+    and the whole post as readable copy, plus an `index.csv` across the lot.
+    Reads only: it can't disturb an export, and you can take one any time.
+    """
+    from datetime import datetime as _dt, timedelta as _td
+
+    from .bundle import bundle_for
+
+    settings = get_settings()
+    settings.ensure_dirs()
+
+    def _date(value: str | None, label: str):
+        if not value:
+            return None
+        try:
+            return _dt.fromisoformat(value)
+        except ValueError:
+            typer.secho(f"--{label} wants a date like 2026-08-24.", fg=typer.colors.RED)
+            raise typer.Exit(2)
+
+    try:
+        picked = Status(status) if status else None
+    except ValueError:
+        allowed = ", ".join(s.value for s in Status)
+        typer.secho(f"--status must be one of: {allowed}", fg=typer.colors.RED)
+        raise typer.Exit(2)
+
+    date_to = _date(until, "until")
+    if date_to:  # --until is inclusive, the selector's bound is exclusive
+        date_to += _td(days=1)
+
+    stamp = _dt.now().strftime("%Y%m%d_%H%M")
+    name = f"chrgd_posts_{stamp}"
+    dest = Path(out) if out else Path.cwd() / f"{name}.zip"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    with _store() as store:
+        result = bundle_for(
+            store,
+            settings,
+            dest=dest,
+            name=name,
+            ids=[i.strip() for i in ids.split(",") if i.strip()] if ids else None,
+            status=picked,
+            date_from=_date(since, "since"),
+            date_to=date_to,
+            limit=limit,
+            include_unbuilt=include_unbuilt,
+        )
+
+    for idea_id, why in result.skipped:
+        typer.secho(f"  \u00b7 {idea_id} skipped \u2014 {why}", fg=typer.colors.YELLOW)
+    if not result.entries:
+        dest.unlink(missing_ok=True)
+        typer.secho("No posts matched \u2014 nothing written.", fg=typer.colors.YELLOW)
+        return
+    for entry in result.entries:
+        typer.secho(f"  \u2713 {entry.folder} ({entry.files} file(s))", fg=typer.colors.GREEN)
+    typer.secho(f"\n{dest}", fg=typer.colors.BLUE)
+    typer.secho(result.summary(), fg=typer.colors.BLUE)
 
 
 @app.command()
